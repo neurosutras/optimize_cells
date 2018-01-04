@@ -138,14 +138,14 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
         context.temp_output_path = temp_output_path
     if 'temp_output_path' not in context() or context.temp_output_path is None:
         context.temp_output_path = '%s%s_pid%i_%s%s_temp_output.hdf5' % \
-                               (output_dir_str, datetime.datetime.today().strftime('%m%d%Y%H%M'), os.getpid(),
+                               (output_dir_str, datetime.datetime.today().strftime('%Y%m%d%H%M'), os.getpid(),
                                 context.optimization_title, label)
     
     if export_file_path is not None:
         context.export_file_path = export_file_path
     if 'export_file_path' not in context() or context.export_file_path is None:
         context.export_file_path = '%s%s_%s%s_interactive_exported_output.hdf5' % \
-                                   (output_dir_str, datetime.datetime.today().strftime('%m%d%Y%H%M'),
+                                   (output_dir_str, datetime.datetime.today().strftime('%Y%m%d%H%M'),
                                     context.optimization_title, label)
 
     context.update_context_funcs = []
