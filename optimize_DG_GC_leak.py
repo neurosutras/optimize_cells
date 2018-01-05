@@ -7,7 +7,6 @@ Requires use of a nested.parallel interface.
 __author__ = 'Aaron D. Milstein and Grace Ng'
 from specify_cells4 import *
 from plot_results import *
-from nested.utils import *
 from nested.optimize_utils import *
 import collections
 import click
@@ -436,9 +435,9 @@ def offset_vm(description, vm_target=None):
 
 def update_context_leak(x, local_context=None):
     """
-
-    x0 = ['soma.g_pas': 2.28e-05, 'dend.g_pas slope': 1.58e-06, 'dend.g_pas tau': 58.4]
-    :param x: array [soma.g_pas, dend.g_pas slope, dend.g_pas tau]
+    
+    :param x: array
+    :param local_context: :class:'Context'
     """
     if local_context is None:
         local_context = context
