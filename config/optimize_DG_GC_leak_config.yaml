@@ -16,7 +16,7 @@ update_context:
   optimize_DG_GC_leak: update_context_leak
 get_features_stages:
 - compute_features: compute_features_leak
-  get_extra_args: get_extra_args_leak
+  get_args_static: get_args_static_leak
   source: optimize_DG_GC_leak
   group_size: 3
 get_objectives:

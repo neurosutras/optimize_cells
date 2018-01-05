@@ -41,7 +41,7 @@ def main(config_file_path, export, output_dir, export_file_path, label, disp, ve
     context.update(locals())
     config_interactive(config_file_path=config_file_path, output_dir=output_dir, export_file_path=export_file_path,
                        label=label, verbose=verbose)
-    extra_args = get_extra_args_leak(context.x0_array)
+    extra_args = get_args_static_leak(context.x0_array)
     group_size = len(extra_args[0])
     sequences = [[context.x0_array] * group_size] + extra_args + [[context.export] * group_size]
     primitives = map(compute_features_leak, *sequences)
@@ -299,14 +299,10 @@ def update_source_contexts(x, local_context=None):
         update_func(x, local_context)
 
 
-def get_extra_args_leak(x, features=None):
+def get_args_static_leak():
     """
-    Computing features is a nested map operation requiring group_size number of concurrent calculations. In some cases,
-    computing a set of features depends on extra arguments which themselves depend on free parameters during
-    optimization, or features computed in a previous stage. By separating the packaging of extra arguments from the
-    calculation of features, both can be distributed across parallel processes.
-    :param x: array
-    :param features: dict
+    A nested map operation is required to compute leak features. The arguments to be mapped are the same (static) for
+    each set of parameters.
     :return: list of list
     """
     return [['soma', 'dend', 'distal_dend']]
@@ -435,7 +431,7 @@ def offset_vm(description, vm_target=None):
 
 def update_context_leak(x, local_context=None):
     """
-    
+
     :param x: array
     :param local_context: :class:'Context'
     """
