@@ -35,15 +35,16 @@ def main(config_file_path, export, output_dir, export_file_path, label, disp, ve
     :param export_file_path: str
     :param label: str
     :param disp: bool
+    :param verbose: bool
     """
     # requires a global variable context: :class:'Context'
 
     context.update(locals())
     config_interactive(config_file_path=config_file_path, output_dir=output_dir, export_file_path=export_file_path,
                        label=label, verbose=verbose)
-    extra_args = get_args_static_leak(context.x0_array)
-    group_size = len(extra_args[0])
-    sequences = [[context.x0_array] * group_size] + extra_args + [[context.export] * group_size]
+    args = get_args_static_leak()
+    group_size = len(args[0])
+    sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size]
     primitives = map(compute_features_leak, *sequences)
     features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
     features, objectives = get_objectives_leak(features)
@@ -308,12 +309,13 @@ def get_args_static_leak():
     return [['soma', 'dend', 'distal_dend']]
 
 
-def compute_features_leak(x, section, export=False):
+def compute_features_leak(x, section, export=False, plot=False):
     """
     Inject a hyperpolarizing step current into the specified section, and return the steady-state input resistance.
     :param x: array
     :param section: str
     :param export: bool
+    :param plot: bool
     :return: dict: {str: float}
     """
     start_time = time.time()
@@ -345,6 +347,8 @@ def compute_features_leak(x, section, export=False):
     result[section+' R_inp'] = Rinp
     print 'Process: %i: %s: %s took %.1f s, Rinp: %.1f' % (os.getpid(), title, description, time.time() - start_time,
                                                                                     Rinp)
+    if plot:
+        context.sim.plot()
     if export:
         export_sim_results()
     return result

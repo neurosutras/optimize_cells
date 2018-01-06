@@ -67,18 +67,20 @@ feature_names:
 - adi
 - f_I_slope
 - f_I_residuals
-features_modules: !!python/tuple
-- parallel_optimize_GC_spiking
-- parallel_optimize_GC_spiking
-get_features: !!python/tuple
-- get_spike_shape_features
-- get_fI_features
-group_sizes: !!python/tuple
-- 1
-- 10
+update_context:
+  optimize_DG_GC_spiking: update_context_spike_shape
+get_features_stages:
+- source: optimize_DG_GC_spiking
+  compute_features: compute_features_spike_shape
+- source: optimize_DG_GC_spiking
+  get_args_dynamic: get_args_dynamic_fI
+  compute_features: compute_features_fI
+  filter_features: filter_features_fI
+get_objectives:
+    optimize_DG_GC_spiking: get_objectives
 kwargs:
-  mech_file_path: data/090717 GC optimizing spiking.yaml
-  neuroH5_file_path: morphologies/121516_DGC_trees.pkl
+  mech_file_path: cells/mechanisms/090717 GC optimizing spiking.yaml
+  neuroH5_file_path: cells/morphologies/121516_DGC_trees.pkl
   neuroH5_index: 0
   spines: False
   verbose: False
@@ -98,9 +100,7 @@ objective_names:
 - th_count
 - adi
 - f_I_slope
-objectives_modules: !!python/tuple
-- parallel_optimize_GC_spiking
-optimization_title: GC_spiking
+optimization_title: DG_GC_spiking
 param_gen: PopulationAnnealing
 param_names:
 - soma.gbar_nas
@@ -175,10 +175,6 @@ target_val:
   v_th: -48.0
   vm_stability: 0.0
   f_I_slope: 53.0
-update_modules: !!python/tuple
-- parallel_optimize_GC_spiking
-update_params: !!python/tuple
-- update_spike_shape_params
 x0:
   ais.gbar_nax: 0.1681
   ais.gkmbar: 0.01286

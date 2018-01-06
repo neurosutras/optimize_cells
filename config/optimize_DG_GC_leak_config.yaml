@@ -15,14 +15,13 @@ feature_names:
 update_context:
   optimize_DG_GC_leak: update_context_leak
 get_features_stages:
-- compute_features: compute_features_leak
+- source: optimize_DG_GC_leak
+  compute_features: compute_features_leak
   get_args_static: get_args_static_leak
-  source: optimize_DG_GC_leak
-  group_size: 3
 get_objectives:
   optimize_DG_GC_leak: get_objectives_leak
 kwargs:
-  mech_file_path: cell/mechanisms/090717 GC optimizing spiking.yaml
+  mech_file_path: cells/mechanisms/090717 GC optimizing spiking.yaml
   neuroH5_file_path: cells/morphologies/121516_DGC_trees.pkl
   neuroH5_index: 0
   spines: False
