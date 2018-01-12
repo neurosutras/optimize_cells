@@ -25,8 +25,8 @@ kwargs:
   neuroH5_file_path: cells/morphologies/121516_DGC_trees.pkl
   neuroH5_index: 0
   spines: False
-  cvode: False
-  verbose: False
+  cvode: True
+  verbose: True
   daspk: True
 objective_names:
 - dend R_inp

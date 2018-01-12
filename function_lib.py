@@ -1,5 +1,8 @@
 __author__ = 'milsteina'
-from mpi4py import MPI
+try:
+    from mpi4py import MPI
+except Exception:
+    pass
 import h5py
 import math
 import pickle
