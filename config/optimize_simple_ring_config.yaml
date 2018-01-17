@@ -1,18 +1,18 @@
 bounds:
+  n0.syn_weight n1: !!python/tuple
+  - 1.0E-8
+  - 10.
+  n0.syn_weight n2: !!python/tuple
+  - 1.0E-8
+  - 10.
   n1.syn_weight n2: !!python/tuple
-  - 1.0E-8
-  - 10.
-  n1.syn_weight n3: !!python/tuple
-  - 1.0E-8
-  - 10.
-  n2.syn_weight n3: !!python/tuple
   - -10.
   - -1.0E-8
 feature_names:
-- n3.EPSP
-- n3.IPSP
+- n2.EPSP
+- n2.IPSP
 update_context:
-  optimize_simple_ring: update_simple_ring
+  optimize_simple_ring: update_context_simple_ring
 get_features_stages:
 - source: optimize_simple_ring
   compute_features: compute_features_simple_ring
@@ -21,21 +21,21 @@ get_objectives:
 kwargs:
   verbose: True
 objective_names:
-- n3.EPSP
-- n3.IPSP
+- n2.EPSP
+- n2.IPSP
 optimization_title: simple_ring
 param_gen: PopulationAnnealing
 param_names:
+- n0.syn_weight n1
+- n0.syn_weight n2
 - n1.syn_weight n2
-- n1.syn_weight n3
-- n2.syn_weight n3
 target_range:
-  n3.EPSP: 3.
-  n3.IPSP: 3.
+  n2.EPSP: 3.
+  n2.IPSP: 3.
 target_val:
-  n3.EPSP: 10.
-  n3.IPSP: -5.
+  n2.EPSP: 10.
+  n2.IPSP: -5.
 x0:
-  n1.syn_weight n2: 0.01
-  n1.syn_weight n3: 0.01
-  n2.syn_weight n3: -0.01
+  n0.syn_weight n1: 0.01
+  n0.syn_weight n2: 0.01
+  n1.syn_weight n2: -0.01

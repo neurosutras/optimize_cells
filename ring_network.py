@@ -6,14 +6,9 @@ from ring_cell import BallStick
 
 class Ring(object):
 
-  def __init__(self, ncell, delay, this_pc, dt=None):
+  def __init__(self, ncell, delay, pc, dt=None):
     #spiking script uses dt = 0.02
-    global pc
-    pc = this_pc
-    global rank
-    rank = int(pc.id())
-    global nhost
-    nhost = int(pc.nhost())
+    self.pc = pc
     self.delay = delay
     self.ncell = int(ncell)
     self.mkring(self.ncell)
@@ -22,51 +17,49 @@ class Ring(object):
     self.spike_record()
     self.pydicts = {}
 
-  """
-  def __del__(self):
-    pc.gid_clear()
-    #print "delete ", self
-  """
-
   def mkring(self, ncell):
     self.mkcells(ncell)
     self.connectcells(ncell)
 
   def mkcells(self, ncell):
-    global rank, nhost
+    rank = int(self.pc.id())
+    nhost = int(self.pc.nhost())
     self.cells = []
     self.gids = []
     for i in range(rank, ncell, nhost):
       cell = BallStick()
       self.cells.append(cell)
       self.gids.append(i)
-      pc.set_gid2node(i, rank)
+      self.pc.set_gid2node(i, rank)
       nc = cell.connect2target(None)
-      pc.cell(i, nc)
+      self.pc.cell(i, nc)
+    #print self.gids
 
   def connectcells(self, ncell):
-    global rank, nhost
-    self.nclist = []
+    rank = int(self.pc.id())
+    nhost = int(self.pc.nhost())
+    self.ncdict = {}
     # not efficient but demonstrates use of pc.gid_exists
-    for i in [0]: #connect only cell 0 to cell 1
-      targid = (i+1)%ncell
-      if pc.gid_exists(targid):
-        target = pc.gid2cell(targid)
+    for pair in [(0, 1), (0, 2), (1, 2)]: #connect only cell 0 to cell 1
+      presyn_gid = pair[0] % ncell
+      target_gid = pair[1] % ncell
+      if self.pc.gid_exists(target_gid):
+        target = self.pc.gid2cell(target_gid)
         syn = target.synlist[0]
-        nc = pc.gid_connect(i, syn)
-        self.nclist.append(nc)
+        nc = self.pc.gid_connect(presyn_gid, syn)
         nc.delay = self.delay
         nc.weight[0] = 0.01
-
+        self.ncdict.update({pair: nc})
+    #print self.ncdict
 
   #Instrumentation - stimulation and recording
   def mkstim(self):
-    if not pc.gid_exists(0):
+    if not self.pc.gid_exists(0):
       return
     self.stim = h.NetStim()
     self.stim.number = 1
     self.stim.start = 0
-    self.ncstim = h.NetCon(self.stim, pc.gid2cell(0).synlist[0])
+    self.ncstim = h.NetCon(self.stim, self.pc.gid2cell(0).synlist[0])
     self.ncstim.delay = 0
     self.ncstim.weight[0] = 0.01
 
@@ -74,9 +67,9 @@ class Ring(object):
     if 0 in self.gids:
       self.ncstim.weight[0] = new_weight
 
-  def update_syn_weight(self, new_weight):
-    if self.nclist:
-      self.nclist[0].weight[0] = new_weight
+  def update_syn_weight(self, pair, new_weight):
+    if pair in self.ncdict:
+      self.ncdict[pair].weight[0] = new_weight
 
   def spike_record(self):
     self.spike_tvec = {}
@@ -85,7 +78,7 @@ class Ring(object):
       tvec = h.Vector()
       idvec = h.Vector()
       nc = self.cells[i].connect2target(None)
-      pc.spike_record(nc.srcgid(), tvec, idvec)
+      self.pc.spike_record(nc.srcgid(), tvec, idvec)
       #Alternatively, could use nc.record(tvec)
       self.spike_tvec[gid] = tvec
       self.spike_idvec[gid] = idvec
@@ -111,13 +104,17 @@ class Ring(object):
       self.pydicts[name][key] = value.to_python()
 
 
-def runring(ring, ncell=5, delay=1, tstop=100):
+def runring(ring, pc, tstop=100):
   pc.set_maxstep(10)
   h.stdinit()
   pc.psolve(tstop)
   ring.vecdict_to_pydict(ring.voltage_tvec, 't')
   ring.vecdict_to_pydict(ring.voltage_recvec, 'rec')
+  nhost = int(pc.nhost())
+  #Use MPI Gather
   all_dicts = pc.py_alltoall([ring.pydicts for i in range(nhost)])
-  t = {key: value for dict in all_dicts for key, value in dict['t'].iteritems()}
-  rec = {key: value for dict in all_dicts for key, value in dict['rec'].iteritems()}
-  return {'t': t, 'rec': rec}
+  if rank == 0:
+    t = {key: value for dict in all_dicts for key, value in dict['t'].iteritems()}
+    rec = {key: value for dict in all_dicts for key, value in dict['rec'].iteritems()}
+    return {'t': t, 'rec': rec}
+  return None
