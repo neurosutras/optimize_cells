@@ -12,26 +12,24 @@ import collections
 import click
 
 
-script_filename='optimize_DG_GC_leak.py'
-
 context = Context()
 
 
 @click.command()
 @click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
               default='config/optimize_DG_GC_leak_config.yaml')
+@click.option("--output-dir", type=click.Path(exists=True, file_okay=False, dir_okay=True), default='data')
 @click.option("--export", is_flag=True)
-@click.option("--output-dir", type=str, default='data')
 @click.option("--export-file-path", type=str, default=None)
 @click.option("--label", type=str, default=None)
 @click.option("--disp", is_flag=True)
 @click.option("--verbose", is_flag=True)
-def main(config_file_path, export, output_dir, export_file_path, label, disp, verbose):
+def main(config_file_path, output_dir, export, export_file_path, label, disp, verbose):
     """
 
     :param config_file_path: str (path)
+    :param output_dir: str (path)
     :param export: bool
-    :param output_dir: str
     :param export_file_path: str
     :param label: str
     :param disp: bool
@@ -150,7 +148,7 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
 
     context.update_context_funcs = []
     for source, func_name in context.update_context_dict.iteritems():
-        if source == script_filename.split('.')[0]:
+        if source == os.path.basename(__file__).split('.')[0]:
             try:
                 func = globals()[func_name]
                 if not isinstance(func, collections.Callable):
@@ -180,7 +178,7 @@ def config_controller(export_file_path, output_dir, **kwargs):
 
 
 def config_worker(update_context_funcs, param_names, default_params, target_val, target_range, temp_output_path,
-                  export_file_path, output_dur, disp, mech_file_path, neuroH5_file_path, neuroH5_index, spines,
+                  export_file_path, output_dir, disp, mech_file_path, neuroH5_file_path, neuroH5_index, spines,
                   **kwargs):
     """
     :param update_context_funcs: list of function references
@@ -190,7 +188,7 @@ def config_worker(update_context_funcs, param_names, default_params, target_val,
     :param target_range: dict
     :param temp_output_path: str
     :param export_file_path: str
-    :param output_dur: str (dir path)
+    :param output_dir: str (dir path)
     :param disp: bool
     :param mech_file_path: str
     :param neuroH5_file_path: str
@@ -461,4 +459,5 @@ def export_sim_results():
 
 
 if __name__ == '__main__':
-    main(args=sys.argv[(list_find(lambda s: s.find(script_filename) != -1, sys.argv) + 1):], standalone_mode=False)
+    main(args=sys.argv[(list_find(lambda s: s.find(os.path.basename(__file__)) != -1, sys.argv) + 1):],
+         standalone_mode=False)
