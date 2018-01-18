@@ -104,16 +104,17 @@ class Ring(object):
       self.pydicts[name][key] = value.to_python()
 
 
-def runring(ring, pc, tstop=100):
+def runring(ring, pc, comm, tstop=100):
   pc.set_maxstep(10)
   h.stdinit()
   pc.psolve(tstop)
   ring.vecdict_to_pydict(ring.voltage_tvec, 't')
   ring.vecdict_to_pydict(ring.voltage_recvec, 'rec')
   nhost = int(pc.nhost())
-  #Use MPI Gather
-  all_dicts = pc.py_alltoall([ring.pydicts for i in range(nhost)])
-  if rank == 0:
+  #Use MPI Gather instead:
+  #all_dicts = pc.py_alltoall([ring.pydicts for i in range(nhost)])
+  all_dicts = comm.gather(ring.pydicts, root=0)
+  if int(pc.id()) == 0:
     t = {key: value for dict in all_dicts for key, value in dict['t'].iteritems()}
     rec = {key: value for dict in all_dicts for key, value in dict['rec'].iteritems()}
     return {'t': t, 'rec': rec}

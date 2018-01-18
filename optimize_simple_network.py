@@ -7,19 +7,19 @@ Requires use of a nested.parallel interface.
 __author__ = 'Aaron D. Milstein and Grace Ng'
 from nested.optimize_utils import *
 from nested.parallel import *
-from ring_network import *
+from dentate_network import *
 import collections
 import click
 
 
-script_filename='optimize_simple_ring.py'
+script_filename='optimize_simple_network.py'
 
 context = Context()
 
 
 @click.command()
 @click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='config/optimize_simple_ring_config.yaml')
+              default='config/optimize_simple_network_config.yaml')
 @click.option("--export", is_flag=True)
 @click.option("--output-dir", type=str, default='data')
 @click.option("--export-file-path", type=str, default=None)
@@ -227,8 +227,8 @@ def setup_network(verbose=False, cvode=False, daspk=False, **kwargs):
     :param cvode: bool
     :param daspk: bool
     """
-    context.ring = Ring(context.ncell, context.delay, context.pc)
-    # context.pc.set_maxstep(10)
+    # Set up Env according to dentate script
+    init(context.env)
 
 
 #Need to modify this for the network
