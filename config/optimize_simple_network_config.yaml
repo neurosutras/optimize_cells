@@ -19,6 +19,22 @@ get_features_stages:
 get_objectives:
   optimize_simple_ring: get_objectives_simple_ring
 kwargs:
+  network_config_file: config/Full_Scale_Control_log_normal_weights.yaml
+  template_paths:
+  dataset_prefix:
+  results_path:
+  results_id: None
+  node_rank_file: None
+  io_size: 0
+  vrecord_fraction: 0
+  coredat: False
+  tstop: 0
+  v_init: -65
+  max_walltime_hours: 0
+  results_write_time: 0
+  dt: 0.025
+  ldbal: False
+  lptbal: False
   verbose: True
 objective_names:
 - n2.EPSP

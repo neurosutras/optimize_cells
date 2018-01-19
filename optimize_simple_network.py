@@ -8,6 +8,7 @@ __author__ = 'Aaron D. Milstein and Grace Ng'
 from nested.optimize_utils import *
 from nested.parallel import *
 from dentate_network import *
+from env import Env
 import collections
 import click
 
@@ -228,6 +229,11 @@ def setup_network(verbose=False, cvode=False, daspk=False, **kwargs):
     :param daspk: bool
     """
     # Set up Env according to dentate script
+    context.env = Env(context.interace.comm, kwargs['network_config_file'], kwargs['template_paths'],
+                      kwargs['dataset_prefix'], kwargs['results_path'], kwargs['results_id'], kwargs['node_rank_file'],
+                      kwargs['io_size'], kwargs['vrecord_fraction'], kwargs['coredat'], kwargs['tstop'], kwargs['v_init'],
+                      kwargs['max_walltime_hours'], kwargs['results_write_time'], kwargs['dt'], kwargs['ldbal'],
+                      kwargs['lptbal'], kwargs['verbose'])
     init(context.env)
 
 
