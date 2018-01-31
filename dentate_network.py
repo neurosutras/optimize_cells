@@ -2,6 +2,12 @@
 ##  Dentate Gyrus model initialization script
 ##  Author: Ivan Raikov
 
+"""
+Example call: mpirun -n 4 python dentate_network.py --config-file ../dentate/config/Full_Scale_Control_log_normal_weights.yaml
+--template-paths ../dgc/Mateos-Aparicio2014/ --dataset-prefix ../dentate/datasets/ --results-path data
+
+"""
+
 import sys, os
 import os.path
 import click
@@ -14,9 +20,15 @@ import h5py
 from neuron import h
 from neuroh5.io import read_projection_names, scatter_read_graph, bcast_graph, scatter_read_trees, \
     scatter_read_cell_attributes, write_cell_attributes
-from neuroh5_io_utils import get_cell_attributes_gid_index_map, get_cell_attributes_by_gid
+from neuroh5_io_utils import get_cell_attributes_index_map, select_cell_attributes, get_edge_attributes_index_map, \
+    select_edge_attributes, select_tree_attributes
+import dentate.utils as utils
 from env import Env
-import lpt, utils, synapses, cells
+import lpt, synapses, cells
+from nested.utils import *
+
+
+context = Context()
 
 
 ## Estimate cell complexity. Code by Michael Hines from the discussion thread
@@ -192,24 +204,12 @@ def connectcells(env, gid_list):
             if int(env.pc.id()) == 0:
                 print '*** Reading synapse attributes of population %s' % (postsyn_name)
 
-
-        """
-        if env.nodeRanks is None:
-            cell_attributes_dict = scatter_read_cell_attributes(env.comm, forestFilePath, postsyn_name,
-                                                                namespaces=cell_attr_namespaces,
-                                                                io_size=env.IOsize)
-        else:
-            cell_attributes_dict = scatter_read_cell_attributes(env.comm, forestFilePath, postsyn_name,
-                                                                namespaces=cell_attr_namespaces,
-                                                                node_rank_map=env.nodeRanks,
-                                                                io_size=env.IOsize)
-        """
-        gid_index_synapses_map = get_cell_attributes_gid_index_map(env.comm, forestFilePath, 'GC', 'Synapse Attributes')
-        if has_weights:
-            gid_index_weights_map = get_cell_attributes_gid_index_map(env.comm, forestFilePath, 'GC', 'Synapse Attributes')
+        gid_index_synapses_map = get_cell_attributes_index_map(env.comm, forestFilePath, 'GC', 'Synapse Attributes')
+        if synapse_config.has_key('weights namespace'):
+            gid_index_weights_map = get_cell_attributes_index_map(env.comm, forestFilePath, 'GC', weights_namespace)
         cell_synapses_dict, cell_weights_dict = {}, {}
         for gid in gid_list:
-            cell_attributes_dict = get_cell_attributes_by_gid(gid, env.comm, forestFilePath, gid_index_synapses_map,
+            cell_attributes_dict = select_cell_attributes(gid, env.comm, forestFilePath, gid_index_synapses_map,
                                                               'GC', 'Synapse Attributes')
             cell_synapses_dict[gid] = {k: v for (k, v) in cell_attributes_dict['Synapse Attributes']}
             if has_weights:
@@ -634,47 +634,101 @@ def init(env):
             lpt_bal(env)
 
 
-# Run the simulation
-def run(env):
+def get_cell(env, gid, population):
+    """
+
+    :param env:
+    :param gid:
+    :param population:
+    :return:
+    """
+    h.load_file("nrngui.hoc")
+    h.load_file("loadbal.hoc")
+    h('objref fi_status, fi_checksimtime, pc, nclist, nc, nil')
+    h('strdef datasetPath')
+    h('numCells = 0')
+    h('totalNumCells = 0')
+    h('max_walltime_hrs = 0')
+    h('mkcellstime = 0')
+    h('mkstimtime = 0')
+    h('connectcellstime = 0')
+    h('connectgjstime = 0')
+    h('results_write_time = 0')
+    h.nclist = h.List()
+    datasetPath = os.path.join(env.datasetPrefix, env.datasetName)
+    h.datasetPath = datasetPath
+    ##  new ParallelContext object
+    # h.pc = h.ParallelContext()
+    # env.pc = h.pc
     rank = int(env.pc.id())
     nhosts = int(env.pc.nhost())
-
-    env.pc.barrier()
-    env.pc.psolve(h.tstop)
-
-    if (rank == 0):
-        print "*** Simulation completed"
-    del (env.cells)
-    env.pc.barrier()
-    if (rank == 0):
-        print "*** Writing spike data"
-    spikeout(env, env.spikeoutPath, np.array(env.t_vec, dtype=np.float32), np.array(env.id_vec, dtype=np.uint32))
-    if env.vrecordFraction > 0.:
-        if (rank == 0):
-            print "*** Writing intracellular trace data"
-        t_vec = np.arange(0, h.tstop + h.dt, h.dt, dtype=np.float32)
-        vout(env, env.spikeoutPath, t_vec, env.v_dict)
-
-    comptime = env.pc.step_time()
-    cwtime = comptime + env.pc.step_wait()
-    maxcw = env.pc.allreduce(cwtime, 2)
-    avgcomp = env.pc.allreduce(comptime, 1) / nhosts
-    maxcomp = env.pc.allreduce(comptime, 2)
+    ## polymorphic value template
+    h.load_file("./templates/Value.hoc")
+    ## randomstream template
+    h.load_file("./templates/ranstream.hoc")
+    ## stimulus cell template
+    h.load_file("./templates/StimCell.hoc")
+    h.xopen("./lib.hoc")
+    h.dt = env.dt
+    h.tstop = env.tstop
+    if env.optldbal or env.optlptbal:
+        lb = h.LoadBalance()
+        if not os.path.isfile("mcomplex.dat"):
+            lb.ExperimentalMechComplex()
 
     if (env.pc.id() == 0):
-        print "Execution time summary for host 0:"
-        print "  created cells in %g seconds" % env.mkcellstime
-        print "  connected cells in %g seconds" % env.connectcellstime
-        print "  created gap junctions in %g seconds" % env.connectgjstime
-        print "  ran simulation in %g seconds" % comptime
-        if (maxcw > 0):
-            print "  load balance = %g" % (avgcomp / maxcw)
+        mkspikeout(env, env.spikeoutPath)
+    env.pc.barrier()
+    h.startsw()
+    mkcells(env)
+    env.mkcellstime = h.stopsw()
+    env.pc.barrier()
+    if (env.pc.id() == 0):
+        print "*** Cells created in %g seconds" % env.mkcellstime
+    print "*** Rank %i created %i cells" % (env.pc.id(), len(env.cells))
+    h.startsw()
+    mkstim(env)
+    env.mkstimtime = h.stopsw()
+    if (env.pc.id() == 0):
+        print "*** Stimuli created in %g seconds" % env.mkstimtime
+    env.pc.barrier()
+    h.startsw()
+    connectcells(env)
+    env.connectcellstime = h.stopsw()
+    env.pc.barrier()
+    if (env.pc.id() == 0):
+        print "*** Connections created in %g seconds" % env.connectcellstime
+    print "*** Rank %i created %i connections" % (env.pc.id(), int(h.nclist.count()))
+    h.startsw()
+    # connectgjs(env)
+    env.connectgjstime = h.stopsw()
+    if (env.pc.id() == 0):
+        print "*** Gap junctions created in %g seconds" % env.connectgjstime
+    env.pc.setup_transfer()
+    env.pc.set_maxstep(10.0)
+    h.max_walltime_hrs = env.max_walltime_hrs
+    h.mkcellstime = env.mkcellstime
+    h.mkstimtime = env.mkstimtime
+    h.connectcellstime = env.connectcellstime
+    h.connectgjstime = env.connectgjstime
+    h.results_write_time = env.results_write_time
+    h.fi_checksimtime = h.FInitializeHandler("checksimtime(pc)")
+    if (env.pc.id() == 0):
+        print "dt = %g" % h.dt
+        print "tstop = %g" % h.tstop
+        h.fi_status = h.FInitializeHandler("simstatus()")
+    h.v_init = env.v_init
+    h.stdinit()
+    h.finitialize(env.v_init)
+    env.pc.barrier()
+    if env.optldbal or env.optlptbal:
+        cx(env)
+        ld_bal(env)
+        if env.optlptbal:
+            lpt_bal(env)
 
-    env.pc.runworker()
-    env.pc.done()
-    h.quit()
 
-
+"""
 @click.command()
 @click.option("--config-file", required=True, type=click.Path(exists=True, file_okay=True, dir_okay=False))
 @click.option("--template-paths", type=str)
@@ -693,6 +747,9 @@ def run(env):
 @click.option("--ldbal", is_flag=True)
 @click.option("--lptbal", is_flag=True)
 @click.option('--verbose', '-v', is_flag=True)
+"""
+
+
 def main(config_file, template_paths, dataset_prefix, results_path, results_id, node_rank_file, io_size, coredat,
          vrecord_fraction, tstop, v_init, max_walltime_hours, results_write_time, dt, ldbal, lptbal, verbose):
     np.seterr(all='raise')
@@ -703,9 +760,11 @@ def main(config_file, template_paths, dataset_prefix, results_path, results_id, 
               vrecord_fraction, coredat, tstop, v_init,
               max_walltime_hours, results_write_time,
               dt, ldbal, lptbal, verbose)
-    init(env)
-    run(env)
-
+    print 'finished initial setup'
+    # test = get_cell(env, 0, 'GC')
+    context.update(locals())
 
 if __name__ == '__main__':
-    main(args=sys.argv[(sys.argv.index("main.py") + 1):])
+    # main(args=sys.argv[(sys.argv.index("main.py") + 1):])
+    main('../dentate/config/Small_Scale_Control_log_normal_weights.yaml', '../dgc/Mateos-Aparicio2014',
+         '../dentate/datasets', 'data', '', None, 1, False, 0.001, 1, -75., 1., 360., 0.025, False, False, False)

@@ -204,6 +204,7 @@ class HocCell(object):
         and axon.
         :param existing_hoc_cell: :class: 'h.hocObject' : instance of a cell template class already built in hoc
         """
+        #Need to make soma sections for the python cell
         soma_list = existing_hoc_cell.soma
         basal_list = existing_hoc_cell.basal
         apical_list = existing_hoc_cell.apical
@@ -243,6 +244,7 @@ class HocCell(object):
             new_node.sec.diam = diam
             new_node.connect(parent_node, parent_loc, child_loc)
             self.convert_hoc_sections(new_node, child.children())
+    #Need to figure out how to create Synapse objects -- maybe simplified ones
 
     def make_section(self, sec_type):
         """
