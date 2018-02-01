@@ -56,7 +56,7 @@ class HocCell(object):
             # Membrane mechanisms must be reinitialized whenever cable properties (Ra, cm) or spatial resolution (nseg)
             # changes.
         elif not self.existing_hoc_cell is None:
-            self.load_morphology_from_hoc()
+            self.load_morphology_from_hoc(self.existing_hoc_cell)
         elif not self.neuroH5_dict is None:
             self.load_morphology_from_neuroH5(preserve_3d)
         if self.axon:
@@ -204,53 +204,48 @@ class HocCell(object):
         and axon.
         :param existing_hoc_cell: :class: 'h.hocObject' : instance of a cell template class already built in hoc
         """
-        #Need to make soma sections for the python cell
-        soma_list = existing_hoc_cell.soma
-        basal_list = existing_hoc_cell.basal
-        apical_list = existing_hoc_cell.apical
-        for sec in soma_list:
-            for child in (child for child in sec.children() if child in basal_list or child in apical_list):
-                L = child.L
-                diam = child.diam
-                if child in basal_list:
-                    new_node = self.make_section('basal')
-                    new_node.sec.L = L
-                    new_node.sec.diam = diam
-                    new_node.connect(self.soma[1])
-                    self.convert_hoc_sections(new_node, child.children())
-                elif child in apical_list:
-                    new_node = self.make_section('apical')
-                    new_node.sec.L = L
-                    new_node.sec.diam = diam
-                    new_node.connect(self.soma[0])
-                    self.convert_hoc_sections(new_node, child.children())
+        sec_types = ['soma', 'axon', 'ais', 'axon_hill', 'apical', 'basal', 'trunk']
+        type_to_secs_dict = {}
+        sec_to_type_dict = {}
+        for sec_type in sec_types:
+            if hasattr(existing_hoc_cell, sec_type):
+                type_to_secs_dict[sec_type] = list(getattr(existing_hoc_cell, sec_type))
+                for sec in getattr(existing_hoc_cell, sec_type):
+                    sec_to_type_dict[sec.hname()] = sec_type
+        first_soma_sec = type_to_secs_dict['soma'][0]
+        soma_node = self.make_section('soma', first_soma_sec)
+        for child in (child for child in first_soma_sec.children()):
+            child_sec_type = sec_to_type_dict[child.hname()]
+            new_node = self.make_section(child_sec_type, child)
+            new_node.connect(soma_node, hoc_exists=True)
+            self.convert_hoc_sections(new_node, child.children(), sec_to_type_dict)
 
-    def convert_hoc_sections(self, parent_node, child_list):
+
+    def convert_hoc_sections(self, parent_node, child_list, sec_to_type_dict):
         """
 
         :param parent_node: :class:'SHocNode'
         :param child_list: list of :class:'h.Section'
         """
-        print "Under construction: import morphology from hoc"
         for child in child_list:
-            L = child.L
-            diam = child.diam
-            child.push()
-            parent_loc = h.parent_connection()
-            child_loc = h.section_orientation()
-            h.pop_section()
-            new_node = self.make_section(parent_node.type)
-            new_node.sec.L = L
-            new_node.sec.diam = diam
-            new_node.connect(parent_node, parent_loc, child_loc)
-            self.convert_hoc_sections(new_node, child.children())
-    #Need to figure out how to create Synapse objects -- maybe simplified ones
+            child_sec_type = sec_to_type_dict[child.hname()]
+            new_node = self.make_section(child_sec_type, child)
+            new_node.connect(parent_node, hoc_exists=True)
+            self.convert_hoc_sections(new_node, child.children(), sec_to_type_dict)
+            """
+            syn = Synapse(self, new_node, syn_types=None, stochastic=1, loc=None, id=None, delay=0., weight=1.,
+                          threshold=-30., stochastic_type=None, source=None, source_node=None, source_param=None,
+                          source_loc=0.5)
+            #Need to figure out how to create Synapse objects -- maybe simplified ones
+            """
 
-    def make_section(self, sec_type):
+
+    def make_section(self, sec_type, sec=None):
         """
         Create a new hoc section to associate with this node, and this cell, and store information about it in the
         node's content dictionary.
         :param sec_type: str
+        :param sec: :class:'h.Section'
         :return node: :class:'SHocNode'
         """
         node = SHocNode(self.index)
@@ -262,7 +257,10 @@ class HocCell(object):
             self._node_dict['spine'].append(node)
         else:
             self._node_dict[sec_type].append(node)
-        node.sec = h.Section(name=node.name, cell=self)
+        if sec is None:
+            node.sec = h.Section(name=node.name, cell=self)
+        else:
+            node.sec = sec
         return node
 
     def make_skeleton(self, raw_node, parent, length=0., diams=None):
@@ -1904,7 +1902,7 @@ class SHocNode(btmorph.btstructs2.SNode2):
         else:
             self.content['layer'] = [layer]
 
-    def connect(self, parent, ploc=1., cloc=0.):
+    def connect(self, parent, ploc=1., cloc=0., hoc_exists=False):
         """
         Connects this SHocNode node to a parent node, and establishes a connection between their associated
         hoc sections.
@@ -1914,7 +1912,8 @@ class SHocNode(btmorph.btstructs2.SNode2):
         """
         self.parent = parent
         parent.add_child(self)
-        self.sec.connect(parent.sec, ploc, cloc)
+        if not hoc_exists:
+            self.sec.connect(parent.sec, ploc, cloc)
 
     @property
     def name(self):
