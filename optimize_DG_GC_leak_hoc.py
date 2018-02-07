@@ -10,28 +10,27 @@ from plot_results import *
 from nested.optimize_utils import *
 import collections
 import click
+import hoc_cell_wrapper
 
-
-script_filename='optimize_DG_GC_leak.py'
 
 context = Context()
 
 
 @click.command()
 @click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='config/optimize_DG_GC_leak_config.yaml')
+              default='config/optimize_DG_GC_hoc_leak_config.yaml')
+@click.option("--output-dir", type=click.Path(exists=True, file_okay=False, dir_okay=True), default='data')
 @click.option("--export", is_flag=True)
-@click.option("--output-dir", type=str, default='data')
 @click.option("--export-file-path", type=str, default=None)
 @click.option("--label", type=str, default=None)
 @click.option("--disp", is_flag=True)
 @click.option("--verbose", is_flag=True)
-def main(config_file_path, export, output_dir, export_file_path, label, disp, verbose):
+def main(config_file_path, output_dir, export, export_file_path, label, disp, verbose):
     """
 
     :param config_file_path: str (path)
+    :param output_dir: str (path)
     :param export: bool
-    :param output_dir: str
     :param export_file_path: str
     :param label: str
     :param disp: bool
@@ -45,15 +44,15 @@ def main(config_file_path, export, output_dir, export_file_path, label, disp, ve
     args = get_args_static_leak()
     group_size = len(args[0])
     sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size]
-    primitives = map(compute_features_leak, *sequences)
-    features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
-    features, objectives = get_objectives_leak(features)
+    #primitives = map(compute_features_leak, *sequences)
+    #features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
+    #features, objectives = get_objectives_leak(features)
     print 'params:'
     pprint.pprint(context.x0_dict)
     print 'features:'
-    pprint.pprint(features)
+    #pprint.pprint(features)
     print 'objectives:'
-    pprint.pprint(objectives)
+    #pprint.pprint(objectives)
 
 
 def config_interactive(config_file_path=None, output_dir=None, temp_output_path=None, export_file_path=None,
@@ -140,7 +139,7 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
         context.temp_output_path = '%s%s_pid%i_%s%s_temp_output.hdf5' % \
                                (output_dir_str, datetime.datetime.today().strftime('%Y%m%d%H%M'), os.getpid(),
                                 context.optimization_title, label)
-    
+
     if export_file_path is not None:
         context.export_file_path = export_file_path
     if 'export_file_path' not in context() or context.export_file_path is None:
@@ -150,7 +149,7 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
 
     context.update_context_funcs = []
     for source, func_name in context.update_context_dict.iteritems():
-        if source == script_filename.split('.')[0]:
+        if source == os.path.basename(__file__).split('.')[0]:
             try:
                 func = globals()[func_name]
                 if not isinstance(func, collections.Callable):
@@ -164,7 +163,7 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
     config_worker(context.update_context_funcs, context.param_names, context.default_params, context.target_val,
                   context.target_range, context.temp_output_path, context.export_file_path, context.output_dir,
                   context.disp, **context.kwargs)
-    update_source_contexts(context.x0_array)
+    #update_source_contexts(context.x0_array)
 
 
 def config_controller(export_file_path, output_dir, **kwargs):
@@ -180,7 +179,7 @@ def config_controller(export_file_path, output_dir, **kwargs):
 
 
 def config_worker(update_context_funcs, param_names, default_params, target_val, target_range, temp_output_path,
-                  export_file_path, output_dur, disp, mech_file_path, neuroH5_file_path, neuroH5_index, spines,
+                  export_file_path, output_dir, disp, mech_file_path, neuroH5_file_path, neuroH5_index, spines,
                   **kwargs):
     """
     :param update_context_funcs: list of function references
@@ -190,7 +189,7 @@ def config_worker(update_context_funcs, param_names, default_params, target_val,
     :param target_range: dict
     :param temp_output_path: str
     :param export_file_path: str
-    :param output_dur: str (dir path)
+    :param output_dir: str (dir path)
     :param disp: bool
     :param mech_file_path: str
     :param neuroH5_file_path: str
@@ -228,10 +227,14 @@ def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
     :param cvode: bool
     :param daspk: bool
     """
+    """
     cell = DG_GC(neuroH5_dict=context.neuroH5_dict, mech_file_path=context.mech_file_path,
                  full_spines=context.spines)
+    """
+    print 'will make the cell'
+    cell = hoc_cell_wrapper.main(context.neuroH5_index, 'GC', **kwargs)
     context.cell = cell
-
+    print 'made the cell'
     # get the thickest apical dendrite ~200 um from the soma
     candidate_branches = []
     candidate_diams = []
@@ -461,4 +464,5 @@ def export_sim_results():
 
 
 if __name__ == '__main__':
-    main(args=sys.argv[(list_find(lambda s: s.find(script_filename) != -1, sys.argv) + 1):], standalone_mode=False)
+    main(args=sys.argv[(list_find(lambda s: s.find(os.path.basename(__file__)) != -1, sys.argv) + 1):],
+         standalone_mode=False)
