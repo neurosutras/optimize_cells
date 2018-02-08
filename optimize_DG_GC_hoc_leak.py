@@ -10,7 +10,7 @@ from plot_results import *
 from nested.optimize_utils import *
 import collections
 import click
-from hoc_cell_wrapper import *
+from neuron_wrapper_utils import *
 
 
 context = Context()
@@ -37,7 +37,6 @@ def main(config_file_path, output_dir, export, export_file_path, label, disp, ve
     :param verbose: bool
     """
     # requires a global variable context: :class:'Context'
-
     context.update(locals())
     config_interactive(config_file_path=config_file_path, output_dir=output_dir, export_file_path=export_file_path,
                        label=label, verbose=verbose)
@@ -55,6 +54,7 @@ def main(config_file_path, output_dir, export, export_file_path, label, disp, ve
     print 'objectives:'
     pprint.pprint(objectives)
     """
+
 
 def config_interactive(config_file_path=None, output_dir=None, temp_output_path=None, export_file_path=None,
                        label=None, verbose=True, **kwargs):
@@ -164,7 +164,6 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
     config_worker(context.update_context_funcs, context.param_names, context.default_params, context.target_val,
                   context.target_range, context.temp_output_path, context.export_file_path, context.output_dir,
                   context.disp, **context.kwargs)
-    #(context.x0_array)
 
 
 def config_controller(export_file_path, output_dir, **kwargs):
@@ -180,8 +179,7 @@ def config_controller(export_file_path, output_dir, **kwargs):
 
 
 def config_worker(update_context_funcs, param_names, default_params, target_val, target_range, temp_output_path,
-                  export_file_path, output_dir, disp, mech_file_path, neuroH5_file_path, neuroH5_index, spines,
-                  **kwargs):
+                  export_file_path, output_dir, disp, mech_file_path, gid, population, spines, **kwargs):
     """
     :param update_context_funcs: list of function references
     :param param_names: list of str
@@ -193,12 +191,11 @@ def config_worker(update_context_funcs, param_names, default_params, target_val,
     :param output_dir: str (dir path)
     :param disp: bool
     :param mech_file_path: str
-    :param neuroH5_file_path: str
-    :param neuroH5_index: int
+    :param gid: str
+    :param population: int
     :param spines: bool
     """
     context.update(kwargs)
-    neuroH5_dict = read_from_pkl(neuroH5_file_path)[neuroH5_index]
     param_indexes = {param_name: i for i, param_name in enumerate(param_names)}
     processed_export_file_path = export_file_path.replace('.hdf5', '_processed.hdf5')
     context.update(locals())
@@ -228,12 +225,8 @@ def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
     :param cvode: bool
     :param daspk: bool
     """
-    """
-    cell = DG_GC(neuroH5_dict=context.neuroH5_dict, mech_file_path=context.mech_file_path,
-                 full_spines=context.spines)
-    """
     env = init_env(**kwargs)
-    cell = make_cell(env, context.neuroH5_index, 'GC')
+    cell = get_hoc_cell_wrapper(env, context.gid, context.population)
     context.cell = cell
     # get the thickest apical dendrite ~200 um from the soma
     candidate_branches = []

@@ -8,7 +8,7 @@ from neuron import h  # must be found in system $PYTHONPATH
 
 # SWC files must use this nonstandard convention to exploit trunk and tuft categorization
 swc_types = [soma_type, axon_type, basal_type, apical_type, trunk_type, tuft_type] = [1, 2, 3, 4, 5, 6]
-sec_types = ['soma', 'axon_hill', 'ais', 'axon', 'basal', 'trunk', 'apical', 'tuft', 'spine_neck', 'spine_head']
+sec_types = ['soma', 'hillock', 'ais', 'axon', 'basal', 'trunk', 'apical', 'tuft', 'spine_neck', 'spine_head']
 swc_type_enumerator = {'soma': 1, 'axon': 2, 'basal': 3, 'apical': 4, 'trunk': 5, 'tuft': 6}
 syn_category_enumerator = {'excitatory': 0, 'inhibitory': 1, 'neuromodulatory': 2}
 
@@ -35,7 +35,7 @@ class HocCell(object):
         self._gid = gid
         self.tree = btmorph.STree2()  # Builds a simple tree to store nodes of type 'SHocNode'
         self.index = 0  # Keep track of number of nodes
-        self._node_dict = {'soma': [], 'axon': [], 'basal': [], 'trunk': [], 'apical': [], 'tuft': [], 'spine': []}
+        self._node_dict = {sec_type: [] for sec_type in sec_types}
         self.mech_file_path = mech_file_path
         # Refer to function_lib for description of structure of mechanism dictionary. loads from .yaml or
         # default_mech_dict in function_lib
@@ -204,7 +204,7 @@ class HocCell(object):
         and axon.
         :param existing_hoc_cell: :class: 'h.hocObject' : instance of a cell template class already built in hoc
         """
-        sec_types = ['soma', 'axon', 'ais', 'axon_hill', 'apical', 'basal', 'trunk']
+        sec_types = ['soma', 'axon', 'ais', 'hillock', 'apical', 'basal', 'trunk']
         type_to_secs_dict = {}
         sec_to_type_dict = {}
         for sec_type in sec_types:
