@@ -10,7 +10,7 @@ from plot_results import *
 from nested.optimize_utils import *
 import collections
 import click
-import hoc_cell_wrapper
+from hoc_cell_wrapper import *
 
 
 context = Context()
@@ -41,19 +41,20 @@ def main(config_file_path, output_dir, export, export_file_path, label, disp, ve
     context.update(locals())
     config_interactive(config_file_path=config_file_path, output_dir=output_dir, export_file_path=export_file_path,
                        label=label, verbose=verbose)
+    """
     args = get_args_static_leak()
     group_size = len(args[0])
     sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size]
-    #primitives = map(compute_features_leak, *sequences)
-    #features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
-    #features, objectives = get_objectives_leak(features)
+    primitives = map(compute_features_leak, *sequences)
+    features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
+    features, objectives = get_objectives_leak(features)
     print 'params:'
     pprint.pprint(context.x0_dict)
     print 'features:'
-    #pprint.pprint(features)
+    pprint.pprint(features)
     print 'objectives:'
-    #pprint.pprint(objectives)
-
+    pprint.pprint(objectives)
+    """
 
 def config_interactive(config_file_path=None, output_dir=None, temp_output_path=None, export_file_path=None,
                        label=None, verbose=True, **kwargs):
@@ -163,7 +164,7 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
     config_worker(context.update_context_funcs, context.param_names, context.default_params, context.target_val,
                   context.target_range, context.temp_output_path, context.export_file_path, context.output_dir,
                   context.disp, **context.kwargs)
-    #update_source_contexts(context.x0_array)
+    #(context.x0_array)
 
 
 def config_controller(export_file_path, output_dir, **kwargs):
@@ -231,25 +232,32 @@ def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
     cell = DG_GC(neuroH5_dict=context.neuroH5_dict, mech_file_path=context.mech_file_path,
                  full_spines=context.spines)
     """
-    print 'will make the cell'
-    cell = hoc_cell_wrapper.main(context.neuroH5_index, 'GC', **kwargs)
+    env = init_env(**kwargs)
+    cell = make_cell(env, context.neuroH5_index, 'GC')
     context.cell = cell
-    print 'made the cell'
     # get the thickest apical dendrite ~200 um from the soma
     candidate_branches = []
+    candidate_distances = []
     candidate_diams = []
     candidate_locs = []
     for branch in cell.apical:
-        if ((cell.get_distance_to_node(cell.tree.root, branch, 0.) >= 200.) &
-                (cell.get_distance_to_node(cell.tree.root, branch, 1.) > 300.) & (not cell.is_terminal(branch))):
-            candidate_branches.append(branch)
+        if not cell.is_terminal(branch):
             for seg in branch.sec:
                 loc = seg.x
-                if cell.get_distance_to_node(cell.tree.root, branch, loc) > 250.:
+                if cell.get_distance_to_node(cell.tree.root, branch, loc) > 130.:
+                    candidate_branches.append(branch)
+                    candidate_distances.append(cell.get_distance_to_node(cell.tree.root, branch, loc))
                     candidate_diams.append(branch.sec(loc).diam)
                     candidate_locs.append(loc)
                     break
-    index = candidate_diams.index(max(candidate_diams))
+    distance_diffs = np.absolute(np.array(candidate_distances) - 250.)
+    #Find the segments within 50 um of the target distance from the soma (250 um)
+    indexes = [ind for ind in range(len(distance_diffs)) if distance_diffs[ind] < 50.]
+    if len(indexes) == 0:
+        index = np.argmin(distance_diffs)
+    else:
+        diams = np.array([candidate_diams[ind] for ind in indexes])
+        index = indexes[np.argmin(diams)]
     dend = candidate_branches[index]
     dend_loc = candidate_locs[index]
 
@@ -257,7 +265,7 @@ def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
     candidate_branches = []
     candidate_end_distances = []
     for branch in (branch for branch in cell.apical if cell.is_terminal(branch)):
-        if cell.get_distance_to_node(cell.tree.root, branch, 0.) >= 300.:
+        if cell.get_distance_to_node(cell.tree.root, branch, 0.) >= 250.:
             candidate_branches.append(branch)
             candidate_end_distances.append(cell.get_distance_to_node(cell.tree.root, branch, 1.))
     index = candidate_end_distances.index(max(candidate_end_distances))
@@ -323,7 +331,7 @@ def compute_features_leak(x, section, export=False, plot=False):
     """
     start_time = time.time()
     update_source_contexts(x, context)
-    context.cell.zero_na()
+    zero_na(context.cell)
 
     duration = context.duration
     stim_dur = context.stim_dur
@@ -466,3 +474,4 @@ def export_sim_results():
 if __name__ == '__main__':
     main(args=sys.argv[(list_find(lambda s: s.find(os.path.basename(__file__)) != -1, sys.argv) + 1):],
          standalone_mode=False)
+

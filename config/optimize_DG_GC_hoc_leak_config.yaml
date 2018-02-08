@@ -31,7 +31,8 @@ kwargs:
   config_file: ../dentate/config/Small_Scale_Control_log_normal_weights.yaml
   template_paths: ../dgc/Mateos-Aparicio2014
   hoc_templates_path: ../dentate
-  dataset_prefix: data
+  dataset_prefix: ../dentate/datasets
+  results_path: data
 objective_names:
 - dend R_inp
 - distal_dend R_inp

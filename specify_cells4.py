@@ -3006,3 +3006,13 @@ class DG_GC(HocCell):
                     if value < end_val:
                         value = end_val
                 setattr(getattr(seg, mech_name), param_name, value)
+
+
+def zero_na(cell):
+    """
+    Set na channel conductances to zero in all compartments. Used during parameter optimization.
+    """
+    for sec_type in ['soma', 'axon_hill', 'ais', 'axon', 'apical']:
+        for na_type in (na_type for na_type in ['nas_kin', 'nat_kin', 'nas', 'nax'] if na_type in
+                cell.mech_dict[sec_type]):
+            cell.modify_mech_param(sec_type, na_type, 'gbar', 0.)

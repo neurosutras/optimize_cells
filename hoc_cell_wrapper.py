@@ -52,7 +52,7 @@ swc_type_dict = {
 v_init = -75
 
 
-def make_cell(env, gid, population):
+def make_hoc_cell(env, gid, population):
     """
 
     :param env:
@@ -255,6 +255,22 @@ def init(env, hoc_template_path):
             lpt_bal(env)
     """
 
+def init_env(config_file, template_paths, hoc_templates_path, dataset_prefix=None, results_path=None, **kwargs):
+    np.seterr(all='raise')
+    comm = MPI.COMM_WORLD
+    template_paths += ':%s/templates' % hoc_templates_path
+    env = Env(comm, config_file, template_paths, dataset_prefix, results_path)
+    init(env, hoc_templates_path)
+    context.env = env
+    return env
+
+def make_cell(env, gid, pop_name):
+    hoc_cell = make_hoc_cell(env, gid, pop_name)
+    cell = HocCell(existing_hoc_cell=hoc_cell)
+    cell.load_morphology()
+    context.update(locals())
+    return cell
+
 """
 @click.command()
 @click.option("--gid", required=True, type=int)
@@ -281,37 +297,11 @@ def main(config_file, template_paths, hoc_templates_path, dataset_prefix, result
          vrecord_fraction, tstop, v_init, max_walltime_hours, results_write_time, dt, ldbal, lptbal, verbose):
 """
 
-def main(gid, pop_name, config_file, template_paths, hoc_templates_path, dataset_prefix=None, results_path=None, results_id='',
-         node_rank_file=None, io_size=1, coredat=False, vrecord_fraction=0.001, tstop=1, v_init=-75.,
-         max_walltime_hours=1, results_write_time=360., dt=0.025, ldbal=False, lptbal=False, verbose=False, **kwargs):
-    print 'inside hoc cell wrapper'
-    np.seterr(all='raise')
-    comm = MPI.COMM_WORLD
-    template_paths += ':%s/templates' %hoc_templates_path
-    print 'will make env'
-    print 'config file'
-    print  config_file
-    print 'template paths'
-    print template_paths
-    env = Env(comm, config_file,
-              template_paths, dataset_prefix, results_path, results_id,
-              node_rank_file, io_size,
-              vrecord_fraction, coredat, tstop, v_init,
-              max_walltime_hours, results_write_time,
-              dt, ldbal, lptbal, verbose)
-    print 'made env'
-    init(env, hoc_templates_path)
-    context.env = env
-    print 'initialized env'
-    hoc_cell = make_cell(env, gid, pop_name)
-    print 'made hoc cell'
-    cell = HocCell(existing_hoc_cell=hoc_cell)
-    cell.load_morphology()
-    print 'made python cell'
-    context.update(locals())
-    return cell
+def main(gid, pop_name, config_file, template_paths, hoc_templates_path, dataset_prefix=None, results_path=None, **kwargs):
+    env = init_env(config_file, template_paths, hoc_templates_path, dataset_prefix=dataset_prefix, results_path=results_path, **kwargs)
+    cell = make_cell(env, gid, pop_name)
 
 if __name__ == '__main__':
     # main(args=sys.argv[(sys.argv.index("main.py") + 1):])
     main(0, 'GC', '../dentate/config/Small_Scale_Control_log_normal_weights.yaml', '../dgc/Mateos-Aparicio2014', '../dentate',
-         '../dentate/datasets', 'data')
+         '../..', 'data')
