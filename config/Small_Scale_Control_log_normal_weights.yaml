@@ -1,0 +1,242 @@
+## Model configuration of dentate gyrus network
+Model Name: dentatenet
+#Dataset Name: Small_Scale_Control
+Dataset Name: sf_Z_DRIVE
+Definitions: !include Definitions.yaml
+Geometry: !include Geometry.yaml
+Random Seeds: !include Random.yaml
+#Cell Data: DGC_forest_test_syns_20171019.h5
+Cell Data: DGC_forest_test_20180207.h5
+Connection Data: DGC_test_connections_20171019.h5
+Connection Generator: !include Full_Scale_Connections_log_normal_weights.yaml
+## Cell types for dentate gyrus model
+Cell Types: 
+  GC:
+    template: DGC
+    synapses:
+      spines: True
+      weights: True
+      density:
+        apical:
+          excitatory: # Excitatory https://www.ncbi.nlm.nih.gov/pubmed/2760687
+            IML: # layer
+             mean: 3.36
+             variance: 0.35
+            MML: # layer
+             mean: 2.28
+             variance: 0.33
+            OML: # layer
+             mean: 2.02
+             variance: 0.28
+          inhibitory: # Inhibitory https://www.ncbi.nlm.nih.gov/pubmed/20034063
+            IML: # layer
+              mean: 1.0
+              variance: 0.01
+            OML: # layer
+              mean: 3.5
+              variance: 0.01
+            MML: # layer
+              mean: 3.5
+              variance: 0.01
+        soma:
+          inhibitory: # Inhibitory https://www.ncbi.nlm.nih.gov/pubmed/20034063
+            default: # layer
+              mean: 4.0
+              variance: 0.2
+        axon:
+          inhibitory: # Inhibitory https://www.ncbi.nlm.nih.gov/pubmed/20034063
+            default: # layer
+              mean: 4.0
+              variance: 0.2
+  MC:
+    template: MossyCell
+    synapses:
+      weights: True
+      density:
+        apical:
+          excitatory: 
+            Hilus: # layer
+             mean: 3.5 
+             variance: 0.2
+          inhibitory: # Inhibitory
+            default: # layer
+              mean: 2.25
+              variance: 0.1
+        soma:
+          inhibitory: # Inhibitory
+            default: # layer
+              mean: 8.0
+              variance: 0.2
+  HC:
+    template: HIPPCell
+    synapses:
+      density:
+        apical:
+          excitatory: 
+            default: # layer
+             mean: 1.0
+             variance: 0.2
+          inhibitory: # Inhibitory https://www.ncbi.nlm.nih.gov/pubmed/20034063
+            default: # layer
+              mean: 0.25
+              variance: 0.1
+        basal:
+          excitatory: # excitatory
+            default: # layer
+              mean: 1.0
+              variance: 0.2
+          inhibitory: # Inhibitory https://www.ncbi.nlm.nih.gov/pubmed/20034063
+            default: # layer
+              mean: 0.25
+              variance: 0.1
+  BC:
+    template: BasketCell
+    synapses:
+      density:
+        apical:
+          excitatory: 
+            GCL: # layer
+             mean: 1.0 
+             variance: 0.2
+            MML: # layer
+             mean: 1.0 
+             variance: 0.2
+            OML: # layer
+             mean: 1.0 
+             variance: 0.2
+          inhibitory: # Inhibitory https://www.ncbi.nlm.nih.gov/pubmed/20034063
+            default: # layer
+              mean: 0.25
+              variance: 0.1
+        basal:
+          excitatory: # excitatory
+            Hilus: # layer
+              mean: 1.0
+              variance: 0.2
+            GCL: # layer
+              mean: 1.0
+              variance: 0.2
+          inhibitory: # Inhibitory https://www.ncbi.nlm.nih.gov/pubmed/20034063
+            default: # layer
+              mean: 0.25
+              variance: 0.1
+  AAC:
+    template: AxoAxonicCell
+    synapses:
+      density:
+        apical:
+          excitatory: 
+            Hilus: # layer
+             mean: 1.0 
+             variance: 0.2
+            GCL: # layer
+             mean: 1.0 
+             variance: 0.2
+          inhibitory: 
+            IML: # layer
+              mean: 0.25
+              variance: 0.1
+            MML: # layer
+              mean: 0.25
+              variance: 0.1
+        basal:
+          excitatory: # excitatory
+            GCL: # layer
+              mean: 1.0
+              variance: 0.2
+  HCC:
+    template: HICAPCell
+    synapses:
+      density:
+        apical:
+          excitatory: 
+            GCL: # layer
+             mean: 0.5 
+             variance: 0.2
+          inhibitory: 
+            MML: # layer
+              mean: 0.25
+              variance: 0.1
+            OML: # layer
+              mean: 0.25
+              variance: 0.1
+        basal:
+          excitatory: # excitatory
+            Hilus: # layer
+             mean: 0.5 
+             variance: 0.2
+            GCL: # layer
+              mean: 0.5
+              variance: 0.2
+          inhibitory: 
+            Hilus: # layer
+              mean: 0.25
+              variance: 0.1
+            GCL: # layer
+              mean: 0.25
+              variance: 0.1
+  NGFC:
+    template: NGFCell
+    synapses:
+      density:
+        apical:
+          excitatory: 
+            default: # layer
+             mean: 1.0 
+             variance: 0.2
+          inhibitory: 
+            default: # layer
+              mean: 0.25
+              variance: 0.1
+        basal:
+          excitatory: # excitatory
+            default: # layer
+              mean: 1.0
+              variance: 0.2
+  MOPP:
+    template: MOPPCell
+    synapses:
+      density:
+        apical:
+          excitatory: 
+            default: # layer
+             mean: 1.0
+             variance: 0.2
+          inhibitory: 
+            default: # layer
+              mean: 0.25
+              variance: 0.1
+        basal:
+          excitatory: # excitatory
+            default: # layer
+              mean: 1.0
+              variance: 0.2
+          inhibitory: 
+            default: # layer
+              mean: 0.25
+              variance: 0.1
+  IS:
+    template: ISCell
+    synapses:
+      density:
+        apical:
+          excitatory: 
+            default: # layer
+             mean: 0.5 
+             variance: 0.2
+          inhibitory: 
+            default: # layer
+              mean: 0.25
+              variance: 0.1
+        basal:
+          excitatory: # excitatory
+            default: # layer
+              mean: 1.0
+              variance: 0.2
+  MPP:
+    template: MPPCell
+    vectorStimulus: Vector Stimulus 0
+  LPP:
+    template: LPPCell
+    vectorStimulus: Vector Stimulus 0
+
