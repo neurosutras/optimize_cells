@@ -12,10 +12,11 @@ import numpy as np
 from mpi4py import MPI  # Must come before importing NEURON
 import h5py
 from neuron import h
-from specify_cells4 import *
+# from specify_cells4 import *
 from dentate.neuroh5_io_utils import *
 from dentate.env import Env
-import dentate.cells as cells
+from dentate.cells import *
+# from dentate.cells import make_neurotree_cell
 from dentate.neuron_utils import *
 from nested.utils import *
 
@@ -42,7 +43,7 @@ def make_hoc_cell(env, gid, population):
     if env.cellAttributeInfo.has_key(popName) and env.cellAttributeInfo[popName].has_key('Trees'):
         tree = select_tree_attributes(gid, env.comm, dataFilePath, popName)
         i = h.numCells
-        hoc_cell = cells.make_neurotree_cell(templateClass, neurotree_dict=tree, gid=gid, local_id=i,
+        hoc_cell = make_neurotree_cell(templateClass, neurotree_dict=tree, gid=gid, local_id=i,
                                              dataset_path=datasetPath)
         h.numCells = h.numCells + 1
     else:
@@ -101,23 +102,25 @@ def init_env(config_file, template_paths, hoc_lib_path, dataset_prefix=None, res
     return env
 
 
-def get_hoc_cell_wrapper(env, gid, pop_name):
+def get_hoc_cell_wrapper(env, gid, population):
     """
 
     :param env:
     :param gid:
-    :param pop_name:
+    :param population:
     :return:
     """
-    hoc_cell = make_hoc_cell(env, gid, pop_name)
-    cell = HocCell(existing_hoc_cell=hoc_cell)
-    cell.load_morphology()
+    hoc_cell = make_hoc_cell(env, gid, population)
+    env.cells.append(hoc_cell)
+    cell = HocCell(gid, population, hoc_cell)
+    # cell = HocCell(existing_hoc_cell=hoc_cell)
+    # cell.load_morphology()
     return cell
 
 
 @click.command()
 @click.option("--gid", required=True, type=int, default=0)
-@click.option("--pop-name", required=True, type=str, default='GC')
+@click.option("--population", required=True, type=str, default='GC')
 @click.option("--config-file", required=True, type=click.Path(exists=True, file_okay=True, dir_okay=False),
               default='../dentate/config/Small_Scale_Control_log_normal_weights.yaml')
 @click.option("--template-paths", type=str, default='../dgc/Mateos-Aparicio2014:../dentate/templates')
@@ -127,11 +130,11 @@ def get_hoc_cell_wrapper(env, gid, pop_name):
 @click.option("--results-path", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
               default='data')
 @click.option('--verbose', '-v', is_flag=True)
-def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefix, results_path, verbose):
+def main(gid, population, config_file, template_paths, hoc_lib_path, dataset_prefix, results_path, verbose):
     """
 
-    :param gid:
-    :param pop_name:
+    :param gid: int
+    :param population: str
     :param config_file:
     :param template_paths:
     :param hoc_lib_path:
@@ -141,7 +144,7 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     """
     env = init_env(config_file=config_file, template_paths=template_paths, hoc_lib_path=hoc_lib_path,
                    dataset_prefix=dataset_prefix, results_path=results_path, verbose=verbose)
-    cell = get_hoc_cell_wrapper(env, gid, pop_name)
+    cell = get_hoc_cell_wrapper(env, gid, population)
     context.update(locals())
 
 
