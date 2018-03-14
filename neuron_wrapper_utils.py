@@ -12,10 +12,8 @@ import numpy as np
 from mpi4py import MPI  # Must come before importing NEURON
 import h5py
 from neuron import h
-#from specify_cells4 import *
 from neuroh5.h5py_io_utils import *
 from dentate.env import Env
-#import dentate.cells as cells
 from dentate.cells import *
 from dentate.neuron_utils import *
 from nested.utils import *
@@ -43,8 +41,6 @@ def make_hoc_cell(env, gid, population):
     if env.cellAttributeInfo.has_key(popName) and env.cellAttributeInfo[popName].has_key('Trees'):
         tree = select_tree_attributes(gid, env.comm, dataFilePath, popName)
         i = h.numCells
-        #hoc_cell = cells.make_neurotree_cell(templateClass, neurotree_dict=tree, gid=gid, local_id=i,
-        #                                     dataset_path=datasetPath)
         hoc_cell = make_neurotree_cell(templateClass, neurotree_dict=tree, gid=gid, local_id=i,
                                              dataset_path=datasetPath)
         h.numCells = h.numCells + 1
@@ -102,7 +98,6 @@ def init_env(config_file, template_paths, hoc_lib_path, dataset_prefix=None, res
     env = Env(comm, config_file, template_paths, dataset_prefix, results_path, verbose, **kwargs)
     configure_env(env, hoc_lib_path)
     return env
-
 
 
 def get_hoc_cell_wrapper(env, gid, pop_name):

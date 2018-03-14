@@ -21,7 +21,7 @@ get_features_stages:
 get_objectives:
   optimize_DG_GC_hoc_leak: get_objectives_leak
 kwargs:
-  mech_file_path: cells/mechanisms/090717 GC optimizing spiking.yaml
+  mech_file_path: mechanisms/20180209_DG_GC_hoc_leak_mech.yaml
   gid: 0
   population: GC
   spines: False
