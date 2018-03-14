@@ -35,7 +35,7 @@ class HocCell(object):
         self._gid = gid
         self.tree = btmorph.STree2()  # Builds a simple tree to store nodes of type 'SHocNode'
         self.index = 0  # Keep track of number of nodes
-        self._node_dict = {sec_type: [] for sec_type in sec_types}
+        self._node_dict = {sec_type: [] for sec_type in sec_types + ['spine']}
         self.mech_file_path = mech_file_path
         # Refer to function_lib for description of structure of mechanism dictionary. loads from .yaml or
         # default_mech_dict in function_lib
@@ -87,7 +87,7 @@ class HocCell(object):
         for index in xrange(3):
             self.make_section('axon')
             self.axon[index].append_layer(0)
-        self.axon[0].type = 'axon_hill'
+        self.axon[0].type = 'hillock'
         self.axon[0].sec.L = 10.
         self.axon[0].set_diam_bounds(3., 2.)  # stores the diameter boundaries for a tapered cylindrical section
         self.axon[1].type = 'ais'
@@ -468,9 +468,7 @@ class HocCell(object):
         :param sec_type: str
         :return: list of :class:'SHocNode'
         """
-        if sec_type in ['axon_hill', 'ais', 'axon']:
-            return [node for node in self.axon if node.type == sec_type]
-        elif sec_type in ['spine_head', 'spine_neck']:
+        if sec_type in ['spine_head', 'spine_neck']:
             return [node for node in self.spine if node.type == sec_type]
         else:
             return self._node_dict[sec_type]
@@ -561,7 +559,7 @@ class HocCell(object):
             synapses.extend([syn for syn in spine.synapses if syn_type is None or syn_type in syn.targets])
         return synapses
 
-    def sec_type_has_synapses(self, sec_type, syn_type=None):
+    def sec_type_has_synapses(cell, sec_type, syn_type=None):
         """
         Checks if any nodes of a given sec_type contain synapses, or spines with synapses. Can also check for a synaptic
         point process of a specific type.
@@ -718,9 +716,9 @@ class HocCell(object):
             node.reinit_diam()
         else:
             if 'custom' in rules:
-                if hasattr(self, rules['custom']['method']):
-                    method_to_call = getattr(self, rules['custom']['method'])
-                    method_to_call(node, mech_name, param_name, baseline, rules, syn_type, donor)
+                if rules['custom']['method'] in globals() and callable(globals()[rules['custom']['method']]):
+                    method_to_call = globals()[rules['custom']['method']]
+                    method_to_call(self, node, mech_name, param_name, baseline, rules, syn_type, donor)
                 else:
                     raise Exception('The custom method %s is not defined for this cell type.' %
                                     rules['custom']['method'])
@@ -924,7 +922,7 @@ class HocCell(object):
             return self.get_dendrite_origin(node.parent, parent_type)
         elif parent_type is not None:
             return self._get_node_along_path_to_root(node.parent, parent_type)
-        elif sec_type in ['basal', 'trunk', 'axon_hill', 'ais', 'axon']:
+        elif sec_type in ['basal', 'trunk', 'hillock', 'ais', 'axon']:
             return self._get_node_along_path_to_root(node, 'soma')
         elif sec_type in ['apical', 'tuft']:
             if self._node_dict['trunk']:
@@ -1436,7 +1434,7 @@ class HocCell(object):
         :param node: :class:'SHocNode'
         :return: int
         """
-        if node.type in ['soma', 'axon_hill', 'ais', 'axon']:
+        if node.type in ['soma', 'hillock', 'ais', 'axon']:
             return 0
         elif node.type == 'trunk':
             children = [child for child in node.parent.children if not child.type == 'spine_neck']
@@ -1463,7 +1461,7 @@ class HocCell(object):
         :param node: :class:'SHocNode'
         :return: bool
         """
-        if node.type in ['soma', 'axon_hill', 'ais', 'axon']:
+        if node.type in ['soma', 'hillock', 'ais', 'axon']:
             return False
         else:
             return not bool([child for child in node.children if not child.type == 'spine_neck'])
@@ -2815,7 +2813,7 @@ class CA1_Pyr(HocCell):
         """
         Set na channel conductances to zero in all compartments. Used during parameter optimization.
         """
-        for sec_type in ['soma', 'axon_hill', 'ais', 'axon', 'basal', 'trunk', 'apical', 'tuft']:
+        for sec_type in ['soma', 'hillock', 'ais', 'axon', 'basal', 'trunk', 'apical', 'tuft']:
             for na_type in (na_type for na_type in ['nas_kin', 'nat_kin', 'nas', 'nax'] if na_type in
                     self.mech_dict[sec_type]):
                 self.modify_mech_param(sec_type, na_type, 'gbar', 0.)
@@ -2917,7 +2915,7 @@ class DG_GC(HocCell):
         """
         Set na channel conductances to zero in all compartments. Used during parameter optimization.
         """
-        for sec_type in ['soma', 'axon_hill', 'ais', 'axon', 'apical']:
+        for sec_type in ['soma', 'hillock', 'ais', 'axon', 'apical']:
             for na_type in (na_type for na_type in ['nas_kin', 'nat_kin', 'nas', 'nax'] if na_type in
                     self.mech_dict[sec_type]):
                 self.modify_mech_param(sec_type, na_type, 'gbar', 0.)
@@ -2951,68 +2949,68 @@ class DG_GC(HocCell):
             else:
                 self._specify_mech_parameter(node, mech_name, param_name, baseline, rules, donor)
 
-    def custom_gradient_by_branch_order(self, node, mech_name, param_name, baseline, rules, syn_type, donor=None):
-        """
-
-        :param node: :class:'SHocNode'
-        :param mech_name: str
-        :param param_name: str
-        :param baseline: float
-        :param rules: dict
-        :param syn_type: str
-        :param donor: :class:'SHocNode' or None
-        """
-        branch_order = int(rules['custom']['branch_order'])
-        if self.get_branch_order(node) >= branch_order:
-            if 'synapse' in mech_name:
-                self._specify_synaptic_parameter(node, mech_name, param_name, baseline, rules, syn_type, donor)
-            else:
-                self._specify_mech_parameter(node, mech_name, param_name, baseline, rules, donor)
-
-    def custom_gradient_by_terminal(self, node, mech_name, param_name, baseline, rules, syn_type, donor=None):
-        """
-
-        :param node: :class:'SHocNode'
-        :param mech_name: str
-        :param param_name: str
-        :param baseline: float
-        :param rules: dict
-        :param syn_type: str
-        :param donor: :class:'SHocNode' or None
-        """
-        if self.is_terminal(node):
-            start_val = baseline
-            if 'min' in rules:
-                end_val = rules['min']
-                direction = -1
-            elif 'max' in rules:
-                end_val = rules['max']
-                direction = 1
-            else:
-                raise Exception('custom_gradient_by_terminal: no min or max target value specified for mechanism: %s '
-                                'parameter: %s' % (mech_name, param_name))
-            slope = (end_val - start_val)/node.sec.L
-            if 'slope' in rules:
-                if direction < 0.:
-                    slope = min(rules['slope'], slope)
-                else:
-                    slope = max(rules['slope'], slope)
-            for seg in node.sec:
-                value = start_val + slope * seg.x * node.sec.L
-                if direction < 0:
-                    if value < end_val:
-                        value = end_val
-                else:
-                    if value < end_val:
-                        value = end_val
-                setattr(getattr(seg, mech_name), param_name, value)
-
 
 def zero_na(cell):
     """
     Set na channel conductances to zero in all compartments. Used during parameter optimization.
     """
-    for sec_type in ['soma', 'axon_hill', 'ais', 'axon', 'apical']:
+    for sec_type in ['soma', 'hillock', 'ais', 'axon', 'apical']:
         for na_type in (na_type for na_type in ['nas_kin', 'nat_kin', 'nas', 'nax'] if na_type in
                 cell.mech_dict[sec_type]):
             cell.modify_mech_param(sec_type, na_type, 'gbar', 0.)
+
+def custom_gradient_by_branch_order(cell, node, mech_name, param_name, baseline, rules, syn_type, donor=None):
+    """
+
+    :param node: :class:'SHocNode'
+    :param mech_name: str
+    :param param_name: str
+    :param baseline: float
+    :param rules: dict
+    :param syn_type: str
+    :param donor: :class:'SHocNode' or None
+    """
+    branch_order = int(rules['custom']['branch_order'])
+    if cell.get_branch_order(node) >= branch_order:
+        if 'synapse' in mech_name:
+            cell._specify_synaptic_parameter(node, mech_name, param_name, baseline, rules, syn_type, donor)
+        else:
+            cell._specify_mech_parameter(node, mech_name, param_name, baseline, rules, donor)
+
+def custom_gradient_by_terminal(cell, node, mech_name, param_name, baseline, rules, syn_type, donor=None):
+    """
+
+    :param node: :class:'SHocNode'
+    :param mech_name: str
+    :param param_name: str
+    :param baseline: float
+    :param rules: dict
+    :param syn_type: str
+    :param donor: :class:'SHocNode' or None
+    """
+    if cell.is_terminal(node):
+        start_val = baseline
+        if 'min' in rules:
+            end_val = rules['min']
+            direction = -1
+        elif 'max' in rules:
+            end_val = rules['max']
+            direction = 1
+        else:
+            raise Exception('custom_gradient_by_terminal: no min or max target value specified for mechanism: %s '
+                            'parameter: %s' % (mech_name, param_name))
+        slope = (end_val - start_val)/node.sec.L
+        if 'slope' in rules:
+            if direction < 0.:
+                slope = min(rules['slope'], slope)
+            else:
+                slope = max(rules['slope'], slope)
+        for seg in node.sec:
+            value = start_val + slope * seg.x * node.sec.L
+            if direction < 0:
+                if value < end_val:
+                    value = end_val
+            else:
+                if value < end_val:
+                    value = end_val
+            setattr(getattr(seg, mech_name), param_name, value)

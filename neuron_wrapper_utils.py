@@ -12,10 +12,11 @@ import numpy as np
 from mpi4py import MPI  # Must come before importing NEURON
 import h5py
 from neuron import h
-from specify_cells4 import *
-from dentate.neuroh5_io_utils import *
+#from specify_cells4 import *
+from neuroh5.h5py_io_utils import *
 from dentate.env import Env
-import dentate.cells as cells
+#import dentate.cells as cells
+from dentate.cells import *
 from dentate.neuron_utils import *
 from nested.utils import *
 
@@ -42,7 +43,9 @@ def make_hoc_cell(env, gid, population):
     if env.cellAttributeInfo.has_key(popName) and env.cellAttributeInfo[popName].has_key('Trees'):
         tree = select_tree_attributes(gid, env.comm, dataFilePath, popName)
         i = h.numCells
-        hoc_cell = cells.make_neurotree_cell(templateClass, neurotree_dict=tree, gid=gid, local_id=i,
+        #hoc_cell = cells.make_neurotree_cell(templateClass, neurotree_dict=tree, gid=gid, local_id=i,
+        #                                     dataset_path=datasetPath)
+        hoc_cell = make_neurotree_cell(templateClass, neurotree_dict=tree, gid=gid, local_id=i,
                                              dataset_path=datasetPath)
         h.numCells = h.numCells + 1
     else:
@@ -101,6 +104,7 @@ def init_env(config_file, template_paths, hoc_lib_path, dataset_prefix=None, res
     return env
 
 
+
 def get_hoc_cell_wrapper(env, gid, pop_name):
     """
 
@@ -110,8 +114,10 @@ def get_hoc_cell_wrapper(env, gid, pop_name):
     :return:
     """
     hoc_cell = make_hoc_cell(env, gid, pop_name)
-    cell = HocCell(existing_hoc_cell=hoc_cell)
-    cell.load_morphology()
+    #cell = HocCell(existing_hoc_cell=hoc_cell)
+    cell = HocCell(gid=0, population='GC', hoc_cell=hoc_cell)
+    # cell_attr_index_map = get_cell_attributes_index_map(context.comm, file_path, target, namespace)
+    #cell.load_morphology()
     return cell
 
 

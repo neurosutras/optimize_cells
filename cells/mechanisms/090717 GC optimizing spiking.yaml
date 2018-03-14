@@ -42,7 +42,7 @@ ais:
       - !!binary |
         ayGN7IpYyD8=
     sh:
-      origin: axon_hill
+      origin: hillock
     sha:
       value: !!python/object/apply:numpy.core.multiarray.scalar
       - *id001
@@ -169,13 +169,13 @@ axon:
       - !!binary |
         emL/RRp7rj8=
     sh:
-      origin: axon_hill
+      origin: hillock
   pas:
     e:
       origin: soma
     g:
       origin: soma
-axon_hill:
+hillock:
   cable:
     Ra:
       origin: soma

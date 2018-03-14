@@ -228,18 +228,22 @@ def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
     env = init_env(**kwargs)
     cell = get_hoc_cell_wrapper(env, context.gid, context.population)
     context.cell = cell
+    #cell.mech_file_path = context.mech_file_path
+    #cell.reinit_mechanisms(reset_cable=True, from_file=True)
+    init_mechanisms(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path)
+    context.cell = cell
     # get the thickest apical dendrite ~200 um from the soma
     candidate_branches = []
     candidate_distances = []
     candidate_diams = []
     candidate_locs = []
     for branch in cell.apical:
-        if not cell.is_terminal(branch):
+        if not is_terminal(branch):
             for seg in branch.sec:
                 loc = seg.x
-                if cell.get_distance_to_node(cell.tree.root, branch, loc) > 130.:
+                if get_distance_to_node(cell, cell.tree.root, branch, loc) > 130.:
                     candidate_branches.append(branch)
-                    candidate_distances.append(cell.get_distance_to_node(cell.tree.root, branch, loc))
+                    candidate_distances.append(get_distance_to_node(cell, cell.tree.root, branch, loc))
                     candidate_diams.append(branch.sec(loc).diam)
                     candidate_locs.append(loc)
                     break
@@ -257,10 +261,10 @@ def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
     # get the most distal terminal branch > 300 um from the soma
     candidate_branches = []
     candidate_end_distances = []
-    for branch in (branch for branch in cell.apical if cell.is_terminal(branch)):
-        if cell.get_distance_to_node(cell.tree.root, branch, 0.) >= 250.:
+    for branch in (branch for branch in cell.apical if is_terminal(branch)):
+        if get_distance_to_node(cell, cell.tree.root, branch, 0.) >= 250.:
             candidate_branches.append(branch)
-            candidate_end_distances.append(cell.get_distance_to_node(cell.tree.root, branch, 1.))
+            candidate_end_distances.append(get_distance_to_node(cell, cell.tree.root, branch, 1.))
     index = candidate_end_distances.index(max(candidate_end_distances))
     distal_dend = candidate_branches[index]
     distal_dend_loc = 1.

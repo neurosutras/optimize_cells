@@ -13,13 +13,13 @@ feature_names:
 - distal_dend R_inp
 - soma R_inp
 update_context:
-  optimize_DG_GC_leak_hoc: update_context_leak
+  optimize_DG_GC_hoc_leak: update_context_leak
 get_features_stages:
-- source: optimize_DG_GC_leak_hoc
+- source: optimize_DG_GC_hoc_leak
   compute_features: compute_features_leak
   get_args_static: get_args_static_leak
 get_objectives:
-  optimize_DG_GC_leak_hoc: get_objectives_leak
+  optimize_DG_GC_hoc_leak: get_objectives_leak
 kwargs:
   mech_file_path: cells/mechanisms/090717 GC optimizing spiking.yaml
   gid: 0
@@ -31,13 +31,14 @@ kwargs:
   config_file: ../dentate/config/Small_Scale_Control_log_normal_weights.yaml
   template_paths: ../dgc/Mateos-Aparicio2014:../dentate/templates
   hoc_lib_path: ../dentate
-  dataset_prefix: ../dentate/datasets
+  dataset_prefix: /mnt/s
+  #dataset_prefix: /home/graceyng/solteszstation/Dentate_Model
   results_path: data
 objective_names:
 - dend R_inp
 - distal_dend R_inp
 - soma R_inp
-optimization_title: DG_GC_leak_hoc
+optimization_title: DG_GC_hoc_leak
 param_gen: PopulationAnnealing
 param_names:
 - dend.g_pas slope
