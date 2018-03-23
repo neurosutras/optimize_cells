@@ -35,6 +35,7 @@ def make_hoc_cell(env, gid, population):
     templateName = env.celltypes[popName]['template']
     h.find_template(env.pc, h.templatePaths, templateName)
     dataFilePath = os.path.join(datasetPath, env.modelConfig['Cell Data'])
+    context.dataFilePath = dataFilePath
     templateName = env.celltypes[popName]['template']
     templateClass = eval('h.%s' % templateName)
 
@@ -110,9 +111,13 @@ def get_hoc_cell_wrapper(env, gid, pop_name):
     """
     hoc_cell = make_hoc_cell(env, gid, pop_name)
     #cell = HocCell(existing_hoc_cell=hoc_cell)
+    # cell.load_morphology()
     cell = HocCell(gid=0, population='GC', hoc_cell=hoc_cell)
-    # cell_attr_index_map = get_cell_attributes_index_map(context.comm, file_path, target, namespace)
-    #cell.load_morphology()
+    cell_attr_index_map = get_cell_attributes_index_map(env.comm, context.dataFilePath, 'GC', 'Synapse Attributes')
+    cell_attr_dict = select_cell_attributes(gid, env.comm, context.dataFilePath, cell_attr_index_map, 'GC', 'Synapse Attributes')
+
+    #Need to add dictionary info to synapse_attributes of each node?
+    context.update(locals())
     return cell
 
 
@@ -124,7 +129,7 @@ def get_hoc_cell_wrapper(env, gid, pop_name):
 @click.option("--template-paths", type=str, default='../dgc/Mateos-Aparicio2014:../dentate/templates')
 @click.option("--hoc-lib-path", type=str, default='../dentate')
 @click.option("--dataset-prefix", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
-              default='../dentate/datasets')
+              default='/mnt/s') #'../dentate'
 @click.option("--results-path", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
               default='data')
 @click.option('--verbose', '-v', is_flag=True)

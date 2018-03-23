@@ -21,7 +21,7 @@ get_features_stages:
 get_objectives:
   optimize_DG_GC_hoc_leak: get_objectives_leak
 kwargs:
-  mech_file_path: mechanisms/20180209_DG_GC_hoc_leak_mech.yaml
+  mech_file_path: mechanisms/090717 GC optimizing spiking.yaml
   gid: 0
   population: GC
   spines: False
@@ -32,7 +32,7 @@ kwargs:
   template_paths: ../dgc/Mateos-Aparicio2014:../dentate/templates
   hoc_lib_path: ../dentate
   dataset_prefix: /mnt/s
-  #dataset_prefix: /home/graceyng/solteszstation/Dentate_Model
+  #dataset_prefix: ../dentate
   results_path: data
 objective_names:
 - dend R_inp
