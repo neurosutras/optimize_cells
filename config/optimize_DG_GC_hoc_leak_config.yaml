@@ -35,7 +35,7 @@ kwargs:
   template_paths: ../dgc/Mateos-Aparicio2014:../dentate/templates
   hoc_lib_path: ../dentate
   #dataset_prefix: /mnt/s
-  dataset_prefix: ../dentate
+  dataset_prefix: ../dentate/datasets
   results_path: data
 objective_names:
 - dend R_inp

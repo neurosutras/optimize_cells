@@ -392,13 +392,14 @@ def configure_env(env, hoc_lib_path):
         h.templatePaths.append(h.templatePathValue)
 
 
-def init_env(config_file, template_paths, hoc_lib_path, dataset_prefix=None, results_path=None, verbose=False,
+def init_env(config_file, template_paths, hoc_lib_path, comm, dataset_prefix=None, results_path=None, verbose=False,
              **kwargs):
     """
 
     :param config_file:
     :param template_paths:
     :param hoc_lib_path:
+    :param comm: :class:'MPI.COMM_WORLD'
     :param dataset_prefix:
     :param results_path:
     :param verbose: bool
@@ -406,8 +407,7 @@ def init_env(config_file, template_paths, hoc_lib_path, dataset_prefix=None, res
     :return:
     """
     np.seterr(all='raise')
-    comm = MPI.COMM_WORLD
-    env = Env(comm, config_file, template_paths, dataset_prefix, results_path, verbose, **kwargs)
+    env = Env(comm, config_file, template_paths, dataset_prefix, results_path, verbose=verbose, **kwargs)
     configure_env(env, hoc_lib_path)
     return env
 
@@ -443,7 +443,7 @@ def get_hoc_cell_wrapper(env, gid, pop_name):
 @click.option("--template-paths", type=str, default='../dgc/Mateos-Aparicio2014:../dentate/templates')
 @click.option("--hoc-lib-path", type=str, default='../dentate')
 @click.option("--dataset-prefix", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
-              default='../dentate')  # '/mnt/s'
+              default='../dentate/datasets')  # '/mnt/s'
 @click.option("--results-path", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
               default='data')
 @click.option('--verbose', '-v', is_flag=True)
@@ -459,7 +459,8 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     :param results_path:
     :param verbose
     """
-    env = init_env(config_file=config_file, template_paths=template_paths, hoc_lib_path=hoc_lib_path,
+    comm = MPI.COMM_WORLD
+    env = init_env(config_file=config_file, template_paths=template_paths, hoc_lib_path=hoc_lib_path, comm=comm,
                    dataset_prefix=dataset_prefix, results_path=results_path, verbose=verbose)
     cell = get_hoc_cell_wrapper(env, gid, pop_name)
     context.update(locals())

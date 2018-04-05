@@ -160,6 +160,12 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
     if not context.update_context_funcs:
         raise Exception('update_context function not found')
 
+    try:
+        from mpi4py import MPI
+        context.comm = MPI.COMM_WORLD
+    except Exception:
+        raise Exception('optimize_DG_GC_hoc_leak: problem importing from mpi4py; required for config_interactive')
+
     config_worker(context.update_context_funcs, context.param_names, context.default_params, context.target_val,
                   context.target_range, context.temp_output_path, context.export_file_path, context.output_dir,
                   context.disp, **context.kwargs)
@@ -224,7 +230,8 @@ def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
     :param cvode: bool
     :param daspk: bool
     """
-    context.env = init_env(**kwargs)
+    print context.comm.rank
+    context.env = init_env(comm=context.comm, **kwargs)
     cell = get_hoc_cell_wrapper(context.env, context.gid, context.population)
     init_mechanisms(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path)
     # get the thickest apical dendrite ~200 um from the soma
@@ -442,7 +449,7 @@ def update_context_leak(x, local_context=None):
     modify_mech_param(cell, 'apical', 'pas', 'g', origin='soma', slope=x[param_indexes['dend.g_pas slope']],
                            tau=x[param_indexes['dend.g_pas tau']])
     for sec_type in ['axon_hill', 'axon', 'ais', 'apical', 'spine_neck', 'spine_head']:
-        reinitialize_subset_mechanisms(cell, sec_type, 'pas')
+        update_mechanism_by_sec_type(cell, sec_type, 'pas')
     if not local_context.spines:
         correct_g_pas_for_spines(cell)
 
