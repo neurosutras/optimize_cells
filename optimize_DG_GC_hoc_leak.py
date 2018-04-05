@@ -40,9 +40,9 @@ def main(config_file_path, output_dir, export, export_file_path, label, disp, ve
     context.update(locals())
     config_interactive(config_file_path=config_file_path, output_dir=output_dir, export_file_path=export_file_path,
                        label=label, verbose=verbose)
-    """
     args = get_args_static_leak()
     group_size = len(args[0])
+    update_source_contexts(context.x0_array, context)
     sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size]
     primitives = map(compute_features_leak, *sequences)
     features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
@@ -53,7 +53,6 @@ def main(config_file_path, output_dir, export, export_file_path, label, disp, ve
     pprint.pprint(features)
     print 'objectives:'
     pprint.pprint(objectives)
-    """
 
 
 def config_interactive(config_file_path=None, output_dir=None, temp_output_path=None, export_file_path=None,
@@ -105,7 +104,7 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
     if 'update_context' not in config_dict or config_dict['update_context'] is None:
         missing_config.append('update_context')
     else:
-        context.update_context_dict = config_dict['update_context']
+        context.update_context_list = config_dict['update_context']
     if 'get_features_stages' not in config_dict or config_dict['get_features_stages'] is None:
         missing_config.append('get_features_stages')
     else:
@@ -149,7 +148,7 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
                                     context.optimization_title, label)
 
     context.update_context_funcs = []
-    for source, func_name in context.update_context_dict.iteritems():
+    for source, func_name in context.update_context_list:
         if source == os.path.basename(__file__).split('.')[0]:
             try:
                 func = globals()[func_name]
@@ -161,6 +160,7 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
     if not context.update_context_funcs:
         raise Exception('update_context function not found')
 
+    pprint.pprint(context.kwargs)
     config_worker(context.update_context_funcs, context.param_names, context.default_params, context.target_val,
                   context.target_range, context.temp_output_path, context.export_file_path, context.output_dir,
                   context.disp, **context.kwargs)
@@ -292,13 +292,13 @@ def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
     context.spike_output_vec = h.Vector()
     cell.spike_detector.record(context.spike_output_vec)
 
-
+"""
 def update_source_contexts(x, local_context=None):
-    """
+
 
     :param x: array
     :param local_context: :class:'Context'
-    """
+
     if local_context is None:
         local_context = context
     local_context.cell.reinit_mechanisms(from_file=True)
@@ -306,7 +306,11 @@ def update_source_contexts(x, local_context=None):
         local_context.cell.correct_g_pas_for_spines()
     for update_func in local_context.update_context_funcs:
         update_func(x, local_context)
-
+"""
+def reinit_mechanisms(x, local_context=None):
+    if local_context is None:
+        local_context = context
+    local_context.cell.reinit_mechanisms(from_file=True)
 
 def get_args_static_leak():
     """
@@ -451,13 +455,13 @@ def update_context_leak(x, local_context=None):
         local_context = context
     cell = local_context.cell
     param_indexes = local_context.param_indexes
-    cell.modify_mech_param('soma', 'pas', 'g', x[param_indexes['soma.g_pas']])
-    cell.modify_mech_param('apical', 'pas', 'g', origin='soma', slope=x[param_indexes['dend.g_pas slope']],
+    modify_mech_param(cell, 'soma', 'pas', 'g', x[param_indexes['soma.g_pas']])
+    modify_mech_param(cell, 'apical', 'pas', 'g', origin='soma', slope=x[param_indexes['dend.g_pas slope']],
                            tau=x[param_indexes['dend.g_pas tau']])
     for sec_type in ['axon_hill', 'axon', 'ais', 'apical', 'spine_neck', 'spine_head']:
-        cell.reinitialize_subset_mechanisms(sec_type, 'pas')
+        reinitialize_subset_mechanisms(cell, sec_type, 'pas')
     if not local_context.spines:
-        cell.correct_g_pas_for_spines()
+        correct_g_pas_for_spines(cell)
 
 
 def export_sim_results():

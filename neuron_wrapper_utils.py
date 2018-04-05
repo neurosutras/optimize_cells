@@ -116,6 +116,9 @@ def get_hoc_cell_wrapper(env, gid, pop_name):
     cell_attr_index_map = get_cell_attributes_index_map(env.comm, context.dataFilePath, 'GC', 'Synapse Attributes')
     cell_attr_dict = select_cell_attributes(gid, env.comm, context.dataFilePath, cell_attr_index_map, 'GC', 'Synapse Attributes')
 
+    #Need to build instance of a class to store all synapse attributes and connnectivity information along with pointers to the
+    #actual point processes and net con objects
+
     #Need to add dictionary info to synapse_attributes of each node?
     context.update(locals())
     return cell

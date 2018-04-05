@@ -68,7 +68,10 @@ feature_names:
 - f_I_slope
 - f_I_residuals
 update_context:
-  optimize_DG_GC_spiking: update_context_spike_shape
+- - optimize_DG_GC_spiking
+  - reinit_mechanisms
+- - optimize_DG_GC_spiking
+  - update_context_spike_shape
 get_features_stages:
 - source: optimize_DG_GC_spiking
   compute_features: compute_features_spike_shape
