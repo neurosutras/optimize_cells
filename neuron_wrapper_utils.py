@@ -2,14 +2,12 @@
 Tools for pulling individual neurons out of the dentate network simulation environment for single-cell tuning.
 """
 __author__ = 'Ivan Raikov, Grace Ng, Aaron D. Milstein'
-import sys, os
 import os.path
 import click
-import itertools
-from collections import defaultdict
-from datetime import datetime
-import numpy as np
-from mpi4py import MPI  # Must come before importing NEURON
+try:
+    from mpi4py import MPI  # Must come before importing NEURON
+except Exception:
+    pass
 import h5py
 from neuron import h
 from neuroh5.h5py_io_utils import *
@@ -20,6 +18,319 @@ from nested.utils import *
 
 
 context = Context()
+
+
+class QuickSim(object):
+    """
+    This method is used to run a quick simulation with a set of current injections and a set of recording sites.
+    Can save detailed information about the simulation to an HDF5 file after each run. Once defined, IClamp objects
+    persist when using an interactive console, but not when executing standalone scripts. Therefore, the best practice
+    is simply to set amp to zero to turn off current injections, or move individual IClamp processes to different
+    locations rather then adding and deleting them.
+    class params:
+    self.stim_list:
+    self.rec_list:
+    """
+
+    def __init__(self, tstop=400., cvode=True, daspk=False, dt=None, verbose=True):
+        """
+
+        :param tstop: float
+        :param cvode: bool
+        :param daspk: bool
+        :param dt: float
+        :param verbose: bool
+        """
+        self.rec_list = []  # list of dicts with keys for 'cell', 'node', 'loc' and 'vec': pointer to hoc Vector object.
+        # Also contains keys for 'ylabel' and 'units' for recording parameters other than Vm.
+        self.stim_list = []  # list of dicts with keys for 'cell', 'node', 'stim': pointer to hoc IClamp object, and
+        # 'vec': recording of actual stimulus for plotting later
+        self.tstop = tstop
+        h.load_file('stdrun.hoc')
+        h.celsius = 35.0
+        h.cao0_ca_ion = 1.3
+        self.cvode = h.CVode()
+        self.cvode_atol = 0.01  # 0.001
+        self.daspk = daspk
+        self.cvode_state = cvode
+        if dt is None:
+            self.dt = h.dt
+        else:
+            self.dt = dt
+        self.verbose = verbose
+        self.tvec = h.Vector()
+        self.tvec.record(h._ref_t, self.dt)
+        self.parameters = {}
+
+    def run(self, v_init=-65.):
+        """
+
+        :param v_init: float
+        """
+        start_time = time.time()
+        h.tstop = self.tstop
+        if not self.cvode_state:
+            h.steps_per_ms = int(1. / self.dt)
+            h.dt = self.dt
+        h.v_init = v_init
+        # h.init()
+        # h.finitialize(v_init)
+        # if self.cvode_state:
+        #     self.cvode.re_init()
+        # else:
+        #     h.fcurrent()
+        h.run()
+        if self.verbose:
+            print 'Simulation runtime: ', time.time() - start_time, ' sec'
+
+    def append_rec(self, cell, node, loc=None, param='_ref_v', object=None, ylabel='Vm', units='mV', description=None):
+        """
+
+        :param cell: :class:'HocCell'
+        :param node: :class:'SHocNode
+        :param loc: float
+        :param param: str
+        :param object: :class:'HocObject'
+        :param ylabel: str
+        :param units: str
+        :param description: str
+        """
+        rec_dict = {'cell': cell, 'node': node, 'ylabel': ylabel, 'units': units}
+        if description is None:
+            rec_dict['description'] = 'rec' + str(len(self.rec_list))
+        elif description in (rec['description'] for rec in self.rec_list):
+            rec_dict['description'] = description + str(len(self.rec_list))
+        else:
+            rec_dict['description'] = description
+        rec_dict['vec'] = h.Vector()
+        if object is None:
+            if loc is None:
+                loc = 0.5
+            rec_dict['vec'].record(getattr(node.sec(loc), param), self.dt)
+        else:
+            if loc is None:
+                try:
+                    loc = object.get_segment().x  # this should not push the section to the hoc stack or risk overflow
+                except:
+                    loc = 0.5  # if the object doesn't have a .get_loc() method, default to 0.5
+            if param is None:
+                rec_dict['vec'].record(object, self.dt)
+            else:
+                rec_dict['vec'].record(getattr(object, param), self.dt)
+        rec_dict['loc'] = loc
+        self.rec_list.append(rec_dict)
+
+    def get_rec(self, description):
+        """
+        Return the dict corresponding to the item in the rec_dict list with the specified description.
+        :param description: str
+        :return: dict
+        """
+        for rec in self.rec_list:
+            if rec['description'] == description:
+                return rec
+        raise Exception('No recording with description %s' % description)
+
+    def get_rec_index(self, description):
+        """
+        Return the index of the item in the rec_dict list with the specified description.
+        :param description: str
+        :return: dict
+        """
+        for i, rec in enumerate(self.rec_list):
+            if rec['description'] == description:
+                return i
+        raise Exception('No recording with description %s' % description)
+
+    def append_stim(self, cell, node, loc, amp, delay, dur, description='IClamp'):
+        """
+
+        :param cell: :class:'HocCell'
+        :param node: :class:'SHocNode'
+        :param loc: float
+        :param amp: float
+        :param delay: float
+        :param dur: float
+        :param description: str
+        """
+        stim_dict = {'cell': cell, 'node': node, 'description': description}
+        stim_dict['stim'] = h.IClamp(node.sec(loc))
+        stim_dict['stim'].amp = amp
+        stim_dict['stim'].delay = delay
+        stim_dict['stim'].dur = dur
+        stim_dict['vec'] = h.Vector()
+        stim_dict['vec'].record(stim_dict['stim']._ref_i, self.dt)
+        self.stim_list.append(stim_dict)
+
+    def modify_stim(self, index=0, node=None, loc=None, amp=None, delay=None, dur=None, description=None):
+        """
+
+        :param index: int
+        :param node: class:'SHocNode'
+        :param loc: float
+        :param amp: float
+        :param delay: float
+        :param dur: float
+        :param description: str
+        """
+        stim_dict = self.stim_list[index]
+        if not (node is None and loc is None):
+            if not node is None:
+                stim_dict['node'] = node
+            if loc is None:
+                loc = stim_dict['stim'].get_segment().x
+            stim_dict['stim'].loc(stim_dict['node'].sec(loc))
+        if not amp is None:
+            stim_dict['stim'].amp = amp
+        if not delay is None:
+            stim_dict['stim'].delay = delay
+        if not dur is None:
+            stim_dict['stim'].dur = dur
+        if not description is None:
+            stim_dict['description'] = description
+
+    def get_stim_index(self, description):
+        """
+        Return the index of the item in the stim_dict list with the specified description.
+        :param description: str
+        :return: dict
+        """
+        for i, stim in enumerate(self.stim_list):
+            if stim['description'] == description:
+                return i
+        raise Exception('No IClamp object with description: %s' % description)
+
+    def modify_rec(self, index=0, node=None, loc=None, object=None, param='_ref_v', ylabel=None, units=None,
+                   description=None):
+        """
+
+        :param index: int
+        :param node: class:'SHocNode'
+        :param loc: float
+        :param object: class:'HocObject'
+        :param param: str
+        :param ylabel: str
+        :param units: str
+        :param description: str
+        """
+        rec_dict = self.rec_list[index]
+        if not ylabel is None:
+            rec_dict['ylabel'] = ylabel
+        if not units is None:
+            rec_dict['units'] = units
+        if not node is None:
+            rec_dict['node'] = node
+        if not loc is None:
+            rec_dict['loc'] = loc
+        if object is None:
+            rec_dict['vec'].record(getattr(rec_dict['node'].sec(rec_dict['loc']), param), self.dt)
+        elif param is None:
+            rec_dict['vec'].record(object, self.dt)
+        else:
+            rec_dict['vec'].record(getattr(object, param), self.dt)
+        if not description is None:
+            rec_dict['description'] = description
+
+    def plot(self):
+        """
+
+        """
+        for rec_dict in self.rec_list:
+            if 'description' in rec_dict:
+                description = str(rec_dict['description'])
+            else:
+                description = ''
+            plt.plot(self.tvec, rec_dict['vec'], label=rec_dict['node'].name + '(' + str(rec_dict['loc']) + ') - ' +
+                                                       description)
+            plt.xlabel("Time (ms)")
+            plt.ylabel(rec_dict['ylabel'] + ' (' + rec_dict['units'] + ')')
+        plt.legend(loc='upper right')
+        if 'description' in self.parameters:
+            plt.title(self.parameters['description'])
+        plt.show()
+        plt.close()
+
+    def export_to_file(self, f, simiter=None):
+        """
+        Extracts important parameters from the lists of stimulation and recording sites, and exports to an HDF5
+        database. Arrays are saved as datasets and metadata is saved as attributes.
+        :param f: :class:'h5py.File'
+        :param simiter: int
+        """
+        start_time = time.time()
+        if simiter is None:
+            simiter = len(f)
+        if str(simiter) not in f:
+            f.create_group(str(simiter))
+        f[str(simiter)].create_dataset('time', compression='gzip', compression_opts=9, data=self.tvec)
+        f[str(simiter)]['time'].attrs['dt'] = self.dt
+        for parameter in self.parameters:
+            f[str(simiter)].attrs[parameter] = self.parameters[parameter]
+        if self.stim_list:
+            f[str(simiter)].create_group('stim')
+            for index, stim in enumerate(self.stim_list):
+                stim_out = f[str(simiter)]['stim'].create_dataset(str(index), compression='gzip', compression_opts=9,
+                                                                  data=stim['vec'])
+                cell = stim['cell']
+                stim_out.attrs['cell'] = cell.gid
+                node = stim['node']
+                stim_out.attrs['index'] = node.index
+                stim_out.attrs['type'] = node.type
+                loc = stim['stim'].get_segment().x
+                stim_out.attrs['loc'] = loc
+                distance = cell.get_distance_to_node(cell.tree.root, node, loc)
+                stim_out.attrs['soma_distance'] = distance
+                distance = cell.get_distance_to_node(cell.get_dendrite_origin(node), node, loc)
+                stim_out.attrs['branch_distance'] = distance
+                stim_out.attrs['amp'] = stim['stim'].amp
+                stim_out.attrs['delay'] = stim['stim'].delay
+                stim_out.attrs['dur'] = stim['stim'].dur
+                stim_out.attrs['description'] = stim['description']
+        f[str(simiter)].create_group('rec')
+        for index, rec in enumerate(self.rec_list):
+            rec_out = f[str(simiter)]['rec'].create_dataset(str(index), compression='gzip', compression_opts=9,
+                                                            data=rec['vec'])
+            cell = rec['cell']
+            rec_out.attrs['cell'] = cell.gid
+            node = rec['node']
+            rec_out.attrs['index'] = node.index
+            rec_out.attrs['type'] = node.type
+            rec_out.attrs['loc'] = rec['loc']
+            distance = cell.get_distance_to_node(cell.tree.root, node, rec['loc'])
+            rec_out.attrs['soma_distance'] = distance
+            distance = cell.get_distance_to_node(cell.get_dendrite_origin(node), node, rec['loc'])
+            is_terminal = int(cell.is_terminal(node))
+            branch_order = cell.get_branch_order(node)
+            rec_out.attrs['branch_distance'] = distance
+            rec_out.attrs['is_terminal'] = is_terminal
+            rec_out.attrs['branch_order'] = branch_order
+            rec_out.attrs['ylabel'] = rec['ylabel']
+            rec_out.attrs['units'] = rec['units']
+            if 'description' in rec:
+                rec_out.attrs['description'] = rec['description']
+        if self.verbose:
+            print 'Simulation ', simiter, ': exporting took: ', time.time() - start_time, ' s'
+
+    def get_cvode_state(self):
+        """
+
+        :return bool
+        """
+        return bool(self.cvode.active())
+
+    def set_cvode_state(self, state):
+        """
+
+        :param state: bool
+        """
+        if state:
+            self.cvode.active(1)
+            self.cvode.atol(self.cvode_atol)
+            self.cvode.use_daspk(int(self.daspk))
+        else:
+            self.cvode.active(0)
+
+    cvode_state = property(get_cvode_state, set_cvode_state)
 
 
 def make_hoc_cell(env, gid, population):
@@ -132,7 +443,7 @@ def get_hoc_cell_wrapper(env, gid, pop_name):
 @click.option("--template-paths", type=str, default='../dgc/Mateos-Aparicio2014:../dentate/templates')
 @click.option("--hoc-lib-path", type=str, default='../dentate')
 @click.option("--dataset-prefix", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
-              default='/mnt/s') #'../dentate'
+              default='../dentate')  # '/mnt/s'
 @click.option("--results-path", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
               default='data')
 @click.option('--verbose', '-v', is_flag=True)

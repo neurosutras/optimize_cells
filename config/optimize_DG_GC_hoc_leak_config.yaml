@@ -13,8 +13,8 @@ feature_names:
 - distal_dend R_inp
 - soma R_inp
 update_context:
-- - optimize_DG_GC_spiking
-  - reinit_mechanisms
+- - optimize_DG_GC_hoc_leak
+  - init_mechanisms_from_file
 - - optimize_DG_GC_hoc_leak
   - update_context_leak
 get_features_stages:
@@ -34,8 +34,8 @@ kwargs:
   config_file: ../dentate/config/Small_Scale_Control_log_normal_weights.yaml
   template_paths: ../dgc/Mateos-Aparicio2014:../dentate/templates
   hoc_lib_path: ../dentate
-  dataset_prefix: /mnt/s
-  #dataset_prefix: ../dentate
+  #dataset_prefix: /mnt/s
+  dataset_prefix: ../dentate
   results_path: data
 objective_names:
 - dend R_inp

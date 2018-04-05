@@ -5,12 +5,12 @@ Requires a YAML file to specify required configuration parameters.
 Requires use of a nested.parallel interface.
 """
 __author__ = 'Aaron D. Milstein and Grace Ng'
-from specify_cells4 import *
 from plot_results import *
 from nested.optimize_utils import *
 import collections
 import click
 from neuron_wrapper_utils import *
+# from specify_cells4 import QuickSim
 
 
 context = Context()
@@ -160,7 +160,6 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
     if not context.update_context_funcs:
         raise Exception('update_context function not found')
 
-    pprint.pprint(context.kwargs)
     config_worker(context.update_context_funcs, context.param_names, context.default_params, context.target_val,
                   context.target_range, context.temp_output_path, context.export_file_path, context.output_dir,
                   context.disp, **context.kwargs)
@@ -225,13 +224,9 @@ def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
     :param cvode: bool
     :param daspk: bool
     """
-    env = init_env(**kwargs)
-    cell = get_hoc_cell_wrapper(env, context.gid, context.population)
-    context.cell = cell
-    #cell.mech_file_path = context.mech_file_path
-    #cell.reinit_mechanisms(reset_cable=True, from_file=True)
+    context.env = init_env(**kwargs)
+    cell = get_hoc_cell_wrapper(context.env, context.gid, context.population)
     init_mechanisms(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path)
-    context.cell = cell
     # get the thickest apical dendrite ~200 um from the soma
     candidate_branches = []
     candidate_distances = []
@@ -291,26 +286,14 @@ def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
 
     context.spike_output_vec = h.Vector()
     cell.spike_detector.record(context.spike_output_vec)
-
-"""
-def update_source_contexts(x, local_context=None):
+    context.cell = cell
 
 
-    :param x: array
-    :param local_context: :class:'Context'
-
+def init_mechanisms_from_file(x, local_context=None):
     if local_context is None:
         local_context = context
-    local_context.cell.reinit_mechanisms(from_file=True)
-    if not local_context.spines:
-        local_context.cell.correct_g_pas_for_spines()
-    for update_func in local_context.update_context_funcs:
-        update_func(x, local_context)
-"""
-def reinit_mechanisms(x, local_context=None):
-    if local_context is None:
-        local_context = context
-    local_context.cell.reinit_mechanisms(from_file=True)
+    init_mechanisms(local_context.cell, from_file=True)
+
 
 def get_args_static_leak():
     """
