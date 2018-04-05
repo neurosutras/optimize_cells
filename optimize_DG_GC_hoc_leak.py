@@ -310,7 +310,7 @@ def update_source_contexts(x, local_context=None):
 def reinit_mechanisms(x, local_context=None):
     if local_context is None:
         local_context = context
-    local_context.cell.reinit_mechanisms(from_file=True)
+    reinit_mechanisms(local_context.cell, from_file=True)
 
 def get_args_static_leak():
     """

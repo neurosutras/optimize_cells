@@ -13,7 +13,7 @@ feature_names:
 - distal_dend R_inp
 - soma R_inp
 update_context:
-- - optimize_DG_GC_spiking
+- - optimize_DG_GC_hoc_leak
   - reinit_mechanisms
 - - optimize_DG_GC_hoc_leak
   - update_context_leak
