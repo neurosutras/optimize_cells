@@ -230,6 +230,12 @@ def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
     :param cvode: bool
     :param daspk: bool
     """
+    if 'comm' not in context():
+        try:
+            from mpi4py import MPI
+            context.comm = MPI.COMM_WORLD
+        except Exception:
+            raise Exception('optimize_DG_GC_hoc_leak: problem importing from mpi4py; required for config_interactive')
     print context.comm.rank
     context.env = init_env(comm=context.comm, **kwargs)
     cell = get_hoc_cell_wrapper(context.env, context.gid, context.population)
