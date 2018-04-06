@@ -14,7 +14,7 @@ feature_names:
 - soma R_inp
 update_context:
 - - optimize_DG_GC_hoc_leak
-  - reinit_mechanisms
+  - init_mechanisms_from_file
 - - optimize_DG_GC_hoc_leak
   - update_context_leak
 get_features_stages:
@@ -35,7 +35,7 @@ kwargs:
   template_paths: ../dgc/Mateos-Aparicio2014:../dentate/templates
   hoc_lib_path: ../dentate
   dataset_prefix: /mnt/s
-  #dataset_prefix: ../dentate
+  #dataset_prefix: ../dentate/datasets
   results_path: data
 objective_names:
 - dend R_inp
