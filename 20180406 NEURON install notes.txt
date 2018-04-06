@@ -1,0 +1,201 @@
+I) To install on a local machine:
+
+1) install anaconda python2.7:
+# includes ipython, numpy, matplotlib
+
+in ~/.bashrc or ~/.bash_profile:
+export PATH=$HOME/anaconda2/bin:$PATH
+
+Depending on the system, you may want to disable the display capability of matplotlib, or change from the default
+backend.
+Either edit the config file in place, or edit a copy:
+~/anaconda2/lib/python2.7/site-packages/matplotlib/mpl-data/matplotlibrc
+or copy it to
+~/.config/matplotlib/matplotlibrc and edit
+This may have to be done each time anaconda is updated.
+To disable dispay, change the backend to 'Agg'
+On Mac OSX 10.13.4, I change the backend to 'Qt5Agg'
+
+In order to ensure that neuron, mpi4py, parallel hdf5, h5py, and neuroh5 all work happily together, we can't use
+anaconda's default versions of these tools:
+
+conda remove mpi4py --force
+conda remove openmpi --force
+conda remove hdf5 --force
+conda remove h5py --force
+
+2) install mpich2:
+
+On Mac, mpich can be installed via homebrew:
+brew install mpich
+
+Otherwise, download and build from source from:
+http://www.mpich.org/downloads/
+
+in ~/.bashrc or ~/.bash_profile:
+export PATH=/usr/local/Cellar/mpich/3.2_2/bin:$PATH
+export LD_LIBRARY_PATH=/usr/local/Cellar/mpich/3.2_2/lib:$LD_LIBRARY_PATH
+
+One has to be VERY careful to not have conflicting installs of mpi
+Check that only one version of mpirun and mpicc are returned by
+which mpirun -a
+
+3) install mpi4py (if you want to use mpi4py.futures for concurrent parallel computing, you need version >3.0.0:
+
+As long as the proper mpicc is in the $PATH, pip can work for mpi4py:
+http://pythonhosted.org/mpi4py/usrman/install.html#using-pip-or-easy-install
+pip install mpi4py
+
+test it with:
+# test_mpi.py
+from mpi4py import MPI
+rank = MPI.COMM_WORLD.rank  # The process ID (integer 0-3 for 4-process run)
+print "Hello World (from process %d)" % rank
+#
+run with:
+mpirun -n 4 python test_mpi.py
+
+4) install neuron:
+clone neuron/iv and neuron/nrn github repositories
+worth consulting these install tips from:
+http://www.neuron.yale.edu/neuron/download/compilestd_osx
+http://www.neuron.yale.edu/neuron/download/compile_linux
+http://www.neuron.yale.edu/phpBB/viewtopic.php?f=4&t=3051#p12584
+
+mkdir ~/neuron
+mkdir ~/neuron/ivsrc
+mkdir ~/neuron/iv
+cd ~/neuron/ivsrc
+git clone https://github.com/nrnhines/iv.git .
+./build.sh
+./configure --prefix=$HOME/neuron/iv
+make
+make install
+
+mkdir ~/neuron/nrnsrc
+mkdir ~/neuron/nrn
+cd ~/neuron/nrnsrc
+git clone https://github.com/nrnhines/nrn.git .
+./build.sh
+./configure --prefix=$HOME/neuron/nrn --with-iv=$HOME/neuron/iv --with-nrnpython=$HOME/anaconda2/bin/python \
+    --with-paranrn --with-mpi
+export CFLAGS='-Qunused-arguments'
+export CXXFLAGS='-Qunused-arguments'
+cd ~/neuron/nrnsrc/src/nrnmpi
+sh mkdynam.sh
+cd ~/neuron/nrnsrc
+make
+make install
+
+create file: ~/neuron/nrnenv
+# containing:
+export IDIR=$HOME/neuron
+export IV=$IDIR/iv
+export N=$IDIR/nrn
+export CPU=x86_64
+export PATH=$IV/$CPU/bin:$N/$CPU/bin:$PATH
+
+in ~/.bashrc or ~/.bash_profile:
+source $HOME/neuron/nrnenv
+export PATH=$HOME/neuron:$PATH
+export PYTHONPATH=$HOME/neuron/nrn/lib/python:$PYTHONPATH
+
+Before executing hoc or python code from any directory, make sure any .mod files required by your models have been
+copied into the same directory as your scripts, and execute nrnivmodl in your directory to compile the mechanisms.
+
+5) Install btmorph from
+http://btmorph.readthedocs.org/en/latest/readme.html#installation
+
+in ~/.bashrc or ~/.bash_profile:
+export PYTHONPATH=<replace with path to repository>/btmorph:$PYTHONPATH
+
+BtMorph requires that the compartments with indices 1, 2, and 3 all be of type 1 (soma), according to the standard used
+by NeuroMorpho.org.
+
+6) Install parallel hdf5 (recommend version 1.8) from source:
+https://support.hdfgroup.org/HDF5/release/obtainsrc518.html#conf
+
+Make sure that 'which mpicc' refers to the above mpich installation directory.
+Consult instructions from:
+https://support.hdfgroup.org/ftp/HDF5/current/src/unpacked/release_docs/INSTALL_parallel
+and
+http://docs.h5py.org/en/latest/mpi.html
+
+mkdir /usr/local/hdf5
+cd /usr/local/hdf5
+export CC=mpicc
+./configure --enable-parallel --enable-shared --prefix=/usr/local/hdf5
+make
+make check
+make install
+
+in ~/.bashrc or ~/.bash_profile:
+export PATH=/usr/local/hdf5/bin:$PATH
+export LD_LIBRARY_PATH=/usr/local/hdf5/lib:$LD_LIBRARY_PATH:
+
+7) Install h5py (recommend version 2.6.0) to refer to parallel hdf5 and mpi4py:
+http://docs.h5py.org/en/latest/mpi.html
+download source from:
+https://pypi.python.org/pypi/h5py
+
+export CC=mpicc
+python setup.py configure --mpi --hdf5=/usr/local/hdf5
+python setup.py build --build-base=$HOME/anaconda2
+python setup.py install --prefix=$HOME/anaconda2
+
+test it with:
+# test_phdf5.py
+from mpi4py import MPI
+import h5py
+rank = MPI.COMM_WORLD.rank  # The process ID (integer 0-3 for 4-process run)
+print "Hello World (from process %d)" % rank
+f = h5py.File('parallel_test.hdf5', 'w', driver='mpio', comm=MPI.COMM_WORLD)
+dset = f.create_dataset('test', (4,), dtype='i')
+dset[rank] = rank
+f.close()
+#
+run with:
+mpiexec -n 4 python test_phdf5.py
+check contents of file with:
+h5dump test_phdf5.py
+
+
+II) Special tips for installing neuron on some linux clusters:
+
+1) On XSEDE Comet:
+
+module load python
+module load hdf5
+module load mpi4py
+
+./configure --prefix=$HOME/neuron/nrn --without-iv --with-paranrn --with-nrnpython --with-mpi
+
+
+2) On NERSC Cori:
+
+module swap PrgEnv-intel PrgEnv-gnu
+module load python
+export CC=cc
+export CXX=CC
+export LD_PRELOAD=/lib64/libreadline.so.6
+export CRAYPE_LINK_TYPE=dynamic
+export PYTHONPATH=/usr/common/software/python/2.7-anaconda-4.4/lib/python2.7/site-packages:$PYTHONPATH
+
+./configure --prefix=$HOME/neuron/nrn -with-paranrn --with-mpi \
+    --with-nrnpython=/usr/common/software/python/2.7-anaconda-4.4/bin/python --without-x --without-memacs \
+    --with-readline=no
+make
+make install
+
+
+III) Other random tips:
+
+1) PyCharm Community Edition is a free and useful IDE for python. PyCharm limits the size of the console output buffer.
+Change the value of idea.cycle.buffer.size in the idea.properties file in the /bin directory of the install package. To
+change the size of the terminal output buffer, change the registry key terminal.buffer.max.lines.count. Navigate to
+Help| Find action| Type "Registry"| Find terminal.buffer.max.lines.count.
+
+2) Copy list of files from Finder, paste as list of string filenames from clipboard:
+from Tkinter import Tk
+root = Tk()
+file_list = Tk.clipboard_get(root).split('\r')

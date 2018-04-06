@@ -5,7 +5,6 @@ import scipy.stats as stats
 import matplotlib.gridspec as gridspec
 from matplotlib import cm
 from function_lib import *
-# from specify_cells2 import *
 from dentate.cells import *
 
 mpl.rcParams['svg.fonttype'] = 'none'
