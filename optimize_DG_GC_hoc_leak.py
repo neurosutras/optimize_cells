@@ -10,7 +10,6 @@ from nested.optimize_utils import *
 import collections
 import click
 from neuron_wrapper_utils import *
-# from specify_cells4 import QuickSim
 
 
 context = Context()
