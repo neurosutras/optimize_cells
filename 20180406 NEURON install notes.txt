@@ -79,8 +79,8 @@ git clone https://github.com/nrnhines/nrn.git .
 ./build.sh
 ./configure --prefix=$HOME/neuron/nrn --with-iv=$HOME/neuron/iv --with-nrnpython=$HOME/anaconda2/bin/python \
     --with-paranrn --with-mpi
-export CFLAGS='-Qunused-arguments'
-export CXXFLAGS='-Qunused-arguments'
+# export CFLAGS='-Qunused-arguments'
+# export CXXFLAGS='-Qunused-arguments'
 cd ~/neuron/nrnsrc/src/nrnmpi
 sh mkdynam.sh
 cd ~/neuron/nrnsrc

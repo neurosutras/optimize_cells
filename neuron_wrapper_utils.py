@@ -423,15 +423,18 @@ def get_hoc_cell_wrapper(env, gid, pop_name):
     hoc_cell = make_hoc_cell(env, gid, pop_name)
     #cell = HocCell(existing_hoc_cell=hoc_cell)
     # cell.load_morphology()
-    cell = HocCell(gid=0, population='GC', hoc_cell=hoc_cell)
-    cell_attr_index_map = get_cell_attributes_index_map(env.comm, context.dataFilePath, 'GC', 'Synapse Attributes')
-    cell_attr_dict = select_cell_attributes(gid, env.comm, context.dataFilePath, cell_attr_index_map, 'GC', 'Synapse Attributes')
-
-    #Need to build instance of a class to store all synapse attributes and connnectivity information along with pointers to the
-    #actual point processes and net con objects
-
-    #Need to add dictionary info to synapse_attributes of each node?
+    cell = HocCell(gid=0, population=pop_name, hoc_cell=hoc_cell)
+    cell_attr_index_map = get_cell_attributes_index_map(env.comm, context.dataFilePath, pop_name, 'Synapse Attributes')
+    cell_attr_dict = {gid: select_cell_attributes(gid, env.comm, context.dataFilePath, cell_attr_index_map, pop_name,
+                                                  'Synapse Attributes')}
+    syn_attrs_dict, syn_index_map = build_syn_attrs_dict(cell_attr_dict, gid)
     context.update(locals())
+
+    datasetPath = os.path.join(env.datasetPrefix, env.datasetName)
+    connectivityFilePath = os.path.join(datasetPath, env.modelConfig['Connection Data'])
+    source_names = fill_source_info(connectivityFilePath, cell_attr_dict, syn_index_map, gid, pop_name, env)
+    context.source_names = source_names
+    fill_syn_mech_names(syn_attrs_dict, syn_index_map, cell_attr_dict, gid, pop_name, env)
     return cell
 
 
@@ -443,7 +446,7 @@ def get_hoc_cell_wrapper(env, gid, pop_name):
 @click.option("--template-paths", type=str, default='../dgc/Mateos-Aparicio2014:../dentate/templates')
 @click.option("--hoc-lib-path", type=str, default='../dentate')
 @click.option("--dataset-prefix", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
-              default='../dentate/datasets')  # '/mnt/s'
+              default='/mnt/s')  # '../dentate/datasets'
 @click.option("--results-path", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
               default='data')
 @click.option('--verbose', '-v', is_flag=True)
@@ -465,6 +468,83 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     cell = get_hoc_cell_wrapper(env, gid, pop_name)
     context.update(locals())
 
+    #init_biophysics(cm, g_pas)
+    subset_syn_list = [5, 10]
+    subset_source_names = subset_syns_by_source(subset_syn_list, context.cell_attr_dict, context.syn_index_map, gid, env)
+    context.subset_source_names = subset_source_names
+    insert_syn_subset(cell, context.syn_attrs_dict, context.cell_attr_dict, gid, subset_source_names, env, pop_name)
+
 
 if __name__ == '__main__':
     main(args=sys.argv[(sys.argv.index(os.path.basename(__file__)) + 1):])
+
+
+def make_connections(syn_attrs_dict, cell_attr_dict, postsyn_gid, env, source_names, pop_name):
+    datasetPath = os.path.join(env.datasetPrefix, env.datasetName)
+    connectivityFilePath = os.path.join(datasetPath, env.modelConfig['Connection Data'])
+
+    synapse_config = env.celltypes[pop_name]['synapses']
+    if synapse_config.has_key('spines'):
+        spines = synapse_config['spines']
+    else:
+        spines = False
+
+    if synapse_config.has_key('unique'):
+        unique = synapse_config['unique']
+    else:
+        unique = False
+
+    for source_name in source_names:
+        edge_count = 0
+        edge_attr_index_map = get_edge_attributes_index_map(env.comm, connectivityFilePath, source_name, pop_name)
+        edge_attr_tuple = select_edge_attributes(postsyn_gid, env.comm, connectivityFilePath, edge_attr_index_map,
+                                                 source_name, 'GC', ['Synapses', 'Connections'])
+
+        connection_dict = env.connection_generator[pop_name][source_name].connection_properties
+        kinetics_dict = env.connection_generator[pop_name][source_name].synapse_kinetics
+        print edge_attr_tuple
+        print 'about to get cell from gid'
+        postsyn_cell = env.pc.gid2cell(postsyn_gid)
+        print 'got cell'
+        cell_syn_dict = cell_attr_dict[postsyn_gid]
+
+        presyn_gids = edge_attr_tuple[0]
+        edge_syn_ids = edge_attr_tuple[1]['Synapses']['syn_id']
+        edge_dists = edge_attr_tuple[1]['Connections']['distance']
+
+        cell_syn_types = cell_syn_dict['syn_types']
+        cell_swc_types = cell_syn_dict['swc_types']
+        cell_syn_locs = cell_syn_dict['syn_locs']
+        cell_syn_sections = cell_syn_dict['syn_secs']
+
+        edge_syn_ps_dict = synapses.mksyns(postsyn_gid,
+                                           postsyn_cell,
+                                           edge_syn_ids,
+                                           cell_syn_types,
+                                           cell_swc_types,
+                                           cell_syn_locs,
+                                           cell_syn_sections,
+                                           kinetics_dict, env,
+                                           add_synapse=synapses.add_unique_synapse if unique else synapses.add_shared_synapse,
+                                           spines=spines)
+
+        if env.verbose:
+            if int(env.pc.id()) == 0:
+                if edge_count == 0:
+                    for sec in list(postsyn_cell.all):
+                        h.psection(sec=sec)
+
+        for (presyn_gid, edge_syn_id, distance) in itertools.izip(presyn_gids, edge_syn_ids, edge_dists):
+            syn_ps_dict = edge_syn_ps_dict[edge_syn_id]
+            for (syn_mech, syn_ps) in syn_ps_dict.iteritems():
+                connection_syn_mech_config = connection_dict[syn_mech]
+                #In full-scale model, we would need to read in weight information from the neuroh5 file
+                weight = connection_syn_mech_config['weight']
+                delay = (distance / connection_syn_mech_config['velocity']) + 0.1
+                if type(weight) is float:
+                    nc = mk_nc_syn(env.pc, h.nclist, presyn_gid, postsyn_gid, syn_ps, weight, delay)
+                else:
+                    nc = mk_nc_syn_wgtvector(env.pc, h.nclist, presyn_gid, postsyn_gid, syn_ps, weight, delay)
+                syn_attrs_dict[postsyn_gid][edge_syn_id][syn_ps.name] = {'netcon': nc, 'attrs': {}}
+
+        edge_count += len(presyn_gids)
