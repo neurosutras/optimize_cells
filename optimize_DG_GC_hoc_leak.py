@@ -180,6 +180,7 @@ def config_controller(export_file_path, output_dir, **kwargs):
     context.update(locals())
     context.update(kwargs)
     init_context()
+    sys.stdout.flush()
 
 
 def config_worker(update_context_funcs, param_names, default_params, target_val, target_range, temp_output_path,
@@ -204,6 +205,7 @@ def config_worker(update_context_funcs, param_names, default_params, target_val,
     processed_export_file_path = export_file_path.replace('.hdf5', '_processed.hdf5')
     context.update(locals())
     init_context()
+    pprint.pprint(kwargs)
     setup_cell(**kwargs)
 
 
@@ -229,7 +231,12 @@ def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
     :param cvode: bool
     :param daspk: bool
     """
-    print context.comm.rank
+    if 'comm' not in context():
+        try:
+            from mpi4py import MPI
+            context.comm = MPI.COMM_WORLD
+        except Exception:
+            raise Exception('optimize_DG_GC_hoc_leak: setup_cell: problem importing from mpi4py')
     context.env = init_env(comm=context.comm, **kwargs)
     cell = get_hoc_cell_wrapper(context.env, context.gid, context.population)
     init_mechanisms(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path)

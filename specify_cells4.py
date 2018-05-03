@@ -2033,14 +2033,14 @@ class Synapse(object):
             syn_types = ['AMPA_KIN']
         elif type(syn_types) is not list:
             syn_types = [syn_types]
-        if self.stochastic:
-            self._init_stochastic()
         self._id = id
         if self.id is not None and loc is None:
             loc = self.branch.synapse_attributes['syn_locs'][self.id]
         if loc is None:
             loc = 0.5
         self._loc = loc
+        if self.stochastic:
+            self._init_stochastic()
         for syn_type in syn_types:
             syn = getattr(h, syn_type)(self.node.sec(self._loc))
             self._targets[syn_type] = {'target': syn}
