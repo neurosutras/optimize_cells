@@ -448,10 +448,12 @@ def get_hoc_cell_wrapper(env, gid, pop_name):
 @click.option("--hoc-lib-path", type=str, default='../dentate')
 @click.option("--dataset-prefix", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
               default='/mnt/s')  # '../dentate/datasets'
+@click.option("--mech-file-path", required=True, type=click.Path(exists=True, file_okay=True, dir_okay=False),
+              default='mechanisms/090717 GC optimizing spiking.yaml')
 @click.option("--results-path", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
               default='data')
 @click.option('--verbose', '-v', is_flag=True)
-def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefix, results_path, verbose):
+def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefix, mech_file_path, results_path, verbose):
     """
 
     :param gid:
@@ -468,9 +470,8 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
                    dataset_prefix=dataset_prefix, results_path=results_path, verbose=verbose)
     cell = get_hoc_cell_wrapper(env, gid, pop_name)
     context.update(locals())
-
-    #init_biophysics(cm, g_pas)
-    #correct_for_spines(cell, context.cell_attr_dict[gid], context.sec_index_map, env)
+    init_mechanisms(cell, reset_cable=True, from_file=True, mech_file_path=mech_file_path, cm_correct=True, g_pas_correct=True,
+                    cell_attr_dict=context.cell_attr_dict[gid], sec_index_map=context.sec_index_map, env=context.env)
 
     """
     #Synapses
