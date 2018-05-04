@@ -456,7 +456,8 @@ def update_context_leak(x, local_context=None):
     for sec_type in ['axon_hill', 'axon', 'ais', 'apical', 'spine_neck', 'spine_head']:
         update_mechanism_by_sec_type(cell, sec_type, 'pas')
     if not local_context.spines:
-        correct_g_pas_for_spines(cell)
+        correct_g_pas_for_spines(cell, local_context.cell_attr_dict[local_context.gid], local_context.sec_index_map,
+                                 local_context.env)
 
 
 def export_sim_results():

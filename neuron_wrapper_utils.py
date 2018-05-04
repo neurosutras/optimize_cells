@@ -470,14 +470,17 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     context.update(locals())
 
     #init_biophysics(cm, g_pas)
-    #correct_cm_for_spines(cell, context.cell_attr_dict[gid], context.sec_index_map, env)
+    #correct_for_spines(cell, context.cell_attr_dict[gid], context.sec_index_map, env)
+
+    """
+    #Synapses
     #subset_syn_list = [5, 10]
     subset_syn_list = context.cell_attr_dict[gid]['syn_ids']
     subset_source_names = subset_syns_by_source(subset_syn_list, context.cell_attr_dict, context.syn_index_map, gid, env)
     subset_source_names = {'MPP': subset_source_names['MPP']} #test only by making MPP synapses
     context.subset_source_names = subset_source_names
     insert_syn_subset(cell, context.syn_attrs_dict, context.cell_attr_dict, gid, subset_source_names, env, pop_name)
-
+    """
 
 if __name__ == '__main__':
     main(args=sys.argv[(sys.argv.index(os.path.basename(__file__)) + 1):])
