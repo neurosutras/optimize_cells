@@ -180,7 +180,6 @@ def config_controller(export_file_path, output_dir, **kwargs):
     context.update(locals())
     context.update(kwargs)
     init_context()
-    sys.stdout.flush()
 
 
 def config_worker(update_context_funcs, param_names, default_params, target_val, target_range, temp_output_path,
@@ -205,7 +204,6 @@ def config_worker(update_context_funcs, param_names, default_params, target_val,
     processed_export_file_path = export_file_path.replace('.hdf5', '_processed.hdf5')
     context.update(locals())
     init_context()
-    pprint.pprint(kwargs)
     setup_cell(**kwargs)
 
 
@@ -236,7 +234,8 @@ def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
             from mpi4py import MPI
             context.comm = MPI.COMM_WORLD
         except Exception:
-            raise Exception('optimize_DG_GC_hoc_leak: setup_cell: problem importing from mpi4py')
+            raise Exception('optimize_DG_GC_hoc_leak: problem importing from mpi4py; required for config_interactive')
+    print context.comm.rank
     context.env = init_env(comm=context.comm, **kwargs)
     cell = get_hoc_cell_wrapper(context.env, context.gid, context.population)
     init_mechanisms(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path)
@@ -457,7 +456,8 @@ def update_context_leak(x, local_context=None):
     for sec_type in ['axon_hill', 'axon', 'ais', 'apical', 'spine_neck', 'spine_head']:
         update_mechanism_by_sec_type(cell, sec_type, 'pas')
     if not local_context.spines:
-        correct_g_pas_for_spines(cell)
+        correct_g_pas_for_spines(cell, local_context.cell_attr_dict[local_context.gid], local_context.sec_index_map,
+                                 local_context.env)
 
 
 def export_sim_results():

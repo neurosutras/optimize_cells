@@ -423,15 +423,19 @@ def get_hoc_cell_wrapper(env, gid, pop_name):
     hoc_cell = make_hoc_cell(env, gid, pop_name)
     #cell = HocCell(existing_hoc_cell=hoc_cell)
     # cell.load_morphology()
-    cell = HocCell(gid=0, population='GC', hoc_cell=hoc_cell)
-    cell_attr_index_map = get_cell_attributes_index_map(env.comm, context.dataFilePath, 'GC', 'Synapse Attributes')
-    cell_attr_dict = select_cell_attributes(gid, env.comm, context.dataFilePath, cell_attr_index_map, 'GC', 'Synapse Attributes')
-
-    #Need to build instance of a class to store all synapse attributes and connnectivity information along with pointers to the
-    #actual point processes and net con objects
-
-    #Need to add dictionary info to synapse_attributes of each node?
+    cell = HocCell(gid=0, population=pop_name, hoc_cell=hoc_cell)
+    cell_attr_index_map = get_cell_attributes_index_map(env.comm, context.dataFilePath, pop_name, 'Synapse Attributes')
+    cell_attr_dict = {gid: select_cell_attributes(gid, env.comm, context.dataFilePath, cell_attr_index_map, pop_name,
+                                                  'Synapse Attributes')}
+    syn_attrs_dict, syn_index_map = build_syn_attrs_dict(cell_attr_dict, gid)
+    sec_index_map = build_sec_index_map(cell_attr_dict, gid)
     context.update(locals())
+
+    datasetPath = os.path.join(env.datasetPrefix, env.datasetName)
+    connectivityFilePath = os.path.join(datasetPath, env.modelConfig['Connection Data'])
+    source_names = fill_source_info(connectivityFilePath, cell_attr_dict, syn_index_map, gid, pop_name, env)
+    context.source_names = source_names
+    fill_syn_mech_names(syn_attrs_dict, syn_index_map, cell_attr_dict, gid, pop_name, env)
     return cell
 
 
@@ -443,11 +447,13 @@ def get_hoc_cell_wrapper(env, gid, pop_name):
 @click.option("--template-paths", type=str, default='../dgc/Mateos-Aparicio2014:../dentate/templates')
 @click.option("--hoc-lib-path", type=str, default='../dentate')
 @click.option("--dataset-prefix", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
-              default='../dentate/datasets')  # '/mnt/s'
+              default='/mnt/s')  # '../dentate/datasets'
+@click.option("--mech-file-path", required=True, type=click.Path(exists=True, file_okay=True, dir_okay=False),
+              default='mechanisms/090717 GC optimizing spiking.yaml')
 @click.option("--results-path", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
               default='data')
 @click.option('--verbose', '-v', is_flag=True)
-def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefix, results_path, verbose):
+def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefix, mech_file_path, results_path, verbose):
     """
 
     :param gid:
@@ -464,7 +470,20 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
                    dataset_prefix=dataset_prefix, results_path=results_path, verbose=verbose)
     cell = get_hoc_cell_wrapper(env, gid, pop_name)
     context.update(locals())
+    """
+    init_mechanisms(cell, reset_cable=True, from_file=True, mech_file_path=mech_file_path, cm_correct=True, g_pas_correct=True,
+                    cell_attr_dict=context.cell_attr_dict[gid], sec_index_map=context.sec_index_map, env=context.env)
+    """
 
+    """
+    #Synapses
+    #subset_syn_list = [5, 10]
+    subset_syn_list = context.cell_attr_dict[gid]['syn_ids']
+    subset_source_names = subset_syns_by_source(subset_syn_list, context.cell_attr_dict, context.syn_index_map, gid, env)
+    subset_source_names = {'MPP': subset_source_names['MPP']} #test only by making MPP synapses
+    context.subset_source_names = subset_source_names
+    insert_syn_subset(cell, context.syn_attrs_dict, context.cell_attr_dict, gid, subset_source_names, env, pop_name)
+    """
 
 if __name__ == '__main__':
     main(args=sys.argv[(list_find(lambda s: s.find(os.path.basename(__file__)) != -1, sys.argv) + 1):],
