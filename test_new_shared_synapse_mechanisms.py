@@ -51,17 +51,21 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     input_spike_train = [equilibrate + i * ISI for i in xrange(3)]
     last_spike_time = input_spike_train[-1]
     ISI = 10.
-    input_spike_train += [last_spike_time + 150. + i * ISI for i in xrange(5)]
+    input_spike_train += [last_spike_time + 150. + i * ISI for i in xrange(10)]
     last_spike_time = input_spike_train[-1]
     input_spike_train += [last_spike_time + 100.]
 
     mech_config = {'SatExp2Syn': {'mech_params': ['sat', 'dur_onset', 'tau_offset', 'e'],
-                              'netcon_params': {'weight': 0, 'g_unit': 1}
-                              },
+                                  'netcon_params': {'weight': 0, 'g_unit': 1}
+                                  },
                    'AMPA_S': {'mech_params': ['Cdur', 'Alpha', 'Beta', 'Erev'],
                               'netcon_params': {'weight': 0}},
                    'FacilExp2Syn': {'mech_params': ['tau_rise', 'tau_decay', 'e', 'f_tau', 'f_inc', 'f_max'],
-                                    'netcon_params': {'weight': 0, 'gmax': 1}}
+                                    'netcon_params': {'weight': 0, 'g_unit': 1}},
+                   'FacilNMDA': {'mech_params': ['tau_rise', 'tau_decay', 'e',
+                                                 'f_tau', 'f_inc', 'f_max',
+                                                 'gamma', 'Kd', 'mg'],
+                                 'netcon_params': {'weight': 0, 'g_unit': 1}}
                    }
     recordings = {'SatExp2Syn': {'mech_params': ['g'],
                                  'netcon_params': {'g0': 4}
@@ -69,12 +73,16 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
                   'AMPA_S': {'mech_params': ['g'],
                              'netcon_params': {'r0': 3}},
                   'FacilExp2Syn': {'mech_params': ['g'],
-                                   'netcon_params': {'A0': 2, 'B0': 3}}
+                                   'netcon_params': {'g0': 4, 'f1': 6}},
+                  'FacilNMDA': {'mech_params': ['g', 'B'],
+                                'netcon_params': {'g0': 4, 'f1': 6}}
                   }
     syn_params = {'SatExp2Syn': {'g_unit': 1., 'dur_onset': 1., 'tau_offset': 5., 'sat': 0.9},
                   'AMPA_S': {},
-                  'FacilExp2Syn': {'f_tau': 30., 'f_inc': 0.3, 'f_max': 0.75,
-                                   'g_unit': 1., 'dur_onset': 10., 'tau_offset': 40., 'sat': 0.9}
+                  'FacilExp2Syn': {'f_tau': 25., 'f_inc': 0.15, 'f_max': 0.6,
+                                   'g_unit': 1., 'dur_onset': 10., 'tau_offset': 35., 'sat': 0.9},
+                  'FacilNMDA': {'f_tau': 25., 'f_inc': 0.15, 'f_max': 0.6,
+                                'g_unit': 1., 'dur_onset': 10., 'tau_offset': 35., 'sat': 0.9}
                   }
 
     each_syn_delay = 10.
@@ -89,7 +97,7 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
 
     duration = this_input_spike_train[-1] + 150.
     sim = QuickSim(duration)
-    # sim.append_rec(cell, cell.tree.root, 0.5, description='soma Vm')
+    sim.append_rec(cell, cell.tree.root, 0.5, description='soma Vm')
     for param_name in recordings[mech_name]['mech_params']:
         sim.append_rec(cell, cell.tree.root, object=syn, param='_ref_'+param_name, description=param_name)
 
@@ -102,11 +110,8 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     context.update(locals())
 
     sim.run()
-    for i in xrange(num_syns):
-        if mech_name == 'FacilExp2Syn':
-            plt.plot(sim.tvec, np.subtract(sim.get_rec('netcon%i_B0' % i)['vec'],
-                                           sim.get_rec('netcon%i_A0' % i)['vec']), label='g%i' % i)
-        elif mech_name == 'SatExp2Syn':
+    if mech_name in ['SatExp2Syn', 'FacilExp2Syn']:
+        for i in xrange(num_syns):
             description = 'netcon%i_g0' % i
             sim.get_rec(description)['vec'] = np.divide(sim.get_rec(description)['vec'],
                                                        getattr(syn, 'g_inf') * getattr(syn, 'sat'))
