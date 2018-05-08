@@ -34,6 +34,7 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     comm = MPI.COMM_WORLD
     env = init_env(config_file=config_file, template_paths=template_paths, hoc_lib_path=hoc_lib_path, comm=comm,
                    dataset_prefix=dataset_prefix, results_path=results_path, verbose=verbose)
+    print env.synapse_mech_name_dict, env.synapse_mech_param_dict
     cell = get_hoc_cell_wrapper(env, gid, pop_name)
     cell.tree.root.sec.insert('pas')
     cell.tree.root.sec.g_pas = 0.5
@@ -55,38 +56,26 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     input_spike_train += [last_spike_time + 100.]
 
     mech_config = {'SatExp2Syn': {'mech_params': ['sat', 'dur_onset', 'tau_offset', 'e'],
-                              'netcon_params': {'gmax': 1, 'g0': 4}
+                              'netcon_params': {'weight': 0, 'g_unit': 1}
                               },
-                   'FacilExp2Syn': {'mech_params': ['tau_rise', 'tau_decay', 'e'],
-                                  'netcon_params': {'gmax': 1, 'A0': 2, 'B0': 3}}
+                   'AMPA_S': {'mech_params': ['Cdur', 'Alpha', 'Beta', 'Erev'],
+                              'netcon_params': {'weight': 0}},
+                   'FacilExp2Syn': {'mech_params': ['tau_rise', 'tau_decay', 'e', 'f_tau', 'f_inc', 'f_max'],
+                                    'netcon_params': {'weight': 0, 'gmax': 1}}
                    }
-    syn_params = {'SatExp2Syn': {'gmax': 1., 'dur_onset': 5., 'tau_offset': 40., 'sat': 0.5}}
-
-    def set_syn_mech_params(mech_config, syn_list, netcon_list, **kwargs):
-        """
-
-        :param mech_config: dict
-        :param syn_list: list of synapse point_process objects
-        :param netcon_list: list of synapse netcon objects
-        :param kwargs: dict
-        """
-        for syn in syn_list:
-            for param_name in mech_config['mech_params']:
-                if hasattr(syn, param_name) and param_name in kwargs:
-                    setattr(syn, param_name, kwargs[param_name])
-        for this_netcon in netcon_list:
-            for param_name, i in mech_config['netcon_params'].iteritems():
-                if param_name in kwargs and this_netcon.wcnt() >= i:
-                    this_netcon.weight[i] = kwargs[param_name]
-                    # print mech_name, param_name, kwargs[param_name], i
-
-    """
-    syn.f_tau = 30.
-    syn.f_inc = 0.3
-    syn.f_max = 0.75
-    syn.tau_rise = 5.
-    syn.tau_decay = 40.
-    """
+    recordings = {'SatExp2Syn': {'mech_params': ['g'],
+                                 'netcon_params': {'g0': 4}
+                                 },
+                  'AMPA_S': {'mech_params': ['g'],
+                             'netcon_params': {'r0': 3}},
+                  'FacilExp2Syn': {'mech_params': ['g'],
+                                   'netcon_params': {'A0': 2, 'B0': 3}}
+                  }
+    syn_params = {'SatExp2Syn': {'g_unit': 1., 'dur_onset': 1., 'tau_offset': 5., 'sat': 0.9},
+                  'AMPA_S': {},
+                  'FacilExp2Syn': {'f_tau': 30., 'f_inc': 0.3, 'f_max': 0.75,
+                                   'g_unit': 1., 'dur_onset': 10., 'tau_offset': 40., 'sat': 0.9}
+                  }
 
     each_syn_delay = 10.
     for i in xrange(num_syns):
@@ -101,11 +90,11 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     duration = this_input_spike_train[-1] + 150.
     sim = QuickSim(duration)
     # sim.append_rec(cell, cell.tree.root, 0.5, description='soma Vm')
-    sim.append_rec(cell, cell.tree.root, object=syn, param='_ref_g', description='g_total')
-    sim.append_rec(cell, cell.tree.root, object=syn, param='_ref_g_onset', description='g_onset')
-    sim.append_rec(cell, cell.tree.root, object=syn, param='_ref_g_offset', description='g_offset')
+    for param_name in recordings[mech_name]['mech_params']:
+        sim.append_rec(cell, cell.tree.root, object=syn, param='_ref_'+param_name, description=param_name)
+
     for i in xrange(num_syns):
-        for param_name, j in mech_config[mech_name]['netcon_params'].iteritems():
+        for param_name, j in recordings[mech_name]['netcon_params'].iteritems():
             if j > 1:
                 description = 'netcon%i_%s' % (i, param_name)
                 sim.append_rec(cell, cell.tree.root, description=description)
@@ -122,6 +111,25 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
             sim.get_rec(description)['vec'] = np.divide(sim.get_rec(description)['vec'],
                                                        getattr(syn, 'g_inf') * getattr(syn, 'sat'))
     sim.plot()
+
+
+def set_syn_mech_params(mech_config, syn_list, netcon_list, **kwargs):
+    """
+
+    :param mech_config: dict
+    :param syn_list: list of synapse point_process objects
+    :param netcon_list: list of synapse netcon objects
+    :param kwargs: dict
+    """
+    for syn in syn_list:
+        for param_name in mech_config['mech_params']:
+            if hasattr(syn, param_name) and param_name in kwargs:
+                setattr(syn, param_name, kwargs[param_name])
+    for this_netcon in netcon_list:
+        for param_name, i in mech_config['netcon_params'].iteritems():
+            if param_name in kwargs and this_netcon.wcnt() >= i:
+                this_netcon.weight[i] = kwargs[param_name]
+                # print mech_name, param_name, kwargs[param_name], i
 
 
 if __name__ == '__main__':

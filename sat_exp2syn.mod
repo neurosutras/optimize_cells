@@ -5,7 +5,7 @@ COMMENT
 Milstein, 2018
 
 Rise and decay kinetics are shared across all presynaptic sources. Conductances are linearly summed across sources, and
-updated at every time step. Each source stores an independent weight multiplier, unitary peak conductance (gmax), and
+updated at every time step. Each source stores an independent weight multiplier, unitary peak conductance (g_unit), and
 memory of its contribution to the total shared conductance. These per-stream parameters need only be updated when a
 spike arrives from that source. This allows each stream to independently saturate its conductance during repetitive
 activation.
@@ -76,7 +76,7 @@ DERIVATIVE release {
 : if spike occurs during onset_dur then new peak time is t + onset_dur
 : onset phase concatenates but does not summate
 
-NET_RECEIVE(weight, gmax (umho), onset, count, g0, t0 (ms)) {
+NET_RECEIVE(weight, g_unit (umho), onset, count, g0, t0 (ms)) {
 	INITIAL {
 		onset = 0
 		count = 0
@@ -90,9 +90,9 @@ NET_RECEIVE(weight, gmax (umho), onset, count, g0, t0 (ms)) {
 			g0 = g0*exp(-(t - t0)/tau_offset)
 			t0 = t
 			onset = 1
-			syn_onset = syn_onset + weight * gmax
-			g_onset = g_onset + g0 * weight * gmax
-			g_offset = g_offset - g0 * weight * gmax
+			syn_onset = syn_onset + weight * g_unit
+			g_onset = g_onset + g0 * weight * g_unit
+			g_offset = g_offset - g0 * weight * g_unit
 		}
 	: come again in dur_onset with flag = current count
 	net_send(dur_onset, count)
@@ -101,9 +101,9 @@ NET_RECEIVE(weight, gmax (umho), onset, count, g0, t0 (ms)) {
 		if (flag == count) { : if the offset signal is associated with the most recent spike then begin offset phase
 			g0 = g_inf - (g_inf - g0) * exp(-(t - t0)/tau_onset)
 			t0 = t
-			syn_onset = syn_onset - weight * gmax
-			g_onset = g_onset - g0 * weight * gmax
-			g_offset = g_offset + g0 * weight * gmax
+			syn_onset = syn_onset - weight * g_unit
+			g_onset = g_onset - g0 * weight * g_unit
+			g_offset = g_offset + g0 * weight * g_unit
 			onset = 0
 		}
 	}
