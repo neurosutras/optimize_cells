@@ -5,7 +5,7 @@ NEURON {
 	SUFFIX Ca
 	USEION ca READ eca WRITE ica
 	RANGE gtcabar, gncabar, glcabar, gtca, gnca, glca
-	RANGE gcamult, i
+	RANGE gcamult, ica
 }
 
 UNITS {
@@ -27,7 +27,6 @@ ASSIGNED {
 	v		(mV)
     eca     (mV)
 	ica	(mA/cm2)
-	i	(mA/cm2)
 	gtca		(S/cm2)
 	gnca		(S/cm2)
 	glca		(S/cm2)
@@ -47,7 +46,6 @@ BREAKPOINT {
 	gnca = gncabar*gcamult*c*c*d
 	glca = glcabar*gcamult*e*e
 	ica = (gtca+gnca+glca)*(v - eca)
-	i = ica
 }
 
 DERIVATIVE state {

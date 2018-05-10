@@ -15,7 +15,7 @@ context = Context()
 @click.option("--results-path", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
               default='data')
 @click.option("--mech-file-path", required=True, type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='mechanisms/20180209_DG_GC_hoc_leak_mech.yaml')
+              default='mechanisms/20180509_DG_GC_test_modified_Ca_mech.yaml')
 @click.option('--verbose', '-v', is_flag=True)
 @click.option('--mech-name', type=str, default='SatExp2Syn')
 @click.option('--num-syns', type=int, default=1)
@@ -33,14 +33,15 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     :param mech_file_path: str
     :param verbose
     :param mech_name: str
+    :param num_syns: int
     """
     comm = MPI.COMM_WORLD
     env = init_env(config_file=config_file, template_paths=template_paths, hoc_lib_path=hoc_lib_path, comm=comm,
                    dataset_prefix=dataset_prefix, results_path=results_path, verbose=verbose)
-    print env.synapse_mech_name_dict, env.synapse_mech_param_dict
     cell = get_hoc_cell_wrapper(env, gid, pop_name)
-    cell.tree.root.sec.insert('pas')
-    cell.tree.root.sec.g_pas = 0.5
+    init_mechanisms(cell, reset_cable=True, from_file=True, mech_file_path=mech_file_path, cm_correct=True,
+                    g_pas_correct=True, cell_attr_dict=env.cell_attr_dict[gid],
+                    sec_index_map=env.sec_index_map[gid], env=env)
 
     h('proc record_netcon_weight_element() { $o1.record(&$o2.weight[$3], $4) }')
 
@@ -80,12 +81,12 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
                   'FacilNMDA': {'mech_params': ['g', 'B'],
                                 'netcon_params': {'g0': 4, 'f1': 6}}
                   }
-    syn_params = {'SatExp2Syn': {'g_unit': 1., 'dur_onset': 1., 'tau_offset': 5., 'sat': 0.9},
+    syn_params = {'SatExp2Syn': {'g_unit': 0.00015, 'dur_onset': 1., 'tau_offset': 5., 'sat': 0.9},
                   'AMPA_S': {},
                   'FacilExp2Syn': {'f_tau': 25., 'f_inc': 0.15, 'f_max': 0.6,
-                                   'g_unit': 1., 'dur_onset': 10., 'tau_offset': 35., 'sat': 0.9},
+                                   'g_unit': 0.005, 'dur_onset': 10., 'tau_offset': 35., 'sat': 0.9},
                   'FacilNMDA': {'f_tau': 25., 'f_inc': 0.15, 'f_max': 0.6,
-                                'g_unit': 1., 'dur_onset': 10., 'tau_offset': 35., 'sat': 0.9}
+                                'g_unit': 0.00015, 'dur_onset': 10., 'tau_offset': 35., 'sat': 0.9}
                   }
 
     each_syn_delay = 10.
