@@ -13,6 +13,7 @@ from neuron import h
 from neuroh5.h5py_io_utils import *
 from dentate.env import Env
 from dentate.cells import *
+from dentate.synapses import *
 from dentate.neuron_utils import *
 from nested.utils import *
 
@@ -344,6 +345,7 @@ def make_hoc_cell(env, gid, population):
     datasetPath = os.path.join(env.datasetPrefix, env.datasetName)
     popName = population
     templateName = env.celltypes[popName]['template']
+    # TODO: load the template specified by the key 'template', but from the file specified by the key 'templateFile'
     h.find_template(env.pc, h.templatePaths, templateName)
     dataFilePath = os.path.join(datasetPath, env.modelConfig['Cell Data'])
     context.dataFilePath = dataFilePath

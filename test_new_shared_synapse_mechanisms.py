@@ -47,30 +47,7 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
 
     netcon_list = []
     vecstim_list = []
-    syn = getattr(h, mech_name)(cell.tree.root.sec(0.5))
 
-    # drive input with spike train
-    ISI = 100.
-    equilibrate = 250.
-    input_spike_train = [equilibrate + i * ISI for i in xrange(3)]
-    last_spike_time = input_spike_train[-1]
-    ISI = 10.
-    input_spike_train += [last_spike_time + 150. + i * ISI for i in xrange(10)]
-    last_spike_time = input_spike_train[-1]
-    input_spike_train += [last_spike_time + 100.]
-
-    mech_config = {'SatExp2Syn': {'mech_params': ['sat', 'dur_onset', 'tau_offset', 'e'],
-                                  'netcon_params': {'weight': 0, 'g_unit': 1}
-                                  },
-                   'AMPA_S': {'mech_params': ['Cdur', 'Alpha', 'Beta', 'Erev'],
-                              'netcon_params': {'weight': 0}},
-                   'FacilExp2Syn': {'mech_params': ['tau_rise', 'tau_decay', 'e', 'f_tau', 'f_inc', 'f_max'],
-                                    'netcon_params': {'weight': 0, 'g_unit': 1}},
-                   'FacilNMDA': {'mech_params': ['tau_rise', 'tau_decay', 'e',
-                                                 'f_tau', 'f_inc', 'f_max',
-                                                 'gamma', 'Kd', 'mg'],
-                                 'netcon_params': {'weight': 0, 'g_unit': 1}}
-                   }
     recordings = {'SatExp2Syn': {'mech_params': ['g'],
                                  'netcon_params': {'g0': 4}
                                  },
@@ -89,6 +66,19 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
                                 'g_unit': 0.00015, 'dur_onset': 10., 'tau_offset': 35., 'sat': 0.9}
                   }
 
+    syn = add_unique_synapse(mech_name, cell.tree.root.sec(0.5))
+    config_syn(mech_name, rules=env.synapse_param_rules, syn=syn, **syn_params[mech_name])
+
+    # drive input with spike train
+    ISI = 100.
+    equilibrate = 250.
+    input_spike_train = [equilibrate + i * ISI for i in xrange(3)]
+    last_spike_time = input_spike_train[-1]
+    ISI = 10.
+    input_spike_train += [last_spike_time + 150. + i * ISI for i in xrange(10)]
+    last_spike_time = input_spike_train[-1]
+    input_spike_train += [last_spike_time + 100.]
+
     each_syn_delay = 10.
     for i in xrange(num_syns):
         this_input_spike_train = [spike_time + i * each_syn_delay for spike_time in input_spike_train]
@@ -97,7 +87,7 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
         this_netcon = h.NetCon(this_vecstim, syn, -30., 0., 1.)
         this_netcon.pre().play(h.Vector(this_input_spike_train))
         netcon_list.append(this_netcon)
-    set_syn_mech_params(mech_config[mech_name], [syn], netcon_list, **syn_params[mech_name])
+        config_syn(mech_name, rules=env.synapse_param_rules, nc=this_netcon, **syn_params[mech_name])
 
     duration = this_input_spike_train[-1] + 150.
     sim = QuickSim(duration)
@@ -120,25 +110,6 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
             sim.get_rec(description)['vec'] = np.divide(sim.get_rec(description)['vec'],
                                                        getattr(syn, 'g_inf') * getattr(syn, 'sat'))
     sim.plot()
-
-
-def set_syn_mech_params(mech_config, syn_list, netcon_list, **kwargs):
-    """
-
-    :param mech_config: dict
-    :param syn_list: list of synapse point_process objects
-    :param netcon_list: list of synapse netcon objects
-    :param kwargs: dict
-    """
-    for syn in syn_list:
-        for param_name in mech_config['mech_params']:
-            if hasattr(syn, param_name) and param_name in kwargs:
-                setattr(syn, param_name, kwargs[param_name])
-    for this_netcon in netcon_list:
-        for param_name, i in mech_config['netcon_params'].iteritems():
-            if param_name in kwargs and this_netcon.wcnt() >= i:
-                this_netcon.weight[i] = kwargs[param_name]
-                # print mech_name, param_name, kwargs[param_name], i
 
 
 if __name__ == '__main__':
