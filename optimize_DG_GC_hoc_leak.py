@@ -239,8 +239,8 @@ def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
     context.env = init_env(comm=context.comm, **kwargs)
     cell = get_hoc_cell_wrapper(context.env, context.gid, context.population, context)
     init_mechanisms(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path, cm_correct=True,
-                    g_pas_correct=True, cell_attr_dict=context.cell_attr_dict[context.gid],
-                    sec_index_map=context.sec_index_map, env=context.env)
+                    g_pas_correct=True, cell_attr_dict=context.env.cell_attr_dict[context.gid],
+                    sec_index_map=context.env.sec_index_map[context.gid], env=context.env)
 
     # get the thickest apical dendrite ~200 um from the soma
     candidate_branches = []
@@ -308,8 +308,8 @@ def init_mechanisms_from_file(x, local_context=None):
     if local_context is None:
         local_context = context
     init_mechanisms(local_context.cell, reset_cable=True, from_file=True, mech_file_path=local_context.mech_file_path,
-                    cm_correct=True, g_pas_correct=True, cell_attr_dict=local_context.cell_attr_dict[context.gid],
-                    sec_index_map=local_context.sec_index_map, env=local_context.env)
+                    cm_correct=True, g_pas_correct=True, cell_attr_dict=local_context.env.cell_attr_dict[local_context.gid],
+                    sec_index_map=local_context.env.sec_index_map[local_context.gid], env=local_context.env)
 
 
 def get_args_static_leak():
@@ -461,8 +461,8 @@ def update_context_leak(x, local_context=None):
     for sec_type in ['axon_hill', 'axon', 'ais', 'apical', 'spine_neck', 'spine_head']:
         update_mechanism_by_sec_type(cell, sec_type, 'pas')
     if not local_context.spines:
-        correct_g_pas_for_spines(cell, local_context.cell_attr_dict[local_context.gid], local_context.sec_index_map,
-                                 local_context.env)
+        correct_g_pas_for_spines(cell, local_context.env.cell_attr_dict[local_context.gid],
+                                 local_context.env.sec_index_map[local_context.gid], local_context.env)
 
 
 def export_sim_results():
