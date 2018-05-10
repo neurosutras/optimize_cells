@@ -2,7 +2,7 @@
 
 
 NEURON {
-	SUFFIX CadepK2017
+	SUFFIX CadepK
 	USEION ca READ cai
 	USEION k READ ek WRITE ik
 	RANGE gbkbar, gskbar, gbar, i, ask, bsk, gsk, gbk, isk, ibk, gcakmult

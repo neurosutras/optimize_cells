@@ -409,6 +409,10 @@ def init_env(config_file, template_paths, hoc_lib_path, comm, dataset_prefix=Non
     np.seterr(all='raise')
     env = Env(comm, config_file, template_paths, dataset_prefix, results_path, verbose=verbose, **kwargs)
     configure_env(env, hoc_lib_path)
+    env.cell_attr_dict = {}
+    env.syn_attrs_dict = {}
+    env.syn_index_map = {}
+    env.sec_index_map = {}
     return env
 
 
@@ -425,17 +429,20 @@ def get_hoc_cell_wrapper(env, gid, pop_name, context):
     # cell.load_morphology()
     cell = HocCell(gid=0, population=pop_name, hoc_cell=hoc_cell)
     cell_attr_index_map = get_cell_attributes_index_map(env.comm, context.dataFilePath, pop_name, 'Synapse Attributes')
-    cell_attr_dict = {gid: select_cell_attributes(gid, env.comm, context.dataFilePath, cell_attr_index_map, pop_name,
-                                                  'Synapse Attributes')}
-    syn_attrs_dict, syn_index_map = build_syn_attrs_dict(cell_attr_dict, gid)
-    sec_index_map = build_sec_index_map(cell_attr_dict, gid)
+    env.cell_attr_dict[gid] = select_cell_attributes(gid, env.comm, context.dataFilePath, cell_attr_index_map, pop_name,
+                                                  'Synapse Attributes')
+    this_syn_attrs_dict, this_syn_index_map = build_syn_attrs_dict(env.cell_attr_dict, gid)
+    env.syn_attrs_dict[gid] = this_syn_attrs_dict
+    env.syn_index_map[gid] = this_syn_index_map
+    env.sec_index_map[gid] = build_sec_index_map(env.cell_attr_dict, gid)
+
     context.update(locals())
 
     datasetPath = os.path.join(env.datasetPrefix, env.datasetName)
     connectivityFilePath = os.path.join(datasetPath, env.modelConfig['Connection Data'])
-    source_names = fill_source_info(connectivityFilePath, cell_attr_dict, syn_index_map, gid, pop_name, env)
+    source_names = fill_source_info(connectivityFilePath, env.cell_attr_dict, env.syn_index_map, gid, pop_name, env)
     context.source_names = source_names
-    fill_syn_mech_names(syn_attrs_dict, syn_index_map, cell_attr_dict, gid, pop_name, env)
+    fill_syn_mech_names(env.syn_attrs_dict, env.syn_index_map, env.cell_attr_dict, gid, pop_name, env)
     return cell
 
 
@@ -447,13 +454,14 @@ def get_hoc_cell_wrapper(env, gid, pop_name, context):
 @click.option("--template-paths", type=str, default='../dgc/Mateos-Aparicio2014:../dentate/templates')
 @click.option("--hoc-lib-path", type=str, default='../dentate')
 @click.option("--dataset-prefix", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
-              default='/mnt/s')  # '../dentate/datasets'
+              default='../dentate/datasets')  # '/mnt/s')  # '../dentate/datasets'
 @click.option("--mech-file-path", required=True, type=click.Path(exists=True, file_okay=True, dir_okay=False),
               default='mechanisms/20180209_DG_GC_hoc_leak_mech.yaml')
 @click.option("--results-path", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
               default='data')
 @click.option('--verbose', '-v', is_flag=True)
-def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefix, mech_file_path, results_path, verbose):
+def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefix, mech_file_path, results_path,
+         verbose):
     """
 
     :param gid:
@@ -470,10 +478,11 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
                    dataset_prefix=dataset_prefix, results_path=results_path, verbose=verbose)
     cell = get_hoc_cell_wrapper(env, gid, pop_name, context)
     context.update(locals())
-    """
-    init_mechanisms(cell, reset_cable=True, from_file=True, mech_file_path=mech_file_path, cm_correct=True, g_pas_correct=True,
-                    cell_attr_dict=context.cell_attr_dict[gid], sec_index_map=context.sec_index_map, env=context.env)
-    """
+
+    init_mechanisms(cell, reset_cable=True, from_file=True, mech_file_path=mech_file_path, cm_correct=True,
+                    g_pas_correct=True, cell_attr_dict=env.cell_attr_dict[gid],
+                    sec_index_map=env.sec_index_map[gid], env=env)
+
 
     """
     #Synapses

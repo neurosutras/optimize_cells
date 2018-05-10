@@ -2,7 +2,7 @@
 
 
 NEURON {
-	SUFFIX Cacum
+	SUFFIX Cacum2017
 	USEION ca READ ica WRITE cai
 	RANGE depth, tau, taucadiv, cai0
 }

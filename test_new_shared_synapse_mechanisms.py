@@ -14,11 +14,13 @@ context = Context()
               default='../dentate/datasets')  # '/mnt/s'
 @click.option("--results-path", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
               default='data')
+@click.option("--mech-file-path", required=True, type=click.Path(exists=True, file_okay=True, dir_okay=False),
+              default='mechanisms/20180209_DG_GC_hoc_leak_mech.yaml')
 @click.option('--verbose', '-v', is_flag=True)
 @click.option('--mech-name', type=str, default='SatExp2Syn')
 @click.option('--num-syns', type=int, default=1)
-def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefix, results_path, verbose,
-         mech_name, num_syns):
+def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefix, results_path, mech_file_path,
+         verbose, mech_name, num_syns):
     """
 
     :param gid:
@@ -28,6 +30,7 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     :param hoc_lib_path:
     :param dataset_prefix:
     :param results_path:
+    :param mech_file_path: str
     :param verbose
     :param mech_name: str
     """

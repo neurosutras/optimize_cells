@@ -2,11 +2,10 @@
 
 
 NEURON {
-	SUFFIX Ca2017
+	SUFFIX Ca
 	USEION ca READ eca WRITE ica
 	RANGE gtcabar, gncabar, glcabar, gtca, gnca, glca
-	RANGE ainf, taua, binf, taub, gbar, gcamult, i
-	GLOBAL Vshift
+	RANGE gcamult, i
 }
 
 UNITS {
@@ -22,7 +21,6 @@ PARAMETER {
 	gncabar = .002	(S/cm2)
 	glcabar = .01	(S/cm2)
     gcamult = 1.
-	Vshift = 0    (mV)
 }
 
 ASSIGNED {
@@ -33,12 +31,6 @@ ASSIGNED {
 	gtca		(S/cm2)
 	gnca		(S/cm2)
 	glca		(S/cm2)
-	gbar		(S/cm2)
-	celsius	(degC)
-	taua    (ms)
-	ainf
-	taub    (ms)
-	binf
 }
 
 STATE {
@@ -59,34 +51,19 @@ BREAKPOINT {
 }
 
 DERIVATIVE state {
-	rates(v)
-	a' = (ainf - a)/taua
-	b' = (binf - b)/taub
+	a' = alphaa(v)*(1-a)-betaa(v)*a
+	b' = alphab(v)*(1-b)-betab(v)*b
 	c' = alphac(v)*(1-c)-betac(v)*c
 	d' = alphad(v)*(1-d)-betad(v)*d
 	e' = alphae(v)*(1-e)-betae(v)*e
 }
 
 INITIAL {
-	rates(v)
-	a = ainf
-	b = binf
+	a = alphaa(v)/(alphaa(v)+betaa(v))
+	b = alphab(v)/(alphab(v)+betab(v))
 	c = alphac(v)/(alphac(v)+betac(v))
 	d = alphad(v)/(alphad(v)+betad(v))
 	e = alphae(v)/(alphae(v)+betae(v))
-	gbar = gcamult * (gtcabar + gncabar + glcabar)
-	gtca = gtcabar*gcamult*a*a*b
-	gnca = gncabar*gcamult*c*c*d
-	glca = glcabar*gcamult*e*e
-	ica = (gtca+gnca+glca)*(v - eca)
-	i = ica
-}
-
-FUNCTION rates(v (mV)) {
-	ainf = alphaa(v)/(alphaa(v) + betaa(v))
-	taua = 1/(alphaa(v) + betaa(v))
-	binf = alphab(v)/(alphab(v) + betab(v))
-	taub = 1/(alphab(v+Vshift) + betab(v+Vshift))
 }
 
 FUNCTION alphaa(v (mV)) (/ms) {
