@@ -235,7 +235,6 @@ def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
             context.comm = MPI.COMM_WORLD
         except Exception:
             raise Exception('optimize_DG_GC_hoc_leak: problem importing from mpi4py; required for config_interactive')
-    print context.comm.rank
     context.env = init_env(comm=context.comm, **kwargs)
     cell = get_hoc_cell_wrapper(context.env, context.gid, context.population, context)
     init_mechanisms(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path, cm_correct=True,

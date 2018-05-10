@@ -39,11 +39,11 @@ bounds:
   - 0.01
   - 0.25
   soma.gCa factor: !!python/tuple
-  - 0.1
-  - 5.0
+  - 0.01
+  - 2.0
   soma.gCadepK factor: !!python/tuple
-  - 0.1
-  - 5.0
+  - 0.01
+  - 2.0
   soma.gbar_nas: !!python/tuple
   - 0.01
   - 0.05
