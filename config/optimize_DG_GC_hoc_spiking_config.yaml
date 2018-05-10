@@ -30,11 +30,11 @@ bounds:
   - 0.01
   - 0.25
   soma.gCa factor: !!python/tuple
-  - 0.1
-  - 5.0
+  - 0.01
+  - 2.0
   soma.gCadepK factor: !!python/tuple
-  - 0.1
-  - 5.0
+  - 0.01
+  - 2.0
   soma.gbar_nas: !!python/tuple
   - 0.01
   - 0.05
@@ -68,27 +68,35 @@ feature_names:
 - f_I_slope
 - f_I_residuals
 update_context:
-- - optimize_DG_GC_spiking
-  - reinit_mechanisms
-- - optimize_DG_GC_spiking
+- - optimize_DG_GC_hoc_spiking
+  - init_mechanisms_from_file
+- - optimize_DG_GC_hoc_spiking
   - update_context_spike_shape
 get_features_stages:
-- source: optimize_DG_GC_spiking
+- source: optimize_DG_GC_hoc_spiking
   compute_features: compute_features_spike_shape
-- source: optimize_DG_GC_spiking
+- source: optimize_DG_GC_hoc_spiking
   get_args_dynamic: get_args_dynamic_fI
   compute_features: compute_features_fI
   filter_features: filter_features_fI
 get_objectives:
-    optimize_DG_GC_spiking: get_objectives
+    optimize_DG_GC_hoc_spiking: get_objectives_spiking
 kwargs:
-  mech_file_path: cells/mechanisms/090717 GC optimizing spiking.yaml
-  neuroH5_file_path: cells/morphologies/121516_DGC_trees.pkl
-  neuroH5_index: 0
+  mech_file_path: mechanisms/20180209_DG_GC_hoc_leak_mech.yaml
+  gid: 0
+  population: GC
+  #neuroH5_file_path: cells/morphologies/121516_DGC_trees.pkl
+  #neuroH5_index: 0
   spines: False
-  verbose: False
+  verbose: True
   cvode: False
   daspk: True
+  config_file: ../dentate/config/Small_Scale_Control_log_normal_weights.yaml
+  template_paths: ../dgc/Mateos-Aparicio2014:../dentate/templates
+  hoc_lib_path: ../dentate
+  dataset_prefix: /mnt/s
+  #dataset_prefix: ../dentate/datasets
+  results_path: data
 objective_names:
 - v_th
 - ADP
@@ -103,7 +111,7 @@ objective_names:
 - th_count
 - adi
 - f_I_slope
-optimization_title: DG_GC_spiking
+optimization_title: DG_GC_hoc_spiking
 param_gen: PopulationAnnealing
 param_names:
 - soma.gbar_nas

@@ -113,7 +113,7 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
     if 'update_context' not in config_dict or config_dict['update_context'] is None:
         missing_config.append('update_context')
     else:
-        context.update_context_dict = config_dict['update_context']
+        context.update_context_list = config_dict['update_context']
     if 'get_features_stages' not in config_dict or config_dict['get_features_stages'] is None:
         missing_config.append('get_features_stages')
     else:
@@ -157,7 +157,7 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
                                     context.optimization_title, label)
 
     context.update_context_funcs = []
-    for source, func_name in context.update_context_dict.iteritems():
+    for source, func_name in context.update_context_list:
         if source == os.path.basename(__file__).split('.')[0]:
             try:
                 func = globals()[func_name]

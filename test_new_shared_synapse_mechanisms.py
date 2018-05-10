@@ -11,11 +11,11 @@ context = Context()
 @click.option("--template-paths", type=str, default='../dgc/Mateos-Aparicio2014:../dentate/templates')
 @click.option("--hoc-lib-path", type=str, default='../dentate')
 @click.option("--dataset-prefix", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
-              default='../dentate/datasets')  # '/mnt/s'
+              default='/mnt/s')  # '/mnt/s' #'../dentate/datasets'
 @click.option("--results-path", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
               default='data')
 @click.option("--mech-file-path", required=True, type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='mechanisms/20180509_DG_GC_test_modified_Ca_mech.yaml')
+              default='mechanisms/20180209_DG_GC_hoc_leak_mech.yaml')
 @click.option('--verbose', '-v', is_flag=True)
 @click.option('--mech-name', type=str, default='SatExp2Syn')
 @click.option('--num-syns', type=int, default=1)

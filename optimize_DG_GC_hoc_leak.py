@@ -236,7 +236,7 @@ def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
         except Exception:
             raise Exception('optimize_DG_GC_hoc_leak: problem importing from mpi4py; required for config_interactive')
     context.env = init_env(comm=context.comm, **kwargs)
-    cell = get_hoc_cell_wrapper(context.env, context.gid, context.population, context)
+    cell = get_hoc_cell_wrapper(context.env, context.gid, context.population)
     init_mechanisms(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path, cm_correct=True,
                     g_pas_correct=True, cell_attr_dict=context.env.cell_attr_dict[context.gid],
                     sec_index_map=context.env.sec_index_map[context.gid], env=context.env)
@@ -306,8 +306,8 @@ def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
 def init_mechanisms_from_file(x, local_context=None):
     if local_context is None:
         local_context = context
-    init_mechanisms(local_context.cell, reset_cable=True, from_file=True, mech_file_path=local_context.mech_file_path,
-                    cm_correct=True, g_pas_correct=True, cell_attr_dict=local_context.env.cell_attr_dict[local_context.gid],
+    init_mechanisms(local_context.cell, reset_cable=False, from_file=True, mech_file_path=local_context.mech_file_path,
+                    g_pas_correct=True, cell_attr_dict=local_context.env.cell_attr_dict[local_context.gid],
                     sec_index_map=local_context.env.sec_index_map[local_context.gid], env=local_context.env)
 
 

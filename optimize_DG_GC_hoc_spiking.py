@@ -16,7 +16,7 @@ context = Context()
 
 @click.command()
 @click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='config/optimize_DG_GC_spiking_config.yaml')
+              default='config/optimize_DG_GC_hoc_spiking_config.yaml')
 @click.option("--output-dir", type=str, default='data')
 @click.option("--export", is_flag=True)
 @click.option("--export-file-path", type=str, default=None)
@@ -112,7 +112,7 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
     if 'update_context' not in config_dict or config_dict['update_context'] is None:
         missing_config.append('update_context')
     else:
-        context.update_context_dict = config_dict['update_context']
+        context.update_context_list = config_dict['update_context']
     if 'get_features_stages' not in config_dict or config_dict['get_features_stages'] is None:
         missing_config.append('get_features_stages')
     else:
@@ -156,7 +156,7 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
                                     context.optimization_title, label)
 
     context.update_context_funcs = []
-    for source, func_name in context.update_context_dict.iteritems():
+    for source, func_name in context.update_context_list:
         if source == os.path.basename(__file__).split('.')[0]:
             try:
                 func = globals()[func_name]
@@ -211,7 +211,7 @@ def config_worker(update_context_funcs, param_names, default_params, target_val,
     :param spines: bool
     """
     context.update(kwargs)
-    neuroH5_dict = read_from_pkl(neuroH5_file_path)[neuroH5_index] #do we still need this?
+    #neuroH5_dict = read_from_pkl(neuroH5_file_path)[neuroH5_index] #do we still need this?
     param_indexes = {param_name: i for i, param_name in enumerate(param_names)}
     processed_export_file_path = export_file_path.replace('.hdf5', '_processed.hdf5')
     context.update(locals())
@@ -278,7 +278,7 @@ def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
         except Exception:
             raise Exception('optimize_DG_GC_hoc_leak: problem importing from mpi4py; required for config_interactive')
     context.env = init_env(comm=context.comm, **kwargs)
-    cell = get_hoc_cell_wrapper(context.env, context.gid, context.population, context)
+    cell = get_hoc_cell_wrapper(context.env, context.gid, context.population)
     init_mechanisms(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path, cm_correct=True,
                     g_pas_correct=True, cell_attr_dict=context.env.cell_attr_dict[context.gid],
                     sec_index_map=context.env.sec_index_map[context.gid], env=context.env)
@@ -325,6 +325,14 @@ def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
     context.spike_output_vec = h.Vector()
     cell.spike_detector.record(context.spike_output_vec)
     context.cell = cell
+
+
+def init_mechanisms_from_file(x, local_context=None):
+    if local_context is None:
+        local_context = context
+    init_mechanisms(local_context.cell, reset_cable=False, from_file=True, mech_file_path=local_context.mech_file_path,
+                    g_pas_correct=True, cell_attr_dict=local_context.env.cell_attr_dict[local_context.gid],
+                    sec_index_map=local_context.env.sec_index_map[local_context.gid], env=local_context.env)
 
 
 def compute_features_spike_shape(x, export=False, plot=False):
@@ -561,7 +569,7 @@ def filter_features_fI(primitives, current_features, export=False):
     return new_features
 
 
-def get_objectives(features):
+def get_objectives_spiking(features):
     """
 
     :param features: dict
@@ -721,50 +729,49 @@ def update_context_spike_shape(x, local_context=None):
         local_context = context
     cell = local_context.cell
     param_indexes = local_context.param_indexes
-    cell.modify_mech_param('soma', 'nas', 'gbar', x[param_indexes['soma.gbar_nas']])
-    cell.modify_mech_param('soma', 'kdr', 'gkdrbar', x[param_indexes['soma.gkdrbar']])
-    cell.modify_mech_param('soma', 'kap', 'gkabar', x[param_indexes['soma.gkabar']])
+    modify_mech_param(cell, 'soma', 'nas', 'gbar', x[param_indexes['soma.gbar_nas']])
+    modify_mech_param(cell, 'soma', 'kdr', 'gkdrbar', x[param_indexes['soma.gkdrbar']])
+    modify_mech_param(cell, 'soma', 'kap', 'gkabar', x[param_indexes['soma.gkabar']])
     slope = (x[param_indexes['dend.gkabar']] - x[param_indexes['soma.gkabar']]) / 300.
-    cell.modify_mech_param('soma', 'nas', 'sh', x[param_indexes['soma.sh_nas/x']])
+    modify_mech_param(cell, 'soma', 'nas', 'sh', x[param_indexes['soma.sh_nas/x']])
     for sec_type in ['apical']:
-        cell.reinitialize_subset_mechanisms(sec_type, 'nas')
-        cell.modify_mech_param(sec_type, 'kap', 'gkabar', origin='soma', min_loc=75., value=0.)
-        cell.modify_mech_param(sec_type, 'kap', 'gkabar', origin='soma', max_loc=75., slope=slope, replace=False)
-        cell.modify_mech_param(sec_type, 'kad', 'gkabar', origin='soma', max_loc=75., value=0.)
-        cell.modify_mech_param(sec_type, 'kad', 'gkabar', origin='soma', min_loc=75., max_loc=300., slope=slope,
-                               value=(x[param_indexes['soma.gkabar']] + slope * 75.), replace=False)
-        cell.modify_mech_param(sec_type, 'kad', 'gkabar', origin='soma', min_loc=300.,
-                               value=(x[param_indexes['soma.gkabar']] + slope * 300.), replace=False)
-        cell.modify_mech_param(sec_type, 'kdr', 'gkdrbar', origin='soma')
-        cell.modify_mech_param(sec_type, 'nas', 'sha', 0.)  # 5.)
-        cell.modify_mech_param(sec_type, 'nas', 'gbar',
-                               x[param_indexes['dend.gbar_nas']])
-        cell.modify_mech_param(sec_type, 'nas', 'gbar', origin='parent', slope=x[param_indexes['dend.gbar_nas slope']],
-                               min=x[param_indexes['dend.gbar_nas min']],
-                               custom={'method': 'custom_gradient_by_branch_order',
-                                       'branch_order': x[param_indexes['dend.gbar_nas bo']]}, replace=False)
-        cell.modify_mech_param(sec_type, 'nas', 'gbar', origin='parent',
-                               slope=x[param_indexes['dend.gbar_nas slope']], min=x[param_indexes['dend.gbar_nas min']],
-                               custom={'method': 'custom_gradient_by_terminal'}, replace=False)
-    cell.reinitialize_subset_mechanisms('axon_hill', 'kap')
-    cell.reinitialize_subset_mechanisms('axon_hill', 'kdr')
-    cell.modify_mech_param('ais', 'kdr', 'gkdrbar', origin='soma')
-    cell.modify_mech_param('ais', 'kap', 'gkabar', x[param_indexes['axon.gkabar']])
-    cell.modify_mech_param('axon', 'kdr', 'gkdrbar', origin='ais')
-    cell.modify_mech_param('axon', 'kap', 'gkabar', origin='ais')
-    cell.modify_mech_param('axon_hill', 'nax', 'sh', x[param_indexes['soma.sh_nas/x']])
-    cell.modify_mech_param('axon_hill', 'nax', 'gbar', x[param_indexes['soma.gbar_nas']])
-    cell.modify_mech_param('axon', 'nax', 'gbar', x[param_indexes['axon.gbar_nax']])
+        update_mechanism_by_sec_type(cell, sec_type, 'nas')
+        modify_mech_param(cell, sec_type, 'kap', 'gkabar', origin='soma', min_loc=75., value=0.)
+        modify_mech_param(cell, sec_type, 'kap', 'gkabar', origin='soma', max_loc=75., slope=slope, replace=False)
+        modify_mech_param(cell, sec_type, 'kad', 'gkabar', origin='soma', max_loc=75., value=0.)
+        modify_mech_param(cell, sec_type, 'kad', 'gkabar', origin='soma', min_loc=75., max_loc=300., slope=slope,
+                          value=(x[param_indexes['soma.gkabar']] + slope * 75.), replace=False)
+        modify_mech_param(cell, sec_type, 'kad', 'gkabar', origin='soma', min_loc=300.,
+                          value=(x[param_indexes['soma.gkabar']] + slope * 300.), replace=False)
+        modify_mech_param(cell, sec_type, 'kdr', 'gkdrbar', origin='soma')
+        modify_mech_param(cell, sec_type, 'nas', 'sha', 0.)  # 5.)
+        modify_mech_param(cell, sec_type, 'nas', 'gbar', x[param_indexes['dend.gbar_nas']])
+        modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=x[param_indexes['dend.gbar_nas slope']],
+                          min=x[param_indexes['dend.gbar_nas min']], custom={'method': 'custom_gradient_by_branch_order',
+                                                                             'branch_order': x[param_indexes['dend.gbar_nas bo']]},
+                          replace=False)
+        modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=x[param_indexes['dend.gbar_nas slope']],
+                          min=x[param_indexes['dend.gbar_nas min']], custom={'method': 'custom_gradient_by_terminal'},
+                          replace=False)
+    update_mechanism_by_sec_type(cell, 'axon_hill', 'kap')
+    update_mechanism_by_sec_type(cell, 'axon_hill', 'kdr')
+    modify_mech_param(cell, 'ais', 'kdr', 'gkdrbar', origin='soma')
+    modify_mech_param(cell, 'ais', 'kap', 'gkabar', x[param_indexes['axon.gkabar']])
+    modify_mech_param(cell, 'axon', 'kdr', 'gkdrbar', origin='ais')
+    modify_mech_param(cell, 'axon', 'kap', 'gkabar', origin='ais')
+    modify_mech_param(cell, 'axon_hill', 'nax', 'sh', x[param_indexes['soma.sh_nas/x']])
+    modify_mech_param(cell, 'axon_hill', 'nax', 'gbar', x[param_indexes['soma.gbar_nas']])
+    modify_mech_param(cell, 'axon', 'nax', 'gbar', x[param_indexes['axon.gbar_nax']])
     for sec_type in ['ais', 'axon']:
-        cell.modify_mech_param(sec_type, 'nax', 'sh', origin='axon_hill')
-    cell.modify_mech_param('soma', 'Ca', 'gcamult', x[param_indexes['soma.gCa factor']])
-    cell.modify_mech_param('soma', 'CadepK', 'gcakmult', x[param_indexes['soma.gCadepK factor']])
-    cell.modify_mech_param('soma', 'km3', 'gkmbar', x[param_indexes['soma.gkmbar']])
-    cell.modify_mech_param('ais', 'km3', 'gkmbar', x[param_indexes['ais.gkmbar']])
-    cell.modify_mech_param('axon_hill', 'km3', 'gkmbar', origin='soma')
-    cell.modify_mech_param('axon', 'km3', 'gkmbar', origin='ais')
-    cell.modify_mech_param('ais', 'nax', 'sha', x[param_indexes['ais.sha_nax']])
-    cell.modify_mech_param('ais', 'nax', 'gbar', x[param_indexes['ais.gbar_nax']])
+        modify_mech_param(cell, sec_type, 'nax', 'sh', origin='axon_hill')
+    modify_mech_param(cell, 'soma', 'Ca', 'gcamult', x[param_indexes['soma.gCa factor']])
+    modify_mech_param(cell, 'soma', 'CadepK', 'gcakmult', x[param_indexes['soma.gCadepK factor']])
+    modify_mech_param(cell, 'soma', 'km3', 'gkmbar', x[param_indexes['soma.gkmbar']])
+    modify_mech_param(cell, 'ais', 'km3', 'gkmbar', x[param_indexes['ais.gkmbar']])
+    modify_mech_param(cell, 'axon_hill', 'km3', 'gkmbar', origin='soma')
+    modify_mech_param(cell, 'axon', 'km3', 'gkmbar', origin='ais')
+    modify_mech_param(cell, 'ais', 'nax', 'sha', x[param_indexes['ais.sha_nax']])
+    modify_mech_param(cell, 'ais', 'nax', 'gbar', x[param_indexes['ais.gbar_nax']])
 
 
 def export_sim_results():

@@ -334,7 +334,7 @@ class QuickSim(object):
     cvode_state = property(get_cvode_state, set_cvode_state)
 
 
-def make_hoc_cell(env, gid, population, context):
+def make_hoc_cell(env, gid, population):
     """
 
     :param env:
@@ -348,7 +348,7 @@ def make_hoc_cell(env, gid, population, context):
     # TODO: load the template specified by the key 'template', but from the file specified by the key 'templateFile'
     h.find_template(env.pc, h.templatePaths, templateName)
     dataFilePath = os.path.join(datasetPath, env.modelConfig['Cell Data'])
-    context.dataFilePath = dataFilePath
+    env.dataFilePath = dataFilePath
     templateName = env.celltypes[popName]['template']
     templateClass = eval('h.%s' % templateName)
 
@@ -411,6 +411,7 @@ def init_env(config_file, template_paths, hoc_lib_path, comm, dataset_prefix=Non
     np.seterr(all='raise')
     env = Env(comm, config_file, template_paths, dataset_prefix, results_path, verbose=verbose, **kwargs)
     configure_env(env, hoc_lib_path)
+    env.cell_attr_index_map = {}
     env.cell_attr_dict = {}
     env.syn_attrs_dict = {}
     env.syn_index_map = {}
@@ -418,7 +419,7 @@ def init_env(config_file, template_paths, hoc_lib_path, comm, dataset_prefix=Non
     return env
 
 
-def get_hoc_cell_wrapper(env, gid, pop_name, context):
+def get_hoc_cell_wrapper(env, gid, pop_name):
     """
 
     :param env:
@@ -426,24 +427,21 @@ def get_hoc_cell_wrapper(env, gid, pop_name, context):
     :param pop_name:
     :return:
     """
-    hoc_cell = make_hoc_cell(env, gid, pop_name, context)
+    hoc_cell = make_hoc_cell(env, gid, pop_name)
     #cell = HocCell(existing_hoc_cell=hoc_cell)
     # cell.load_morphology()
     cell = HocCell(gid=0, population=pop_name, hoc_cell=hoc_cell)
-    cell_attr_index_map = get_cell_attributes_index_map(env.comm, context.dataFilePath, pop_name, 'Synapse Attributes')
-    env.cell_attr_dict[gid] = select_cell_attributes(gid, env.comm, context.dataFilePath, cell_attr_index_map, pop_name,
-                                                  'Synapse Attributes')
-    this_syn_attrs_dict, this_syn_index_map = build_syn_attrs_dict(env.cell_attr_dict, gid)
-    env.syn_attrs_dict[gid] = this_syn_attrs_dict
-    env.syn_index_map[gid] = this_syn_index_map
+    if pop_name not in env.cell_attr_index_map:
+        env.cell_attr_index_map[pop_name] = get_cell_attributes_index_map(env.comm, env.dataFilePath, pop_name,
+                                                                      'Synapse Attributes')
+    env.cell_attr_dict[gid] = select_cell_attributes(gid, env.comm, env.dataFilePath, env.cell_attr_index_map[pop_name],
+                                                     pop_name, 'Synapse Attributes')
+    env.syn_attrs_dict[gid], env.syn_index_map[gid] = build_syn_attrs_dict(env.cell_attr_dict, gid)
     env.sec_index_map[gid] = build_sec_index_map(env.cell_attr_dict, gid)
-
-    context.update(locals())
 
     datasetPath = os.path.join(env.datasetPrefix, env.datasetName)
     connectivityFilePath = os.path.join(datasetPath, env.modelConfig['Connection Data'])
-    source_names = fill_source_info(connectivityFilePath, env.cell_attr_dict, env.syn_index_map, gid, pop_name, env)
-    context.source_names = source_names
+    fill_source_info(connectivityFilePath, env.cell_attr_dict, env.syn_index_map, gid, pop_name, env)
     fill_syn_mech_names(env.syn_attrs_dict, env.syn_index_map, env.cell_attr_dict, gid, pop_name, env)
     return cell
 
