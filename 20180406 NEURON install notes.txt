@@ -17,12 +17,14 @@ To disable dispay, change the backend to 'Agg'
 On Mac OSX 10.13.4, I change the backend to 'Qt5Agg'
 
 In order to ensure that neuron, mpi4py, parallel hdf5, h5py, and neuroh5 all work happily together, we can't use
-anaconda's default versions of these tools:
+anaconda's default versions of these tools (--force just makes sure not to remove any dependencies)
 
 conda remove mpi4py --force
 conda remove openmpi --force
 conda remove hdf5 --force
 conda remove h5py --force
+
+conda install ipyparallel -no-deps
 
 2) install mpich2:
 
@@ -199,3 +201,6 @@ Help| Find action| Type "Registry"| Find terminal.buffer.max.lines.count.
 from Tkinter import Tk
 root = Tk()
 file_list = Tk.clipboard_get(root).split('\r')
+
+3) get full name of slurm job:
+scontrol show jobid -dd <jobid>

@@ -486,4 +486,5 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     """
 
 if __name__ == '__main__':
-    main(args=sys.argv[(sys.argv.index(os.path.basename(__file__)) + 1):])
+    main(args=sys.argv[(list_find(lambda s: s.find(os.path.basename(__file__)) != -1, sys.argv) + 1):],
+         standalone_mode=False)
