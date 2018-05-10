@@ -40,7 +40,7 @@ BREAKPOINT {
 }
 
 DERIVATIVE state {	: exact when v held constant; integrates over dt step
-	cai' = -(1e7)*ica * B - (cai-cai0)/tau
+	cai' = -ica * B - (cai-cai0)/tau
  	cao' = 0.
 }
 

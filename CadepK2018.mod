@@ -5,8 +5,7 @@ NEURON {
 	SUFFIX CadepK
 	USEION ca READ cai
 	USEION k READ ek WRITE ik
-	RANGE gbkbar, gskbar, gbar, i, ask, bsk, gsk, gbk, isk, ibk, gcakmult
-	GLOBAL stau, tauskdiv
+	RANGE gbkbar, gskbar, ik, gsk, gbk, isk, ibk, gcakmult
 }
 
 UNITS {
@@ -21,9 +20,6 @@ PARAMETER {
 	gbkbar = .0003	(S/cm2)	: maximum permeability
 	gskbar = .0005	(S/cm2)	: maximum permeability
 	gcakmult = 1.
-	tauskdiv = 1
-	ask = 1
-	bsk = 1
 	alphar = 7.5	(/ms)
 	stau = 10		(ms)
 }
@@ -34,9 +30,7 @@ ASSIGNED {
 	ik		(mA/cm2)
 	isk		(mA/cm2)
 	ibk		(mA/cm2)
-	i 		(mA/cm2)
 	cai		(mM)
-	area	(microm2)
   	gbk		(S/cm2)
   	gsk		(S/cm2)
   	gbar  (S/cm2)
@@ -55,11 +49,10 @@ BREAKPOINT {
 	isk = gsk*(v - ek)
 	ibk = gbk*(v - ek)
 	ik = isk + ibk
-	i = ik
 }
 
 DERIVATIVE state {	: exact when v held constant; integrates over dt step
-	q' = tauskdiv*(ask*alphaq(cai)*(1-q)-bsk*betaq(cai)*q)
+	q' = alphaq(cai)*(1-q)-betaq(cai)*q
 	r' = alphar*(1-r)-betar(v)*r
 	s' = (sinf(cai)-s)/stau
 }
@@ -68,13 +61,6 @@ INITIAL {
 	q = alphaq(cai)/(alphaq(cai)+betaq(cai))
 	r = alphar/(alphar+betar(v))
   	s = sinf(cai)
-	gbk = gbkbar*gcakmult*r*s*s
-	gsk = gskbar*gcakmult*q*q
-	isk = gsk*(v - ek)
-	ibk = gbk*(v - ek)
-	ik = isk + ibk
-	i = ik
-  	gbar = gcakmult * (gbkbar + gskbar)
 }
 
 FUNCTION exp1(A (/ms), d, k, x (mM)) (/ms) {
