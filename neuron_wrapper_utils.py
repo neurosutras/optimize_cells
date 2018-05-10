@@ -333,7 +333,7 @@ class QuickSim(object):
     cvode_state = property(get_cvode_state, set_cvode_state)
 
 
-def make_hoc_cell(env, gid, population):
+def make_hoc_cell(env, gid, population, context):
     """
 
     :param env:
@@ -412,7 +412,7 @@ def init_env(config_file, template_paths, hoc_lib_path, comm, dataset_prefix=Non
     return env
 
 
-def get_hoc_cell_wrapper(env, gid, pop_name):
+def get_hoc_cell_wrapper(env, gid, pop_name, context):
     """
 
     :param env:
@@ -420,7 +420,7 @@ def get_hoc_cell_wrapper(env, gid, pop_name):
     :param pop_name:
     :return:
     """
-    hoc_cell = make_hoc_cell(env, gid, pop_name)
+    hoc_cell = make_hoc_cell(env, gid, pop_name, context)
     #cell = HocCell(existing_hoc_cell=hoc_cell)
     # cell.load_morphology()
     cell = HocCell(gid=0, population=pop_name, hoc_cell=hoc_cell)
@@ -468,7 +468,7 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     comm = MPI.COMM_WORLD
     env = init_env(config_file=config_file, template_paths=template_paths, hoc_lib_path=hoc_lib_path, comm=comm,
                    dataset_prefix=dataset_prefix, results_path=results_path, verbose=verbose)
-    cell = get_hoc_cell_wrapper(env, gid, pop_name)
+    cell = get_hoc_cell_wrapper(env, gid, pop_name, context)
     context.update(locals())
     """
     init_mechanisms(cell, reset_cable=True, from_file=True, mech_file_path=mech_file_path, cm_correct=True, g_pas_correct=True,

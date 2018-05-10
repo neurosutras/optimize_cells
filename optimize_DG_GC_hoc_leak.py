@@ -237,8 +237,11 @@ def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
             raise Exception('optimize_DG_GC_hoc_leak: problem importing from mpi4py; required for config_interactive')
     print context.comm.rank
     context.env = init_env(comm=context.comm, **kwargs)
-    cell = get_hoc_cell_wrapper(context.env, context.gid, context.population)
-    init_mechanisms(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path)
+    cell = get_hoc_cell_wrapper(context.env, context.gid, context.population, context)
+    init_mechanisms(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path, cm_correct=True,
+                    g_pas_correct=True, cell_attr_dict=context.cell_attr_dict[context.gid],
+                    sec_index_map=context.sec_index_map, env=context.env)
+
     # get the thickest apical dendrite ~200 um from the soma
     candidate_branches = []
     candidate_distances = []
@@ -304,7 +307,9 @@ def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
 def init_mechanisms_from_file(x, local_context=None):
     if local_context is None:
         local_context = context
-    init_mechanisms(local_context.cell, from_file=True)
+    init_mechanisms(local_context.cell, reset_cable=True, from_file=True, mech_file_path=local_context.mech_file_path,
+                    cm_correct=True, g_pas_correct=True, cell_attr_dict=local_context.cell_attr_dict[context.gid],
+                    sec_index_map=local_context.sec_index_map, env=local_context.env)
 
 
 def get_args_static_leak():
