@@ -496,6 +496,7 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     insert_syn_subset(cell, context.syn_attrs_dict, context.cell_attr_dict, gid, subset_source_names, env, pop_name)
     """
 
+
 if __name__ == '__main__':
     main(args=sys.argv[(list_find(lambda s: s.find(os.path.basename(__file__)) != -1, sys.argv) + 1):],
          standalone_mode=False)

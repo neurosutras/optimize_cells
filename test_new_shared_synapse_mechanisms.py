@@ -56,17 +56,19 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
                   'FacilExp2Syn': {'mech_params': ['g'],
                                    'netcon_params': {'g0': 4, 'f1': 6}},
                   'FacilNMDA': {'mech_params': ['g', 'B'],
-                                'netcon_params': {'g0': 4, 'f1': 6}}
+                                'netcon_params': {'g0': 4, 'f1': 6}},
+                  'Exp2Syn': {'mech_params': ['g']}
                   }
-    syn_params = {'SatExp2Syn': {'g_unit': 0.00015, 'dur_onset': 1., 'tau_offset': 5., 'sat': 0.9},
+    syn_params = {'SatExp2Syn': {'g_unit': 0.00015, 'dur_onset': 1., 'tau_offset': 5., 'sat': 0.9, 'e': 0.},
                   'AMPA_S': {},
                   'FacilExp2Syn': {'f_tau': 25., 'f_inc': 0.15, 'f_max': 0.6,
-                                   'g_unit': 0.005, 'dur_onset': 10., 'tau_offset': 35., 'sat': 0.9},
+                                   'g_unit': 0.005, 'dur_onset': 10., 'tau_offset': 35., 'sat': 0.9, 'e': 0.},
                   'FacilNMDA': {'f_tau': 25., 'f_inc': 0.15, 'f_max': 0.6,
-                                'g_unit': 0.00015, 'dur_onset': 10., 'tau_offset': 35., 'sat': 0.9}
+                                'g_unit': 0.00015, 'dur_onset': 10., 'tau_offset': 35., 'sat': 0.9, 'e': 0.},
+                  'Exp2Syn': {'weight': 0.0016, 'tau1': 0.5, 'tau2': 5., 'e': 0.}
                   }
-
-    syn = add_unique_synapse(mech_name, cell.tree.root.sec(0.5))
+    syn_node = cell.apical[-1]  # cell.tree.root
+    syn = add_unique_synapse(mech_name, syn_node.sec(0.5))
     config_syn(mech_name, rules=env.synapse_param_rules, syn=syn, **syn_params[mech_name])
 
     # drive input with spike train
@@ -92,15 +94,19 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     duration = this_input_spike_train[-1] + 150.
     sim = QuickSim(duration)
     sim.append_rec(cell, cell.tree.root, 0.5, description='soma Vm')
-    for param_name in recordings[mech_name]['mech_params']:
-        sim.append_rec(cell, cell.tree.root, object=syn, param='_ref_'+param_name, description=param_name)
+    if syn_node != cell.tree.root:
+        sim.append_rec(cell, syn_node, 0.5, description='%s Vm' % syn_node.name)
+    if 'mech_params' in recordings[mech_name]:
+        for param_name in recordings[mech_name]['mech_params']:
+            sim.append_rec(cell, syn_node, object=syn, param='_ref_'+param_name, description=param_name)
 
-    for i in xrange(num_syns):
-        for param_name, j in recordings[mech_name]['netcon_params'].iteritems():
-            if j > 1:
-                description = 'netcon%i_%s' % (i, param_name)
-                sim.append_rec(cell, cell.tree.root, description=description)
-                h.record_netcon_weight_element(sim.get_rec(description)['vec'], netcon_list[i], j, sim.dt)
+    if 'netcon_params' in recordings[mech_name]:
+        for i in xrange(num_syns):
+            for param_name, j in recordings[mech_name]['netcon_params'].iteritems():
+                if j > 1:
+                    description = 'netcon%i_%s' % (i, param_name)
+                    sim.append_rec(cell, syn_node, description=description)
+                    h.record_netcon_weight_element(sim.get_rec(description)['vec'], netcon_list[i], j, sim.dt)
     context.update(locals())
 
     sim.run()
