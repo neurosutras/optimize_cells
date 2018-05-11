@@ -254,24 +254,27 @@ class QuickSim(object):
     def export_to_file(self, f, simiter=None):
         """
         Extracts important parameters from the lists of stimulation and recording sites, and exports to an HDF5
-        database. Arrays are saved as datasets and metadata is saved as attributes.
+        file. Arrays are saved as datasets and metadata is saved as attributes.
         :param f: :class:'h5py.File'
         :param simiter: int
         """
         start_time = time.time()
+        if 'sim_output' not in f:
+            f.create_group('sim_output')
+        target = f['sim_output']
         if simiter is None:
-            simiter = len(f)
-        if str(simiter) not in f:
-            f.create_group(str(simiter))
-        f[str(simiter)].create_dataset('time', compression='gzip', compression_opts=9, data=self.tvec)
-        f[str(simiter)]['time'].attrs['dt'] = self.dt
+            simiter = len(target)
+        if str(simiter) not in target:
+            target.create_group(str(simiter))
+        target[str(simiter)].create_dataset('time', compression='gzip', compression_opts=9, data=self.tvec)
+        target[str(simiter)]['time'].attrs['dt'] = self.dt
         for parameter in self.parameters:
-            f[str(simiter)].attrs[parameter] = self.parameters[parameter]
+            target[str(simiter)].attrs[parameter] = self.parameters[parameter]
         if self.stim_list:
-            f[str(simiter)].create_group('stim')
+            target[str(simiter)].create_group('stim')
             for index, stim in enumerate(self.stim_list):
-                stim_out = f[str(simiter)]['stim'].create_dataset(str(index), compression='gzip', compression_opts=9,
-                                                                  data=stim['vec'])
+                stim_out = target[str(simiter)]['stim'].create_dataset(str(index), compression='gzip',
+                                                                       compression_opts=9, data=stim['vec'])
                 cell = stim['cell']
                 stim_out.attrs['cell'] = cell.gid
                 node = stim['node']
@@ -287,9 +290,9 @@ class QuickSim(object):
                 stim_out.attrs['delay'] = stim['stim'].delay
                 stim_out.attrs['dur'] = stim['stim'].dur
                 stim_out.attrs['description'] = stim['description']
-        f[str(simiter)].create_group('rec')
+        target[str(simiter)].create_group('rec')
         for index, rec in enumerate(self.rec_list):
-            rec_out = f[str(simiter)]['rec'].create_dataset(str(index), compression='gzip', compression_opts=9,
+            rec_out = target[str(simiter)]['rec'].create_dataset(str(index), compression='gzip', compression_opts=9,
                                                             data=rec['vec'])
             cell = rec['cell']
             rec_out.attrs['cell'] = cell.gid

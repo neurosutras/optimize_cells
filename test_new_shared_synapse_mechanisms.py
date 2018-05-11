@@ -11,7 +11,7 @@ context = Context()
 @click.option("--template-paths", type=str, default='../dgc/Mateos-Aparicio2014:../dentate/templates')
 @click.option("--hoc-lib-path", type=str, default='../dentate')
 @click.option("--dataset-prefix", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
-              default='/mnt/s')  # '/mnt/s' #'../dentate/datasets'
+              default='../dentate/datasets')  # '/mnt/s' #'../dentate/datasets'
 @click.option("--results-path", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
               default='data')
 @click.option("--mech-file-path", required=True, type=click.Path(exists=True, file_okay=True, dir_okay=False),
@@ -68,8 +68,8 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
                   'Exp2Syn': {'weight': 0.0016, 'tau1': 0.5, 'tau2': 5., 'e': 0.}
                   }
     syn_node = cell.apical[-1]  # cell.tree.root
-    syn = add_unique_synapse(mech_name, syn_node.sec(0.5))
-    config_syn(mech_name, rules=env.synapse_param_rules, syn=syn, **syn_params[mech_name])
+    syn = add_unique_synapse(syn_name=mech_name, seg=syn_node.sec(0.5))
+    config_syn(syn_name=mech_name, rules=env.synapse_param_rules, syn=syn, **syn_params[mech_name])
 
     # drive input with spike train
     ISI = 100.
