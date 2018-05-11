@@ -54,7 +54,7 @@ def main(config_file_path, output_dir, export, export_file_path, label, disp, ve
     this_features = filter_features_fI(primitives, features, context.export)
     features.update(this_features)
 
-    features, objectives = get_objectives(features)
+    features, objectives = get_objectives_spiking(features)
     print 'params:'
     pprint.pprint(context.x0_dict)
     print 'features:'
@@ -193,8 +193,7 @@ def config_controller(export_file_path, output_dir, **kwargs):
 
 
 def config_worker(update_context_funcs, param_names, default_params, target_val, target_range, temp_output_path,
-                  export_file_path, output_dir, disp, mech_file_path, neuroH5_file_path, neuroH5_index, spines,
-                  **kwargs):
+                  export_file_path, output_dir, disp, mech_file_path, gid, population, spines, **kwargs):
     """
     :param update_context_funcs: list of function references
     :param param_names: list of str
@@ -206,12 +205,9 @@ def config_worker(update_context_funcs, param_names, default_params, target_val,
     :param output_dir: str (dir path)
     :param disp: bool
     :param mech_file_path: str
-    :param neuroH5_file_path: str
-    :param neuroH5_index: int
     :param spines: bool
     """
     context.update(kwargs)
-    #neuroH5_dict = read_from_pkl(neuroH5_file_path)[neuroH5_index] #do we still need this?
     param_indexes = {param_name: i for i, param_name in enumerate(param_names)}
     processed_export_file_path = export_file_path.replace('.hdf5', '_processed.hdf5')
     context.update(locals())
@@ -279,6 +275,7 @@ def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
             raise Exception('optimize_DG_GC_hoc_leak: problem importing from mpi4py; required for config_interactive')
     context.env = init_env(comm=context.comm, **kwargs)
     cell = get_hoc_cell_wrapper(context.env, context.gid, context.population)
+    context.cell = cell
     init_mechanisms(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path, cm_correct=True,
                     g_pas_correct=True, cell_attr_dict=context.env.cell_attr_dict[context.gid],
                     sec_index_map=context.env.sec_index_map[context.gid], env=context.env)
@@ -288,23 +285,22 @@ def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
     candidate_diams = []
     candidate_locs = []
     for branch in cell.apical:
-        if ((cell.get_distance_to_node(cell.tree.root, branch, 0.) >= 200.) &
-                (cell.get_distance_to_node(cell.tree.root, branch, 1.) > 300.) & (not cell.is_terminal(branch))):
+        if ((get_distance_to_node(cell, cell.tree.root, branch, 0.) >= 130.) &
+                (get_distance_to_node(cell, cell.tree.root, branch, 1.) > 280.) & (not is_terminal(branch))):
             candidate_branches.append(branch)
             for seg in branch.sec:
                 loc = seg.x
-                if cell.get_distance_to_node(cell.tree.root, branch, loc) > 250.:
+                if get_distance_to_node(cell, cell.tree.root, branch, loc) > 250.:
                     candidate_diams.append(branch.sec(loc).diam)
                     candidate_locs.append(loc)
                     break
     index = candidate_diams.index(max(candidate_diams))
     dend = candidate_branches[index]
     dend_loc = candidate_locs[index]
-    axon_seg_locs = [seg.x for seg in cell.axon[2].sec]
-
+    axon_seg_locs = [seg.x for seg in cell.axon[0].sec]
     rec_locs = {'soma': 0., 'dend': dend_loc, 'ais': 1., 'axon': axon_seg_locs[0]}
     context.rec_locs = rec_locs
-    rec_nodes = {'soma': cell.tree.root, 'dend': dend, 'ais': cell.axon[1], 'axon': cell.axon[2]}
+    rec_nodes = {'soma': cell.tree.root, 'dend': dend, 'ais': cell.ais[0], 'axon': cell.axon[0]}
     context.rec_nodes = rec_nodes
 
     equilibrate = context.equilibrate
@@ -324,7 +320,6 @@ def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
 
     context.spike_output_vec = h.Vector()
     cell.spike_detector.record(context.spike_output_vec)
-    context.cell = cell
 
 
 def init_mechanisms_from_file(x, local_context=None):
@@ -753,22 +748,22 @@ def update_context_spike_shape(x, local_context=None):
         modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=x[param_indexes['dend.gbar_nas slope']],
                           min=x[param_indexes['dend.gbar_nas min']], custom={'method': 'custom_gradient_by_terminal'},
                           replace=False)
-    update_mechanism_by_sec_type(cell, 'axon_hill', 'kap')
-    update_mechanism_by_sec_type(cell, 'axon_hill', 'kdr')
+    update_mechanism_by_sec_type(cell, 'hillock', 'kap')
+    update_mechanism_by_sec_type(cell, 'hillock', 'kdr')
     modify_mech_param(cell, 'ais', 'kdr', 'gkdrbar', origin='soma')
     modify_mech_param(cell, 'ais', 'kap', 'gkabar', x[param_indexes['axon.gkabar']])
     modify_mech_param(cell, 'axon', 'kdr', 'gkdrbar', origin='ais')
     modify_mech_param(cell, 'axon', 'kap', 'gkabar', origin='ais')
-    modify_mech_param(cell, 'axon_hill', 'nax', 'sh', x[param_indexes['soma.sh_nas/x']])
-    modify_mech_param(cell, 'axon_hill', 'nax', 'gbar', x[param_indexes['soma.gbar_nas']])
+    modify_mech_param(cell, 'hillock', 'nax', 'sh', x[param_indexes['soma.sh_nas/x']])
+    modify_mech_param(cell, 'hillock', 'nax', 'gbar', x[param_indexes['soma.gbar_nas']])
     modify_mech_param(cell, 'axon', 'nax', 'gbar', x[param_indexes['axon.gbar_nax']])
     for sec_type in ['ais', 'axon']:
-        modify_mech_param(cell, sec_type, 'nax', 'sh', origin='axon_hill')
+        modify_mech_param(cell, sec_type, 'nax', 'sh', origin='hillock')
     modify_mech_param(cell, 'soma', 'Ca', 'gcamult', x[param_indexes['soma.gCa factor']])
     modify_mech_param(cell, 'soma', 'CadepK', 'gcakmult', x[param_indexes['soma.gCadepK factor']])
     modify_mech_param(cell, 'soma', 'km3', 'gkmbar', x[param_indexes['soma.gkmbar']])
     modify_mech_param(cell, 'ais', 'km3', 'gkmbar', x[param_indexes['ais.gkmbar']])
-    modify_mech_param(cell, 'axon_hill', 'km3', 'gkmbar', origin='soma')
+    modify_mech_param(cell, 'hillock', 'km3', 'gkmbar', origin='soma')
     modify_mech_param(cell, 'axon', 'km3', 'gkmbar', origin='ais')
     modify_mech_param(cell, 'ais', 'nax', 'sha', x[param_indexes['ais.sha_nax']])
     modify_mech_param(cell, 'ais', 'nax', 'gbar', x[param_indexes['ais.gbar_nax']])
