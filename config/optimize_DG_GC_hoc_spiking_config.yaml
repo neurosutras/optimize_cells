@@ -69,9 +69,9 @@ feature_names:
 - f_I_residuals
 update_context:
 - - optimize_DG_GC_hoc_spiking
-  - init_mechanisms_from_file
+  - reset_mechanisms
 - - optimize_DG_GC_hoc_spiking
-  - update_context_spike_shape
+  - update_mechanisms_spiking
 get_features_stages:
 - source: optimize_DG_GC_hoc_spiking
   compute_features: compute_features_spike_shape
@@ -86,14 +86,14 @@ kwargs:
   gid: 0
   population: GC
   spines: False
-  verbose: True
+  verbose: 1
   cvode: False
   daspk: True
   config_file: ../dentate/config/Small_Scale_Control_log_normal_weights.yaml
   template_paths: ../dgc/Mateos-Aparicio2014:../dentate/templates
   hoc_lib_path: ../dentate
-  dataset_prefix: /mnt/s
-  #dataset_prefix: ../dentate/datasets
+  # dataset_prefix: /mnt/s
+  dataset_prefix: ../dentate/datasets
   results_path: data
 objective_names:
 - v_th
@@ -135,7 +135,7 @@ rel_bounds:
   - 1.0
   - soma.gbar_nas
 - - dend.gbar_nas
-  - <
+  - '<='
   - 1.0
   - soma.gbar_nas
 - - dend.gbar_nas
@@ -196,7 +196,7 @@ x0:
   dend.gbar_nas slope: -0.0001
   dend.gkabar: 0.04
   soma.gCa factor: 0.3364
-  soma.gCadepK factor: 4.096
+  soma.gCadepK factor: 2.
   soma.gbar_nas: 0.03
   soma.gkabar: 0.02108
   soma.gkdrbar: 0.04299

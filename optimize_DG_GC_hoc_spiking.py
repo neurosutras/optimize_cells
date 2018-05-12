@@ -17,12 +17,12 @@ context = Context()
 @click.command()
 @click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
               default='config/optimize_DG_GC_hoc_spiking_config.yaml')
-@click.option("--output-dir", type=str, default='data')
+@click.option("--output-dir", type=click.Path(exists=True, file_okay=False, dir_okay=True), default='data')
 @click.option("--export", is_flag=True)
 @click.option("--export-file-path", type=str, default=None)
 @click.option("--label", type=str, default=None)
 @click.option("--disp", is_flag=True)
-@click.option("--verbose", is_flag=True)
+@click.option("--verbose", type=int, default=1)
 def main(config_file_path, output_dir, export, export_file_path, label, disp, verbose):
     """
 
@@ -35,10 +35,9 @@ def main(config_file_path, output_dir, export, export_file_path, label, disp, ve
     :param verbose: bool
     """
     # requires a global variable context: :class:'Context'
-
     context.update(locals())
-    config_interactive(config_file_path=config_file_path, output_dir=output_dir, export_file_path=export_file_path,
-                       label=label, verbose=verbose)
+    config_interactive(config_file_path=config_file_path, output_dir=output_dir, export=export,
+                       export_file_path=export_file_path, label=label, disp=disp, verbose=verbose)
     # Stage 0:
     args = []
     group_size = 1
@@ -63,16 +62,18 @@ def main(config_file_path, output_dir, export, export_file_path, label, disp, ve
     pprint.pprint(objectives)
 
 
-def config_interactive(config_file_path=None, output_dir=None, temp_output_path=None, export_file_path=None,
-                       label=None, verbose=True, **kwargs):
+def config_interactive(config_file_path=None, output_dir=None, temp_output_path=None, export=False,
+                       export_file_path=None, label=None, disp=True, verbose=2, **kwargs):
     """
 
     :param config_file_path: str (.yaml file path)
     :param output_dir: str (dir path)
     :param temp_output_path: str (.hdf5 file path)
+    :param export: bool
     :param export_file_path: str (.hdf5 file path)
     :param label: str
-    :param verbose: bool
+    :param disp: bool
+    :param verbose: int
     """
 
     if config_file_path is not None:
@@ -81,11 +82,18 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
             not os.path.isfile(context.config_file_path):
         raise Exception('config_file_path specifying required parameters is missing or invalid.')
     config_dict = read_from_yaml(context.config_file_path)
-    context.param_names = config_dict['param_names']
+    if 'param_names' not in config_dict or config_dict['param_names'] is None:
+        raise Exception('config_file at path: %s is missing the following required field: %s' %
+                        (context.config_file_path, 'param_names'))
+    else:
+        context.param_names = config_dict['param_names']
     if 'default_params' not in config_dict or config_dict['default_params'] is None:
         context.default_params = {}
     else:
         context.default_params = config_dict['default_params']
+    if 'bounds' not in config_dict or config_dict['bounds'] is None:
+        raise Exception('config_file at path: %s is missing the following required field: %s' %
+                        (context.config_file_path, 'bounds'))
     for param in context.default_params:
         config_dict['bounds'][param] = (context.default_params[param], context.default_params[param])
     context.bounds = [config_dict['bounds'][key] for key in context.param_names]
@@ -98,19 +106,41 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
     else:
         context.x0 = config_dict['x0']
         context.x0_dict = context.x0
+        for param_name in context.default_params:
+            context.x0_dict[param_name] = context.default_params[param_name]
         context.x0_array = param_dict_to_array(context.x0_dict, context.param_names)
-    context.feature_names = config_dict['feature_names']
-    context.objective_names = config_dict['objective_names']
-    context.target_val = config_dict['target_val']
-    context.target_range = config_dict['target_range']
-    context.optimization_title = config_dict['optimization_title']
-    context.kwargs = config_dict['kwargs']  # Extra arguments to be passed to imported sources
-    context.kwargs['verbose'] = verbose
-    context.update(context.kwargs)
 
     missing_config = []
+    if 'feature_names' not in config_dict or config_dict['feature_names'] is None:
+        missing_config.append('feature_names')
+    else:
+        context.feature_names = config_dict['feature_names']
+    if 'objective_names' not in config_dict or config_dict['objective_names'] is None:
+        missing_config.append('objective_names')
+    else:
+        context.objective_names = config_dict['objective_names']
+    if 'target_val' in config_dict:
+        context.target_val = config_dict['target_val']
+    else:
+        context.target_val = None
+    if 'target_range' in config_dict:
+        context.target_range = config_dict['target_range']
+    else:
+        context.target_range = None
+    if 'optimization_title' in config_dict:
+        if config_dict['optimization_title'] is None:
+            context.optimization_title = ''
+        else:
+            context.optimization_title = config_dict['optimization_title']
+    if 'kwargs' in config_dict and config_dict['kwargs'] is not None:
+        context.kwargs = config_dict['kwargs']  # Extra arguments to be passed to imported sources
+    else:
+        context.kwargs = {}
+    context.kwargs.update(kwargs)
+    context.update(context.kwargs)
+
     if 'update_context' not in config_dict or config_dict['update_context'] is None:
-        missing_config.append('update_context')
+        context.update_context_list = []
     else:
         context.update_context_list = config_dict['update_context']
     if 'get_features_stages' not in config_dict or config_dict['get_features_stages'] is None:
@@ -148,6 +178,7 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
                                    (output_dir_str, datetime.datetime.today().strftime('%Y%m%d%H%M'), os.getpid(),
                                     context.optimization_title, label)
 
+    context.export = export
     if export_file_path is not None:
         context.export_file_path = export_file_path
     if 'export_file_path' not in context() or context.export_file_path is None:
@@ -168,16 +199,13 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
     if not context.update_context_funcs:
         raise Exception('update_context function not found')
 
-    try:
-        from mpi4py import MPI
-        context.comm = MPI.COMM_WORLD
-    except Exception:
-        raise Exception('optimize_DG_GC_hoc_leak: problem importing from mpi4py; required for config_interactive')
-
-    config_worker(context.update_context_funcs, context.param_names, context.default_params, context.target_val,
-                  context.target_range, context.temp_output_path, context.export_file_path, context.output_dir,
-                  context.disp, **context.kwargs)
-    update_source_contexts(context.x0_array)
+    context.disp=disp
+    context.rel_bounds_handler = RelativeBoundedStep(context.x0_array, context.param_names, context.bounds,
+                                                     context.rel_bounds)
+    config_worker(context.update_context_funcs, context.param_names, context.default_params, context.feature_names,
+                  context.objective_names, context.target_val, context.target_range, context.temp_output_path,
+                  context.export_file_path, context.output_dir, context.disp, **context.kwargs)
+    update_source_contexts(context.x0_array, context)
 
 
 def config_controller(export_file_path, output_dir, **kwargs):
@@ -186,31 +214,33 @@ def config_controller(export_file_path, output_dir, **kwargs):
     :param export_file_path: str (path)
     :param output_dir: str (dir)
     """
-    processed_export_file_path = export_file_path.replace('.hdf5', '_processed.hdf5')
     context.update(locals())
     context.update(kwargs)
     init_context()
 
 
-def config_worker(update_context_funcs, param_names, default_params, target_val, target_range, temp_output_path,
-                  export_file_path, output_dir, disp, mech_file_path, gid, population, spines, **kwargs):
+def config_worker(update_context_funcs, param_names, default_params, feature_names, objective_names, target_val,
+                  target_range, temp_output_path, export_file_path, output_dir, disp, mech_file_path, gid,
+                  population, spines, **kwargs):
     """
     :param update_context_funcs: list of function references
     :param param_names: list of str
     :param default_params: dict
     :param target_val: dict
     :param target_range: dict
+    :param feature_names: list of str
+    :param objective_names: list of str
     :param temp_output_path: str
     :param export_file_path: str
     :param output_dir: str (dir path)
     :param disp: bool
     :param mech_file_path: str
+    :param gid: int
+    :param population: str
     :param spines: bool
     """
-    context.update(kwargs)
-    param_indexes = {param_name: i for i, param_name in enumerate(param_names)}
-    processed_export_file_path = export_file_path.replace('.hdf5', '_processed.hdf5')
     context.update(locals())
+    context.update(kwargs)
     init_context()
     setup_cell(**kwargs)
 
@@ -260,10 +290,10 @@ def get_adaptation_index(spike_times):
     return np.mean(adi)
 
 
-def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
+def setup_cell(verbose=1, cvode=False, daspk=False, **kwargs):
     """
 
-    :param verbose: bool
+    :param verbose: int
     :param cvode: bool
     :param daspk: bool
     """
@@ -272,10 +302,9 @@ def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
             from mpi4py import MPI
             context.comm = MPI.COMM_WORLD
         except Exception:
-            raise Exception('optimize_DG_GC_hoc_leak: problem importing from mpi4py; required for config_interactive')
+            raise Exception('optimize_DG_GC_hoc_spiking: problem importing from mpi4py; required for config_interactive')
     context.env = init_env(comm=context.comm, **kwargs)
     cell = get_hoc_cell_wrapper(context.env, context.gid, context.population)
-    context.cell = cell
     init_mechanisms(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path, cm_correct=True,
                     g_pas_correct=True, cell_attr_dict=context.env.cell_attr_dict[context.gid],
                     sec_index_map=context.env.sec_index_map[context.gid], env=context.env)
@@ -308,7 +337,7 @@ def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
     duration = context.duration
     dt = context.dt
 
-    sim = QuickSim(duration, cvode=cvode, daspk=daspk, dt=dt, verbose=verbose)
+    sim = QuickSim(duration, cvode=cvode, daspk=daspk, dt=dt, verbose=verbose>1)
     sim.append_stim(cell, cell.tree.root, loc=0., amp=0., delay=equilibrate, dur=stim_dur, description='step')
     sim.append_stim(cell, cell.tree.root, loc=0., amp=0., delay=0., dur=duration, description='offset')
     for description, node in rec_nodes.iteritems():
@@ -320,9 +349,10 @@ def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
 
     context.spike_output_vec = h.Vector()
     cell.spike_detector.record(context.spike_output_vec)
+    context.cell = cell
 
 
-def init_mechanisms_from_file(x, local_context=None):
+def reset_mechanisms(x, local_context=None):
     if local_context is None:
         local_context = context
     init_mechanisms(local_context.cell, reset_cable=False, from_file=True, mech_file_path=local_context.mech_file_path,
@@ -546,10 +576,12 @@ def filter_features_fI(primitives, current_features, export=False):
     amps = map(amps.__getitem__, adapt_ind)
     experimental_f_I_slope = context.target_val['f_I_slope']  # Hz/ln(pA); rate = slope * ln(current - rheobase)
     if export:
+        print 'filter_features_fI trying to export'
         description = 'f_I_features'
-        with h5py.File(context.processed_export_file_path, 'a') as f:
+        with h5py.File(context.export_file_path, 'a') as f:
             if description not in f:
                 f.create_group(description)
+                f[description].attrs['enumerated'] = False
             group = f[description]
             group.create_dataset('amps', compression='gzip', compression_opts=9, data=amps)
             group.create_dataset('adi', compression='gzip', compression_opts=9, data=new_features['adi'])
@@ -713,7 +745,7 @@ def get_spike_shape(vm, spike_times):
     return v_peak, th_v, ADP, AHP
 
 
-def update_context_spike_shape(x, local_context=None):
+def update_mechanisms_spiking(x, local_context=None):
     """
     :param x: array ['soma.gbar_nas', 'dend.gbar_nas', 'dend.gbar_nas slope', 'dend.gbar_nas min', 'dend.gbar_nas bo',
                     'axon.gbar_nax', 'ais.gbar_nax', 'soma.gkabar', 'dend.gkabar', 'soma.gkdrbar', 'axon.gkabar',
@@ -723,50 +755,50 @@ def update_context_spike_shape(x, local_context=None):
     if local_context is None:
         local_context = context
     cell = local_context.cell
-    param_indexes = local_context.param_indexes
-    modify_mech_param(cell, 'soma', 'nas', 'gbar', x[param_indexes['soma.gbar_nas']])
-    modify_mech_param(cell, 'soma', 'kdr', 'gkdrbar', x[param_indexes['soma.gkdrbar']])
-    modify_mech_param(cell, 'soma', 'kap', 'gkabar', x[param_indexes['soma.gkabar']])
-    slope = (x[param_indexes['dend.gkabar']] - x[param_indexes['soma.gkabar']]) / 300.
-    modify_mech_param(cell, 'soma', 'nas', 'sh', x[param_indexes['soma.sh_nas/x']])
+    x_dict = param_array_to_dict(x, local_context.param_names)
+    modify_mech_param(cell, 'soma', 'nas', 'gbar', x_dict['soma.gbar_nas'])
+    modify_mech_param(cell, 'soma', 'kdr', 'gkdrbar', x_dict['soma.gkdrbar'])
+    modify_mech_param(cell, 'soma', 'kap', 'gkabar', x_dict['soma.gkabar'])
+    slope = (x_dict['dend.gkabar'] - x_dict['soma.gkabar']) / 300.
+    modify_mech_param(cell, 'soma', 'nas', 'sh', x_dict['soma.sh_nas/x'])
     for sec_type in ['apical']:
         update_mechanism_by_sec_type(cell, sec_type, 'nas')
         modify_mech_param(cell, sec_type, 'kap', 'gkabar', origin='soma', min_loc=75., value=0.)
         modify_mech_param(cell, sec_type, 'kap', 'gkabar', origin='soma', max_loc=75., slope=slope, replace=False)
         modify_mech_param(cell, sec_type, 'kad', 'gkabar', origin='soma', max_loc=75., value=0.)
         modify_mech_param(cell, sec_type, 'kad', 'gkabar', origin='soma', min_loc=75., max_loc=300., slope=slope,
-                          value=(x[param_indexes['soma.gkabar']] + slope * 75.), replace=False)
+                          value=(x_dict['soma.gkabar'] + slope * 75.), replace=False)
         modify_mech_param(cell, sec_type, 'kad', 'gkabar', origin='soma', min_loc=300.,
-                          value=(x[param_indexes['soma.gkabar']] + slope * 300.), replace=False)
+                          value=(x_dict['soma.gkabar'] + slope * 300.), replace=False)
         modify_mech_param(cell, sec_type, 'kdr', 'gkdrbar', origin='soma')
         modify_mech_param(cell, sec_type, 'nas', 'sha', 0.)  # 5.)
-        modify_mech_param(cell, sec_type, 'nas', 'gbar', x[param_indexes['dend.gbar_nas']])
-        modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=x[param_indexes['dend.gbar_nas slope']],
-                          min=x[param_indexes['dend.gbar_nas min']], custom={'method': 'custom_gradient_by_branch_order',
-                                                                             'branch_order': x[param_indexes['dend.gbar_nas bo']]},
-                          replace=False)
-        modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=x[param_indexes['dend.gbar_nas slope']],
-                          min=x[param_indexes['dend.gbar_nas min']], custom={'method': 'custom_gradient_by_terminal'},
+        modify_mech_param(cell, sec_type, 'nas', 'gbar', x_dict['dend.gbar_nas'])
+        modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=x_dict['dend.gbar_nas slope'],
+                          min=x_dict['dend.gbar_nas min'],
+                          custom={'method': 'custom_gradient_by_branch_order',
+                                  'branch_order': x_dict['dend.gbar_nas bo']}, replace=False)
+        modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=x_dict['dend.gbar_nas slope'],
+                          min=x_dict['dend.gbar_nas min'], custom={'method': 'custom_gradient_by_terminal'},
                           replace=False)
     update_mechanism_by_sec_type(cell, 'hillock', 'kap')
     update_mechanism_by_sec_type(cell, 'hillock', 'kdr')
     modify_mech_param(cell, 'ais', 'kdr', 'gkdrbar', origin='soma')
-    modify_mech_param(cell, 'ais', 'kap', 'gkabar', x[param_indexes['axon.gkabar']])
+    modify_mech_param(cell, 'ais', 'kap', 'gkabar', x_dict['axon.gkabar'])
     modify_mech_param(cell, 'axon', 'kdr', 'gkdrbar', origin='ais')
     modify_mech_param(cell, 'axon', 'kap', 'gkabar', origin='ais')
-    modify_mech_param(cell, 'hillock', 'nax', 'sh', x[param_indexes['soma.sh_nas/x']])
-    modify_mech_param(cell, 'hillock', 'nax', 'gbar', x[param_indexes['soma.gbar_nas']])
-    modify_mech_param(cell, 'axon', 'nax', 'gbar', x[param_indexes['axon.gbar_nax']])
+    modify_mech_param(cell, 'hillock', 'nax', 'sh', x_dict['soma.sh_nas/x'])
+    modify_mech_param(cell, 'hillock', 'nax', 'gbar', x_dict['soma.gbar_nas'])
+    modify_mech_param(cell, 'axon', 'nax', 'gbar', x_dict['axon.gbar_nax'])
     for sec_type in ['ais', 'axon']:
         modify_mech_param(cell, sec_type, 'nax', 'sh', origin='hillock')
-    modify_mech_param(cell, 'soma', 'Ca', 'gcamult', x[param_indexes['soma.gCa factor']])
-    modify_mech_param(cell, 'soma', 'CadepK', 'gcakmult', x[param_indexes['soma.gCadepK factor']])
-    modify_mech_param(cell, 'soma', 'km3', 'gkmbar', x[param_indexes['soma.gkmbar']])
-    modify_mech_param(cell, 'ais', 'km3', 'gkmbar', x[param_indexes['ais.gkmbar']])
+    modify_mech_param(cell, 'soma', 'Ca', 'gcamult', x_dict['soma.gCa factor'])
+    modify_mech_param(cell, 'soma', 'CadepK', 'gcakmult', x_dict['soma.gCadepK factor'])
+    modify_mech_param(cell, 'soma', 'km3', 'gkmbar', x_dict['soma.gkmbar'])
+    modify_mech_param(cell, 'ais', 'km3', 'gkmbar', x_dict['ais.gkmbar'])
     modify_mech_param(cell, 'hillock', 'km3', 'gkmbar', origin='soma')
     modify_mech_param(cell, 'axon', 'km3', 'gkmbar', origin='ais')
-    modify_mech_param(cell, 'ais', 'nax', 'sha', x[param_indexes['ais.sha_nax']])
-    modify_mech_param(cell, 'ais', 'nax', 'gbar', x[param_indexes['ais.gbar_nax']])
+    modify_mech_param(cell, 'ais', 'nax', 'sha', x_dict['ais.sha_nax'])
+    modify_mech_param(cell, 'ais', 'nax', 'gbar', x_dict['ais.gbar_nax'])
 
 
 def export_sim_results():

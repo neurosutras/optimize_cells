@@ -11,7 +11,6 @@ import collections
 import click
 from neuron_wrapper_utils import *
 
-
 context = Context()
 
 
@@ -41,7 +40,6 @@ def main(config_file_path, output_dir, export, export_file_path, label, disp, ve
                        export_file_path=export_file_path, label=label, disp=disp, verbose=verbose)
     args = get_args_static_leak()
     group_size = len(args[0])
-    update_source_contexts(context.x0_array, context)
     sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size]
     primitives = map(compute_features_leak, *sequences)
     features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
@@ -190,8 +188,10 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
                 raise Exception('update_context function: %s not found' % func_name)
     if not context.update_context_funcs:
         raise Exception('update_context function not found')
-    
+
     context.disp=disp
+    context.rel_bounds_handler = RelativeBoundedStep(context.x0_array, context.param_names, context.bounds,
+                                                     context.rel_bounds)
     config_worker(context.update_context_funcs, context.param_names, context.default_params, context.feature_names,
                   context.objective_names, context.target_val, context.target_range, context.temp_output_path,
                   context.export_file_path, context.output_dir, context.disp, **context.kwargs)
@@ -250,10 +250,10 @@ def init_context():
     context.update(locals())
 
 
-def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
+def setup_cell(verbose=1, cvode=False, daspk=False, **kwargs):
     """
 
-    :param verbose: bool
+    :param verbose: int
     :param cvode: bool
     :param daspk: bool
     """
@@ -316,7 +316,7 @@ def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
     duration = context.duration
     dt = context.dt
 
-    sim = QuickSim(duration, cvode=cvode, daspk=daspk, dt=dt, verbose=verbose)
+    sim = QuickSim(duration, cvode=cvode, daspk=daspk, dt=dt, verbose=verbose>1)
     sim.append_stim(cell, cell.tree.root, loc=0., amp=0., delay=equilibrate, dur=stim_dur, description='step')
     sim.append_stim(cell, cell.tree.root, loc=0., amp=0., delay=0., dur=duration, description='offset')
     for description, node in rec_nodes.iteritems():

@@ -29,7 +29,7 @@ kwargs:
   population: GC
   spines: False
   cvode: True
-  verbose: True
+  verbose: 1
   daspk: True
   config_file: ../dentate/config/Small_Scale_Control_log_normal_weights.yaml
   template_paths: ../dgc/Mateos-Aparicio2014:../dentate/templates

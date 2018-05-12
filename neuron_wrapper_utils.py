@@ -261,6 +261,7 @@ class QuickSim(object):
         start_time = time.time()
         if 'sim_output' not in f:
             f.create_group('sim_output')
+            f['sim_output'].attrs['enumerated'] = True
         target = f['sim_output']
         if simiter is None:
             simiter = len(target)
@@ -282,9 +283,9 @@ class QuickSim(object):
                 stim_out.attrs['type'] = node.type
                 loc = stim['stim'].get_segment().x
                 stim_out.attrs['loc'] = loc
-                distance = cell.get_distance_to_node(cell.tree.root, node, loc)
+                distance = get_distance_to_node(cell, cell.tree.root, node, loc)
                 stim_out.attrs['soma_distance'] = distance
-                distance = cell.get_distance_to_node(cell.get_dendrite_origin(node), node, loc)
+                distance = get_distance_to_node(cell, get_dendrite_origin(cell, node), node, loc)
                 stim_out.attrs['branch_distance'] = distance
                 stim_out.attrs['amp'] = stim['stim'].amp
                 stim_out.attrs['delay'] = stim['stim'].delay
@@ -300,13 +301,13 @@ class QuickSim(object):
             rec_out.attrs['index'] = node.index
             rec_out.attrs['type'] = node.type
             rec_out.attrs['loc'] = rec['loc']
-            distance = cell.get_distance_to_node(cell.tree.root, node, rec['loc'])
+            distance = get_distance_to_node(cell, cell.tree.root, node, rec['loc'])
             rec_out.attrs['soma_distance'] = distance
-            distance = cell.get_distance_to_node(cell.get_dendrite_origin(node), node, rec['loc'])
-            is_terminal = int(cell.is_terminal(node))
-            branch_order = cell.get_branch_order(node)
+            distance = get_distance_to_node(cell, get_dendrite_origin(cell, node), node, rec['loc'])
+            node_is_terminal = int(is_terminal(node))
+            branch_order = get_branch_order(cell, node)
             rec_out.attrs['branch_distance'] = distance
-            rec_out.attrs['is_terminal'] = is_terminal
+            rec_out.attrs['is_terminal'] = node_is_terminal
             rec_out.attrs['branch_order'] = branch_order
             rec_out.attrs['ylabel'] = rec['ylabel']
             rec_out.attrs['units'] = rec['units']
@@ -431,8 +432,6 @@ def get_hoc_cell_wrapper(env, gid, pop_name):
     :return:
     """
     hoc_cell = make_hoc_cell(env, gid, pop_name)
-    #cell = HocCell(existing_hoc_cell=hoc_cell)
-    # cell.load_morphology()
     cell = HocCell(gid=0, population=pop_name, hoc_cell=hoc_cell)
     if pop_name not in env.cell_attr_index_map:
         env.cell_attr_index_map[pop_name] = get_cell_attributes_index_map(env.comm, env.dataFilePath, pop_name,
@@ -457,7 +456,7 @@ def get_hoc_cell_wrapper(env, gid, pop_name):
 @click.option("--template-paths", type=str, default='../dgc/Mateos-Aparicio2014:../dentate/templates')
 @click.option("--hoc-lib-path", type=str, default='../dentate')
 @click.option("--dataset-prefix", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
-              default='/mnt/s')  # '/mnt/s')  # '../dentate/datasets'
+              default='../dentate/datasets')  # '/mnt/s')  # '../dentate/datasets'
 @click.option("--mech-file-path", required=True, type=click.Path(exists=True, file_okay=True, dir_okay=False),
               default='mechanisms/20180209_DG_GC_hoc_leak_mech.yaml')
 @click.option("--results-path", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
