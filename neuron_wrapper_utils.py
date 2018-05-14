@@ -346,15 +346,11 @@ def make_hoc_cell(env, gid, population):
     :param population:
     :return:
     """
-    datasetPath = os.path.join(env.datasetPrefix, env.datasetName)
     popName = population
-    templateName = env.celltypes[popName]['template']
-    # TODO: load the template specified by the key 'template', but from the file specified by the key 'templateFile'
-    h.find_template(env.pc, h.templatePaths, templateName)
-    dataFilePath = os.path.join(datasetPath, env.modelConfig['Cell Data'])
-    env.dataFilePath = dataFilePath
-    templateName = env.celltypes[popName]['template']
-    templateClass = eval('h.%s' % templateName)
+    datasetPath = env.datasetPath
+    dataFilePath = env.dataFilePath
+    env.load_cell_template(popName)
+    templateClass = getattr(h, env.celltypes[popName]['template'])
 
     if env.cellAttributeInfo.has_key(popName) and env.cellAttributeInfo[popName].has_key('Trees'):
         tree = select_tree_attributes(gid, env.comm, dataFilePath, popName)
@@ -368,10 +364,10 @@ def make_hoc_cell(env, gid, population):
     return hoc_cell
 
 
-def configure_env(env, hoc_lib_path):
+def configure_env(env):
     """
 
-    :param env:
+    :param env: :class:'Env'
     """
     h.load_file("nrngui.hoc")
     h.load_file("loadbal.hoc")
@@ -380,42 +376,22 @@ def configure_env(env, hoc_lib_path):
     h('numCells = 0')
     h('totalNumCells = 0')
     h.nclist = h.List()
-    datasetPath = os.path.join(env.datasetPrefix, env.datasetName)
-    h.datasetPath = datasetPath
+    h.datasetPath = env.datasetPath
     h.pc = h.ParallelContext()
     env.pc = h.pc
     ## polymorphic value template
-    h.load_file(hoc_lib_path + "/templates/Value.hoc")
+    h.load_file(env.hoclibPath + '/templates/Value.hoc')
     ## randomstream template
-    h.load_file(hoc_lib_path + "/templates/ranstream.hoc")
+    h.load_file(env.hoclibPath + '/templates/ranstream.hoc')
     ## stimulus cell template
-    h.load_file(hoc_lib_path + "/templates/StimCell.hoc")
-    h.xopen(hoc_lib_path + "/lib.hoc")
+    h.load_file(env.hoclibPath + '/templates/StimCell.hoc')
+    h.xopen(env.hoclibPath + '/lib.hoc')
+
     h('objref templatePaths, templatePathValue')
     h.templatePaths = h.List()
     for path in env.templatePaths:
         h.templatePathValue = h.Value(1, path)
         h.templatePaths.append(h.templatePathValue)
-
-
-def init_env(config_file, template_paths, hoc_lib_path, comm, dataset_prefix=None, results_path=None, verbose=False,
-             **kwargs):
-    """
-
-    :param config_file:
-    :param template_paths:
-    :param hoc_lib_path:
-    :param comm: :class:'MPI.COMM_WORLD'
-    :param dataset_prefix:
-    :param results_path:
-    :param verbose: bool
-    :param kwargs:
-    :return:
-    """
-    np.seterr(all='raise')
-    env = Env(comm, config_file, template_paths, dataset_prefix, results_path, verbose=verbose, **kwargs)
-    configure_env(env, hoc_lib_path)
-    return env
 
 
 def get_hoc_cell_wrapper(env, gid, pop_name):
@@ -427,15 +403,14 @@ def get_hoc_cell_wrapper(env, gid, pop_name):
     :return:
     """
     hoc_cell = make_hoc_cell(env, gid, pop_name)
-    cell = HocCell(gid=0, population=pop_name, hoc_cell=hoc_cell)
+    cell = HocCell(gid=gid, population=pop_name, hoc_cell=hoc_cell)
     syn_attrs = env.synapse_attributes
     if pop_name not in syn_attrs.select_cell_attr_index_map:
         syn_attrs.select_cell_attr_index_map[pop_name] = \
             get_cell_attributes_index_map(env.comm, env.dataFilePath, pop_name, 'Synapse Attributes')
-    syn_attrs.load_syn_id_attrs(gid,
-                                select_cell_attributes(gid, env.comm, env.dataFilePath,
-                                                       syn_attrs.select_cell_attr_index_map[pop_name], pop_name,
-                                                       'Synapse Attributes'))
+    syn_attrs.load_syn_id_attrs(gid, select_cell_attributes(gid, env.comm, env.dataFilePath,
+                                                            syn_attrs.select_cell_attr_index_map[pop_name], pop_name,
+                                                            'Synapse Attributes'))
     for source_name in env.projection_dict[pop_name]:
         if source_name not in syn_attrs.select_edge_attr_index_map[pop_name]:
             syn_attrs.select_edge_attr_index_map[pop_name][source_name] = \
@@ -454,16 +429,14 @@ def get_hoc_cell_wrapper(env, gid, pop_name):
 @click.option("--config-file", required=True, type=click.Path(exists=True, file_okay=True, dir_okay=False),
               default='../dentate/config/Small_Scale_Control_log_normal_weights.yaml')
 @click.option("--template-paths", type=str, default='../dgc/Mateos-Aparicio2014:../dentate/templates')
-@click.option("--hoc-lib-path", type=str, default='../dentate')
+@click.option("--hoc-lib-path", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
+              default='../dentate')
 @click.option("--dataset-prefix", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
               default='../dentate/datasets')  # '/mnt/s')  # '../dentate/datasets'
 @click.option("--mech-file-path", required=True, type=click.Path(exists=True, file_okay=True, dir_okay=False),
               default='mechanisms/20180209_DG_GC_hoc_leak_mech.yaml')
-@click.option("--results-path", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
-              default='data')
 @click.option('--verbose', '-v', is_flag=True)
-def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefix, mech_file_path, results_path,
-         verbose):
+def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefix, mech_file_path, verbose):
     """
 
     :param gid:
@@ -472,12 +445,13 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     :param template_paths:
     :param hoc_lib_path:
     :param dataset_prefix:
-    :param results_path:
     :param verbose
     """
     comm = MPI.COMM_WORLD
-    env = init_env(config_file=config_file, template_paths=template_paths, hoc_lib_path=hoc_lib_path, comm=comm,
-                   dataset_prefix=dataset_prefix, results_path=results_path, verbose=verbose)
+    np.seterr(all='raise')
+    env = Env(comm, config_file, template_paths, hoc_lib_path, dataset_prefix, verbose=verbose)
+    configure_env(env)
+
     cell = get_hoc_cell_wrapper(env, gid, pop_name)
     context.update(locals())
 
