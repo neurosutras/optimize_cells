@@ -415,11 +415,6 @@ def init_env(config_file, template_paths, hoc_lib_path, comm, dataset_prefix=Non
     np.seterr(all='raise')
     env = Env(comm, config_file, template_paths, dataset_prefix, results_path, verbose=verbose, **kwargs)
     configure_env(env, hoc_lib_path)
-    env.cell_attr_index_map = {}
-    env.cell_attr_dict = {}
-    env.syn_attrs_dict = {}
-    env.syn_index_map = {}
-    env.sec_index_map = {}
     return env
 
 
@@ -433,18 +428,23 @@ def get_hoc_cell_wrapper(env, gid, pop_name):
     """
     hoc_cell = make_hoc_cell(env, gid, pop_name)
     cell = HocCell(gid=0, population=pop_name, hoc_cell=hoc_cell)
-    if pop_name not in env.cell_attr_index_map:
-        env.cell_attr_index_map[pop_name] = get_cell_attributes_index_map(env.comm, env.dataFilePath, pop_name,
-                                                                      'Synapse Attributes')
-    env.cell_attr_dict[gid] = select_cell_attributes(gid, env.comm, env.dataFilePath, env.cell_attr_index_map[pop_name],
-                                                     pop_name, 'Synapse Attributes')
-    env.syn_attrs_dict[gid], env.syn_index_map[gid] = build_syn_attrs_dict(env.cell_attr_dict, gid)
-    env.sec_index_map[gid] = build_sec_index_map(env.cell_attr_dict, gid)
-
-    datasetPath = os.path.join(env.datasetPrefix, env.datasetName)
-    connectivityFilePath = os.path.join(datasetPath, env.modelConfig['Connection Data'])
-    fill_source_info(connectivityFilePath, env.cell_attr_dict, env.syn_index_map, gid, pop_name, env)
-    fill_syn_mech_names(env.syn_attrs_dict, env.syn_index_map, env.cell_attr_dict, gid, pop_name, env)
+    syn_attrs = env.synapse_attributes
+    if pop_name not in syn_attrs.select_cell_attr_index_map:
+        syn_attrs.select_cell_attr_index_map[pop_name] = \
+            get_cell_attributes_index_map(env.comm, env.dataFilePath, pop_name, 'Synapse Attributes')
+    syn_attrs.load_syn_id_attrs(gid,
+                                select_cell_attributes(gid, env.comm, env.dataFilePath,
+                                                       syn_attrs.select_cell_attr_index_map[pop_name], pop_name,
+                                                       'Synapse Attributes'))
+    for source_name in env.projection_dict[pop_name]:
+        if source_name not in syn_attrs.select_edge_attr_index_map[pop_name]:
+            syn_attrs.select_edge_attr_index_map[pop_name][source_name] = \
+                get_edge_attributes_index_map(env.comm, env.connectivityFilePath, source_name, pop_name)
+        source_indexes, edge_attr_dict = \
+            select_edge_attributes(gid, env.comm, env.connectivityFilePath,
+                                   syn_attrs.select_edge_attr_index_map[pop_name][source_name], source_name, pop_name,
+                                   ['Synapses'])
+        syn_attrs.load_edge_attrs(gid, source_name, edge_attr_dict['Synapses']['syn_id'], env)
     return cell
 
 
@@ -481,12 +481,11 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     cell = get_hoc_cell_wrapper(env, gid, pop_name)
     context.update(locals())
 
-    init_mechanisms(cell, reset_cable=True, from_file=True, mech_file_path=mech_file_path, cm_correct=True,
-                    g_pas_correct=True, cell_attr_dict=env.cell_attr_dict[gid],
-                    sec_index_map=env.sec_index_map[gid], env=env)
-
-
+    init_mechanisms(cell, reset_cable=True, from_file=True, mech_file_path=mech_file_path, correct_cm=True,
+                    correct_g_pas=True, env=env)
     """
+
+    
     #Synapses
     #subset_syn_list = [5, 10]
     subset_syn_list = context.cell_attr_dict[gid]['syn_ids']

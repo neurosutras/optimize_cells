@@ -39,9 +39,8 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     env = init_env(config_file=config_file, template_paths=template_paths, hoc_lib_path=hoc_lib_path, comm=comm,
                    dataset_prefix=dataset_prefix, results_path=results_path, verbose=verbose)
     cell = get_hoc_cell_wrapper(env, gid, pop_name)
-    init_mechanisms(cell, reset_cable=True, from_file=True, mech_file_path=mech_file_path, cm_correct=True,
-                    g_pas_correct=True, cell_attr_dict=env.cell_attr_dict[gid],
-                    sec_index_map=env.sec_index_map[gid], env=env)
+    init_mechanisms(cell, reset_cable=True, from_file=True, mech_file_path=mech_file_path, correct_cm=True,
+                    correct_g_pas=True, env=env)
 
     h('proc record_netcon_weight_element() { $o1.record(&$o2.weight[$3], $4) }')
 
@@ -67,9 +66,11 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
                                 'g_unit': 0.00015, 'dur_onset': 10., 'tau_offset': 35., 'sat': 0.9, 'e': 0.},
                   'Exp2Syn': {'weight': 0.0016, 'tau1': 0.5, 'tau2': 5., 'e': 0.}
                   }
+
+    syn_attrs = env.synapse_attributes
     syn_node = cell.apical[-1]  # cell.tree.root
     syn = add_unique_synapse(syn_name=mech_name, seg=syn_node.sec(0.5))
-    config_syn(syn_name=mech_name, rules=env.synapse_param_rules, syn=syn, **syn_params[mech_name])
+    config_syn(syn_name=mech_name, rules=syn_attrs.syn_param_rules, syn=syn, **syn_params[mech_name])
 
     # drive input with spike train
     ISI = 100.
@@ -89,7 +90,7 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
         this_netcon = h.NetCon(this_vecstim, syn, -30., 0., 1.)
         this_netcon.pre().play(h.Vector(this_input_spike_train))
         netcon_list.append(this_netcon)
-        config_syn(mech_name, rules=env.synapse_param_rules, nc=this_netcon, **syn_params[mech_name])
+        config_syn(mech_name, rules=syn_attrs.syn_param_rules, nc=this_netcon, **syn_params[mech_name])
 
     duration = this_input_spike_train[-1] + 150.
     sim = QuickSim(duration)
