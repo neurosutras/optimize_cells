@@ -32,10 +32,14 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     :param verbose
     """
     comm = MPI.COMM_WORLD
-    env = init_env(config_file=config_file, template_paths=template_paths, hoc_lib_path=hoc_lib_path, comm=comm,
-                   dataset_prefix=dataset_prefix, results_path=results_path, verbose=verbose)
-    cell = get_hoc_cell_wrapper(env, gid, pop_name)
-    init_mechanisms(cell, reset_cable=True, from_file=True, mech_file_path=mech_file_path, correct_cm=True,
+    np.seterr(all='raise')
+    env = Env(comm, config_file, template_paths, hoc_lib_path, dataset_prefix, verbose=verbose)
+    configure_env(env)
+
+    cell = get_biophys_cell(env, gid, pop_name)
+    context.update(locals())
+
+    init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=mech_file_path, correct_cm=True,
                     correct_g_pas=True, env=env)
 
     equilibrate = 250.
