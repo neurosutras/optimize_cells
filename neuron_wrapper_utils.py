@@ -87,7 +87,7 @@ class QuickSim(object):
     def append_rec(self, cell, node, loc=None, param='_ref_v', object=None, ylabel='Vm', units='mV', description=None):
         """
 
-        :param cell: :class:'HocCell'
+        :param cell: :class:'BiophysCell'
         :param node: :class:'SHocNode
         :param loc: float
         :param param: str
@@ -146,7 +146,7 @@ class QuickSim(object):
     def append_stim(self, cell, node, loc, amp, delay, dur, description='IClamp'):
         """
 
-        :param cell: :class:'HocCell'
+        :param cell: :class:'BiophysCell'
         :param node: :class:'SHocNode'
         :param loc: float
         :param amp: float
@@ -394,7 +394,7 @@ def configure_env(env):
         h.templatePaths.append(h.templatePathValue)
 
 
-def get_hoc_cell_wrapper(env, gid, pop_name):
+def get_biophys_cell(env, gid, pop_name):
     """
 
     :param env:
@@ -403,7 +403,7 @@ def get_hoc_cell_wrapper(env, gid, pop_name):
     :return:
     """
     hoc_cell = make_hoc_cell(env, gid, pop_name)
-    cell = HocCell(gid=gid, population=pop_name, hoc_cell=hoc_cell)
+    cell = BiophysCell(gid=gid, population=pop_name, hoc_cell=hoc_cell)
     syn_attrs = env.synapse_attributes
     if pop_name not in syn_attrs.select_cell_attr_index_map:
         syn_attrs.select_cell_attr_index_map[pop_name] = \
@@ -411,6 +411,7 @@ def get_hoc_cell_wrapper(env, gid, pop_name):
     syn_attrs.load_syn_id_attrs(gid, select_cell_attributes(gid, env.comm, env.dataFilePath,
                                                             syn_attrs.select_cell_attr_index_map[pop_name], pop_name,
                                                             'Synapse Attributes'))
+
     for source_name in env.projection_dict[pop_name]:
         if source_name not in syn_attrs.select_edge_attr_index_map[pop_name]:
             syn_attrs.select_edge_attr_index_map[pop_name][source_name] = \
@@ -452,10 +453,10 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     env = Env(comm, config_file, template_paths, hoc_lib_path, dataset_prefix, verbose=verbose)
     configure_env(env)
 
-    cell = get_hoc_cell_wrapper(env, gid, pop_name)
+    cell = get_biophys_cell(env, gid, pop_name)
     context.update(locals())
 
-    init_mechanisms(cell, reset_cable=True, from_file=True, mech_file_path=mech_file_path, correct_cm=True,
+    init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=mech_file_path, correct_cm=True,
                     correct_g_pas=True, env=env)
     """
 
