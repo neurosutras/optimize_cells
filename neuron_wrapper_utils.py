@@ -432,7 +432,7 @@ def get_hoc_cell_wrapper(env, gid, pop_name):
 @click.option("--hoc-lib-path", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
               default='../dentate')
 @click.option("--dataset-prefix", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
-              default='../dentate/datasets')  # '/mnt/s')  # '../dentate/datasets'
+              default='/mnt/s')  # '/mnt/s')  # '../dentate/datasets'
 @click.option("--mech-file-path", required=True, type=click.Path(exists=True, file_okay=True, dir_okay=False),
               default='mechanisms/20180209_DG_GC_hoc_leak_mech.yaml')
 @click.option('--verbose', '-v', is_flag=True)

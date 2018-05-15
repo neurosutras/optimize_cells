@@ -61,7 +61,6 @@ def main(config_file_path, output_dir, export, export_file_path, label, disp, ve
     print 'objectives:'
     pprint.pprint(objectives)
 
-
 def config_interactive(config_file_path=None, output_dir=None, temp_output_path=None, export=False,
                        export_file_path=None, label=None, disp=True, verbose=2, **kwargs):
     """
@@ -303,7 +302,9 @@ def setup_cell(verbose=1, cvode=False, daspk=False, **kwargs):
             context.comm = MPI.COMM_WORLD
         except Exception:
             raise Exception('optimize_DG_GC_hoc_spiking: problem importing from mpi4py; required for config_interactive')
-    context.env = init_env(comm=context.comm, **kwargs)
+    #context.env = init_env(comm=context.comm, **kwargs)
+    env = Env(comm=context.comm,  verbose=verbose, **kwargs)
+    configure_env(env)
     cell = get_hoc_cell_wrapper(context.env, context.gid, context.population)
     init_mechanisms(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path, correct_cm=True,
                     correct_g_pas=True, env=context.env)

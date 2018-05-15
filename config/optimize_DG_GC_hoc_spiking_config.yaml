@@ -92,8 +92,8 @@ kwargs:
   config_file: ../dentate/config/Small_Scale_Control_log_normal_weights.yaml
   template_paths: ../dgc/Mateos-Aparicio2014:../dentate/templates
   hoc_lib_path: ../dentate
-  # dataset_prefix: /mnt/s
-  dataset_prefix: ../dentate/datasets
+  dataset_prefix: /mnt/s
+  # dataset_prefix: ../dentate/datasets
   results_path: data
 objective_names:
 - v_th
