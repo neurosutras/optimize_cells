@@ -62,13 +62,13 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
                                 'netcon_params': {'g0': 4, 'f1': 6}},
                   'Exp2Syn': {'mech_params': ['g']}
                   }
-    syn_params = {'SatExp2Syn': {'g_unit': 0.00015, 'dur_onset': 1., 'tau_offset': 5., 'sat': 0.9, 'e': 0.},
+    syn_params = {'SatExp2Syn': {'g_unit': 0.00015, 'dur_onset': 50., 'tau_offset': 200., 'sat': 0.9, 'e': -70.},
                   'AMPA_S': {},
                   'FacilExp2Syn': {'f_tau': 25., 'f_inc': 0.15, 'f_max': 0.6,
                                    'g_unit': 0.005, 'dur_onset': 10., 'tau_offset': 35., 'sat': 0.9, 'e': 0.},
                   'FacilNMDA': {'f_tau': 25., 'f_inc': 0.15, 'f_max': 0.6,
                                 'g_unit': 0.00015, 'dur_onset': 10., 'tau_offset': 35., 'sat': 0.9, 'e': 0.},
-                  'Exp2Syn': {'weight': 0.0016, 'tau1': 0.5, 'tau2': 5., 'e': 0.}
+                  'Exp2Syn': {'weight': 0.0016, 'tau1': 50., 'tau2': 200., 'e': -70.}
                   }
 
     syn_attrs = env.synapse_attributes
