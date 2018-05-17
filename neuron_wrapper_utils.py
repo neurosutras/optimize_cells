@@ -396,7 +396,7 @@ def configure_env(env):
 
 def get_biophys_cell(env, gid, pop_name):
     """
-
+    TODO: Provide options to cache 'Connection distances' and synaptic weights from file.
     :param env:
     :param gid:
     :param pop_name:
