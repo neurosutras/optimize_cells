@@ -396,7 +396,8 @@ def configure_env(env):
 
 def get_biophys_cell(env, gid, pop_name):
     """
-    TODO: Provide options to cache 'Connection distances' and synaptic weights from file.
+    TODO: Use Connections: distance attribute to compute and load netcon delays
+    TODO: Consult env for weights namespaces, load_syn_weights
     :param env:
     :param gid:
     :param pop_name:
@@ -458,17 +459,8 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
 
     init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=mech_file_path, correct_cm=True,
                     correct_g_pas=True, env=env)
-    """
-
-    
-    #Synapses
-    #subset_syn_list = [5, 10]
-    subset_syn_list = context.cell_attr_dict[gid]['syn_ids']
-    subset_source_names = subset_syns_by_source(subset_syn_list, context.cell_attr_dict, context.syn_index_map, gid, env)
-    subset_source_names = {'MPP': subset_source_names['MPP']} #test only by making MPP synapses
-    context.subset_source_names = subset_source_names
-    insert_syn_subset(cell, context.syn_attrs_dict, context.cell_attr_dict, gid, subset_source_names, env, pop_name)
-    """
+    # TODO init_syn_mech_attrs
+    update_cell_synapses_from_mech_attrs(cell, env, insert=True)
 
 
 if __name__ == '__main__':
