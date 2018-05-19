@@ -2,19 +2,12 @@
 Tools for pulling individual neurons out of the dentate network simulation environment for single-cell tuning.
 """
 __author__ = 'Ivan Raikov, Grace Ng, Aaron D. Milstein'
-import os.path
 import click
-try:
-    from mpi4py import MPI  # Must come before importing NEURON
-except Exception:
-    pass
-import h5py
-from neuron import h
+from dentate.utils import *
+from dentate.neuron_utils import *
 from neuroh5.h5py_io_utils import *
 from dentate.env import Env
 from dentate.cells import *
-from dentate.synapses import *
-from dentate.neuron_utils import *
 from nested.utils import *
 
 
@@ -404,7 +397,7 @@ def get_biophys_cell(env, gid, pop_name):
     :return:
     """
     hoc_cell = make_hoc_cell(env, gid, pop_name)
-    cell = BiophysCell(gid=gid, population=pop_name, hoc_cell=hoc_cell)
+    cell = BiophysCell(gid=gid, pop_name=pop_name, hoc_cell=hoc_cell)
     syn_attrs = env.synapse_attributes
     if pop_name not in syn_attrs.select_cell_attr_index_map:
         syn_attrs.select_cell_attr_index_map[pop_name] = \
