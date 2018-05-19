@@ -422,6 +422,7 @@ def get_biophys_cell(env, gid, pop_name):
                                    syn_attrs.select_edge_attr_index_map[pop_name][source_name], source_name, pop_name,
                                    ['Synapses'])
         syn_attrs.load_edge_attrs(gid, source_name, edge_attr_dict['Synapses']['syn_id'], env)
+    env.biophys_cells[pop_name][gid] = cell
     return cell
 
 
@@ -460,7 +461,7 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=mech_file_path, correct_cm=True,
                     correct_g_pas=True, env=env)
     # TODO init_syn_mech_attrs
-    update_cell_synapses_from_mech_attrs(cell, env, insert=True)
+    config_syns_from_mech_attrs(gid, env, pop_name, insert=True)
 
 
 if __name__ == '__main__':
