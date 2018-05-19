@@ -397,7 +397,7 @@ def get_biophys_cell(env, gid, pop_name):
     :return:
     """
     hoc_cell = make_hoc_cell(env, gid, pop_name)
-    cell = BiophysCell(gid=gid, pop_name=pop_name, hoc_cell=hoc_cell)
+    cell = BiophysCell(gid=gid, pop_name=pop_name, hoc_cell=hoc_cell, env=env)
     syn_attrs = env.synapse_attributes
     if pop_name not in syn_attrs.select_cell_attr_index_map:
         syn_attrs.select_cell_attr_index_map[pop_name] = \
