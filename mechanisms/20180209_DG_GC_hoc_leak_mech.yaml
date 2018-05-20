@@ -66,12 +66,12 @@ apical:
     - value: 0.03068362380290623
     - custom:
         branch_order: 5.0
-        method: custom_gradient_by_branch_order
+        func: custom_filter_by_branch_order
       min: 0.0
       origin: parent
       slope: -0.00022791073975362896
     - custom:
-        method: custom_gradient_by_terminal
+        func: custom_filter_by_terminal
       min: 0.0
       origin: parent
       slope: -0.00022791073975362896
