@@ -1,4 +1,3 @@
-#Expects there to already be a hoc cell with a python wrapper (as defined in cells.py); the python cell should be called cell.
 from neuron_wrapper_utils import *
 from optimize_cells.plot_results import *
 import click
@@ -20,7 +19,7 @@ def compare_single_value(key, x, seg, mech_name, param_name):
             print 'Model %s, Expected %s' % (format(model_val, 'e'), format(exp_val, 'e'))
 
 
-def run_standard_modify_mech_param_tests(cell):
+def standard_modify_mech_param_tests(cell):
     """
 
     :param cell:
@@ -133,7 +132,13 @@ def compare_nseg(nseg, distances, labels):
     plt.close()
 
 
-def run_cm_correction_test(cell, env, mech_file_path):
+def cm_correction_test(cell, env, mech_file_path):
+    """
+
+    :param cell:
+    :param env:
+    :param mech_file_path:
+    """
     init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=mech_file_path, correct_cm=False,
                     correct_g_pas=False, env=context.env)
     old_nseg, old_distances = count_nseg(cell)
@@ -153,6 +158,10 @@ def run_cm_correction_test(cell, env, mech_file_path):
 
 
 def run_cable_test(cell):
+    """
+
+    :param cell:
+    """
     plot_cable_param_distribution(cell, 'cm', export='old_cm.hdf5', param_label='cm', show=False, overwrite=True, scale_factor=1)
     modify_mech_param(cell, 'soma', 'cable', 'cm', value=2.)
     init_mechanisms(cell, reset_cable=True)
@@ -197,12 +206,67 @@ def run_cable_test(cell):
     #res parameter -- this should be a multiplier on the current nseg
 
 
-def count_syns(cell, context):
+def count_spines(cell, env):
+    """
+
+    :param cell:
+    :param env:
+    """
+    init_biophysics(cell, env, reset_cable=True, correct_cm=True)
+    syn_attrs = env.synapse_attributes
+    syn_id_attr_dict = syn_attrs.syn_id_attr_dict[cell.gid]
+    sec_index_map = syn_attrs.sec_index_map[cell.gid]
+    num_spines_list = []
+    distances = []
     for node in cell.apical:
-        all_syn = filtered_synapse_attributes(context.cell_attr_dict[0], np.array(context.sec_index_map[node.index]),
-                                              context.env, syn_category='excitatory', output='syn_locs')['syn_locs']
-        print ('%s: length %.3f, num synapses %i, num segments %i, density %.3f' %(node.name, node.sec.L, len(all_syn),
-                                                                                   node.sec.nseg, len(all_syn)/node.sec.L))
+        num_spines = len(get_filtered_syn_indexes(syn_id_attr_dict, sec_index_map[node.index],
+                                                  syn_types=[env.Synapse_Types['excitatory']]))
+        stored_num_spines = sum(node.spine_count)
+        if num_spines != stored_num_spines:
+            raise ValueError('count_spines_test: failed for node: %s; %i != %i' %
+                             (node.name, num_spines, stored_num_spines))
+        num_spines_list.append(num_spines)
+        distances.append(get_distance_to_node(cell, cell.tree.root, node, 0.5))
+        print 'count_spines_test: passed for node: %s; nseg: %i; L: %.2f um; spine_count: %i; density: %.2f /um' % \
+              (node.name, node.sec.nseg, node.sec.L, num_spines, num_spines/node.sec.L)
+    fig, axes = plt.subplots()
+    axes.scatter(distances, num_spines_list)
+    clean_axes(axes)
+    fig.show()
+
+
+def standard_modify_syn_mech_param_tests(cell, env):
+    """
+
+    :param cell:
+    :param env:
+    """
+    init_biophysics(cell, env, reset_cable=True, correct_cm=True)
+    syn_attrs = env.synapse_attributes
+    syn_id_attr_dict = syn_attrs.syn_id_attr_dict[cell.gid]
+    sec_index_map = syn_attrs.sec_index_map[cell.gid]
+    sec_type = 'apical'
+    syn_name = 'AMPA'
+    modify_syn_mech_param(cell, env, sec_type, syn_name, param_name='g_unit', value=0.0005,
+                          filters={'syn_types': ['excitatory']}, origin='soma', slope=0.00001, tau=50., xhalf=200.)
+    vals = []
+    distances = []
+    if sec_type in cell.nodes:
+        for node in cell.nodes[sec_type]:
+            syn_indexes = get_filtered_syn_indexes(syn_id_attr_dict, sec_index_map[node.index],
+                                                   syn_types=[env.Synapse_Types['excitatory']])
+            syn_ids = syn_id_attr_dict['syn_ids'][syn_indexes]
+            syn_locs = syn_id_attr_dict['syn_locs'][syn_indexes]
+            for syn_id, syn_loc in zip(syn_ids, syn_locs):
+                if syn_attrs.has_mech_attrs(cell.gid, syn_id, syn_name):
+                    vals.append(syn_attrs.get_mech_attrs(cell.gid, syn_id, syn_name)['g_unit'])
+                    distances.append(get_distance_to_node(cell, cell.tree.root, node, syn_loc))
+    fig, axes = plt.subplots()
+    axes.scatter(distances, vals)
+    clean_axes(axes)
+    fig.show()
+
+
 
 @click.command()
 @click.option("--gid", required=True, type=int, default=0)
@@ -238,8 +302,10 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
 
     # init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=mech_file_path, correct_cm=True,
     #                correct_g_pas=True, env=env)
-    run_standard_modify_mech_param_tests(cell)
-    run_cm_correction_test(cell, env, mech_file_path)
+    # standard_modify_mech_param_tests(cell)
+    # cm_correction_test(cell, env, mech_file_path)
+    # count_spines(cell, env)
+    standard_modify_syn_mech_param_tests(cell, env)
 
 
 if __name__ == '__main__':
