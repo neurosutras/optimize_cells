@@ -79,17 +79,17 @@ def run_standard_modify_mech_param_tests(cell):
     plot_mech_param_from_file('kad', 'gkabar', ['old_dend_kad.hdf5', 'new_dend_kad.hdf5'], ['old', 'new'],
                               param_label='dend.kad')
 
-    modify_mech_param(cell, 'soma', 'nas', 'gbar', x['soma.gbar_nas'])
     plot_mech_param_distribution(cell, 'nas', 'gbar', export='old_dend_nas.hdf5', param_label='dend.nas',
                                  show=False, sec_types='all', overwrite=True)
+    modify_mech_param(cell, 'soma', 'nas', 'gbar', x['soma.gbar_nas'])
     for sec_type in ['apical']:
-        update_mechanism_by_sec_type(cell, sec_type, 'nas')
+        modify_mech_param(cell, sec_type, 'nas', 'gbar', x['dend.gbar_nas'])
         modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=x['dend.gbar_nas slope'],
                           min=x['dend.gbar_nas min'],
-                          custom={'func': 'custom_gradient_by_branch_order',
+                          custom={'func': 'custom_filter_by_branch_order',
                                   'branch_order': x['dend.gbar_nas bo']}, append=True)
         modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=x['dend.gbar_nas slope'],
-                          min=x['dend.gbar_nas min'], custom={'func': 'custom_gradient_by_terminal'}, append=True)
+                          min=x['dend.gbar_nas min'], custom={'func': 'custom_filter_by_terminal'}, append=True)
     plot_mech_param_distribution(cell, 'nas', 'gbar', export='new_dend_nas.hdf5', param_label='dend.nas',
                                  show=False, sec_types='all', overwrite=True)
 
