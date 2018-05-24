@@ -302,7 +302,8 @@ def setup_cell(verbose=1, cvode=False, daspk=False, **kwargs):
             from mpi4py import MPI
             context.comm = MPI.COMM_WORLD
         except Exception:
-            raise Exception('optimize_DG_GC_hoc_spiking: problem importing from mpi4py; required for config_interactive')
+            raise Exception('optimize_DG_GC_hoc_spiking: problem importing from mpi4py; '
+                            'required for config_interactive')
     context.env = Env(comm=context.comm, **kwargs)
     configure_env(context.env)
     cell = get_biophys_cell(context.env, context.gid, context.population)

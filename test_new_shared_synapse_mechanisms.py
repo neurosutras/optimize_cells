@@ -51,24 +51,19 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     netcon_list = []
     vecstim_list = []
 
-    recordings = {'SatExp2Syn': {'mech_params': ['g'],
-                                 'netcon_params': {'g0': 4}
-                                 },
-                  'AMPA_S': {'mech_params': ['g'],
-                             'netcon_params': {'r0': 3}},
-                  'FacilExp2Syn': {'mech_params': ['g'],
-                                   'netcon_params': {'g0': 4, 'f1': 6}},
-                  'FacilNMDA': {'mech_params': ['g', 'B'],
-                                'netcon_params': {'g0': 4, 'f1': 6}},
-                  'Exp2Syn': {'mech_params': ['g']}
+    recordings = {'SatExp2Syn': {'mech_params': ['g']},  # , 'netcon_params': {'g0': 4}},
+                  'AMPA_S': {'mech_params': ['g']},  # , 'netcon_params': {'r0': 3}},
+                  'FacilExp2Syn': {'mech_params': ['g']},  # , 'netcon_params': {'g0': 4, 'f1': 6}},
+                  'FacilNMDA': {'mech_params': ['g']},  # , 'B'], 'netcon_params': {'g0': 4, 'f1': 6}},
+                  'LinExp2Syn': {'mech_params': ['g']}
                   }
-    syn_params = {'SatExp2Syn': {'g_unit': 0.00015, 'dur_onset': 50., 'tau_offset': 200., 'sat': 0.9, 'e': -70.},
+    syn_params = {'SatExp2Syn': {'g_unit': 0.00005, 'dur_onset': 10., 'tau_offset': 35., 'sat': 0.9, 'e': 0.},
                   'AMPA_S': {},
                   'FacilExp2Syn': {'f_tau': 25., 'f_inc': 0.15, 'f_max': 0.6,
-                                   'g_unit': 0.005, 'dur_onset': 10., 'tau_offset': 35., 'sat': 0.9, 'e': 0.},
+                                   'g_unit': 0.00005, 'dur_onset': 10., 'tau_offset': 35., 'sat': 0.9, 'e': 0.},
                   'FacilNMDA': {'f_tau': 25., 'f_inc': 0.15, 'f_max': 0.6,
-                                'g_unit': 0.00015, 'dur_onset': 10., 'tau_offset': 35., 'sat': 0.9, 'e': 0.},
-                  'Exp2Syn': {'weight': 0.0016, 'tau1': 50., 'tau2': 200., 'e': -70.}
+                                'g_unit': 0.00005, 'dur_onset': 10., 'tau_offset': 35., 'sat': 0.9, 'e': 0.},
+                  'LinExp2Syn': {'g_unit': 0.00005, 'tau_rise': 10., 'tau_decay': 35., 'e': 0.}
                   }
 
     syn_attrs = env.synapse_attributes
@@ -97,7 +92,7 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
         config_syn(mech_name, rules=syn_attrs.syn_param_rules, nc=this_netcon, **syn_params[mech_name])
 
     duration = this_input_spike_train[-1] + 150.
-    sim = QuickSim(duration)
+    sim = QuickSim(duration, cvode=False)
     sim.append_rec(cell, cell.tree.root, 0.5, description='soma Vm')
     if syn_node != cell.tree.root:
         sim.append_rec(cell, syn_node, 0.5, description='%s Vm' % syn_node.name)
@@ -118,8 +113,11 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     if mech_name in ['SatExp2Syn', 'FacilExp2Syn']:
         for i in xrange(num_syns):
             description = 'netcon%i_g0' % i
-            sim.get_rec(description)['vec'] = np.divide(sim.get_rec(description)['vec'],
-                                                       getattr(syn, 'g_inf') * getattr(syn, 'sat'))
+            for rec in sim.rec_list:
+                if rec['description'] == description:
+                    sim.get_rec(description)['vec'] = \
+                        sim.get_rec(description)['vec'] * getattr(syn, 'g_unit') / getattr(syn, 'sat')
+                    break
     sim.plot()
 
 

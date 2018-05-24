@@ -2,19 +2,12 @@
 Tools for pulling individual neurons out of the dentate network simulation environment for single-cell tuning.
 """
 __author__ = 'Ivan Raikov, Grace Ng, Aaron D. Milstein'
-import os.path
 import click
-try:
-    from mpi4py import MPI  # Must come before importing NEURON
-except Exception:
-    pass
-import h5py
-from neuron import h
+from dentate.utils import *
+from dentate.neuron_utils import *
 from neuroh5.h5py_io_utils import *
 from dentate.env import Env
 from dentate.cells import *
-from dentate.synapses import *
-from dentate.neuron_utils import *
 from nested.utils import *
 
 
@@ -396,14 +389,15 @@ def configure_env(env):
 
 def get_biophys_cell(env, gid, pop_name):
     """
-    TODO: Provide options to cache 'Connection distances' and synaptic weights from file.
+    TODO: Use Connections: distance attribute to compute and load netcon delays
+    TODO: Consult env for weights namespaces, load_syn_weights
     :param env:
     :param gid:
     :param pop_name:
     :return:
     """
     hoc_cell = make_hoc_cell(env, gid, pop_name)
-    cell = BiophysCell(gid, pop_name, hoc_cell=hoc_cell)
+    cell = BiophysCell(gid=gid, pop_name=pop_name, hoc_cell=hoc_cell, env=env)
     syn_attrs = env.synapse_attributes
     if pop_name not in syn_attrs.select_cell_attr_index_map:
         syn_attrs.select_cell_attr_index_map[pop_name] = \
@@ -421,6 +415,7 @@ def get_biophys_cell(env, gid, pop_name):
                                    syn_attrs.select_edge_attr_index_map[pop_name][source_name], source_name, pop_name,
                                    ['Synapses'])
         syn_attrs.load_edge_attrs(gid, source_name, edge_attr_dict['Synapses']['syn_id'], env)
+    env.biophys_cells[pop_name][gid] = cell
     return cell
 
 
@@ -458,6 +453,8 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
 
     init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=mech_file_path, correct_cm=True,
                     correct_g_pas=True, env=env)
+    # TODO init_syn_mech_attrs
+    config_syns_from_mech_attrs(gid, env, pop_name, insert=True)
 
 
 if __name__ == '__main__':
