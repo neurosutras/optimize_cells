@@ -1734,81 +1734,118 @@ def plot_synaptic_parameter_GC(rec_file_list, param_names=None, description_list
 
 
 
-def plot_synaptic_param_distribution(cell, syn_type, param_name, scale_factor=1., param_label=None,
-                                 ylabel='Peak conductance', yunits='uS', svg_title=None):
+def plot_synaptic_param_distribution(cell, env, syn_name, param_name, export=None, overwrite=False, scale_factor=1.,
+                                     param_label=None, ylabel='Peak conductance', yunits='uS', svg_title=None, show=True):
     """
-    Takes a cell as input rather than a file. No simulation is required, this method just takes a fully specified cell
-    and plots the relationship between distance and the specified synaptic parameter for all spines. Used while
-    debugging specification of synaptic parameters.
-    :param cell: :class:'HocCell'
-    :param syn_type: str
+    Plots synapse attributes that are stored in env.synapse_attributes.syn_id_attr_dict. No simulation is required, this
+    method just takes a fully specified cell and plots the relationship between distance and the specified synaptic
+    parameter. Used while debugging specification of synaptic parameters.
+
+    :param cell: :class:'BiophysCell'
+    :param env: :class:'Env'
+    :param syn_name: str
     :param param_name: str
+    :param export: str (name of hdf5 file for export)
+    :param overwrite: bool (whether to overwrite or append to potentially existing hdf5 file)
     :param scale_factor: float
     :param param_label: str
     :param ylabel: str
     :param yunits: str
     :param svg_title: str
+    :param show: bool (whether to show the plot, or simply save the hdf5 file)
+    :return:
     """
-    colors = ['k', 'r', 'c', 'y', 'm', 'g', 'b']
-    dend_types = ['basal', 'trunk', 'apical', 'tuft']
-
     if svg_title is not None:
         remember_font_size = mpl.rcParams['font.size']
         mpl.rcParams['font.size'] = 20
+    dend_types = ['basal', 'trunk', 'apical', 'tuft']
     fig, axes = plt.subplots(1)
-    maxval, minval = None, None
-    for i, sec_type in enumerate(dend_types):
-        syn_list = []
-        distances = []
-        param_vals = []
-
-        for branch in cell.get_nodes_of_subtype(sec_type):
-            for spine in branch.spines:
-                syn_list.extend(spine.synapses)
-            syn_list.extend(branch.synapses)
-        for syn in [syn for syn in syn_list if syn_type in syn._syn]:
-            if syn.node.type == 'spine_head':
-                this_distance = cell.get_distance_to_node(cell.tree.root, syn.node.parent.parent, syn.loc)
-            else:
-                this_distance = cell.get_distance_to_node(cell.tree.root, syn.node, syn.loc)
-            distances.append(this_distance)
-            if sec_type == 'basal':
-                    distances[-1] *= -1
-            param_vals.append(getattr(syn.target(syn_type), param_name) * scale_factor)
-        if param_vals:
-            axes.scatter(distances, param_vals, color=colors[i], label=sec_type)
+    maxval, minval = 1., 0.
+    distances = {}
+    param_vals = {}
+    sec_types_list = [sec_type for sec_type in dend_types if sec_type in cell.nodes.keys()]
+    num_colors = 10
+    color_x = np.linspace(0., 1., num_colors)
+    colors = [cm.Set1(x) for x in color_x]
+    for i, sec_type in enumerate(sec_types_list):
+        distances[sec_type] = []
+        param_vals[sec_type] = []
+        for branch in cell.nodes[sec_type]:
+            for seg in [seg for seg in branch.sec if hasattr(seg, mech_name)]:
+                distances[sec_type].append(get_distance_to_node(cell, cell.tree.root, branch, seg.x))
+                if sec_type == 'basal':
+                    distances[sec_type][-1] *= -1
+                param_vals[sec_type].append(getattr(getattr(seg, mech_name), param_name) * scale_factor)
+        if param_vals[sec_type]:
+            axes.scatter(distances[sec_type], param_vals[sec_type],
+                         color=colors[i], label=sec_type, alpha=0.5)
             if maxval is None:
-                maxval = max(param_vals)
+                maxval = max(param_vals[sec_type])
             else:
-                maxval = max(maxval, max(param_vals))
+                maxval = max(maxval, max(param_vals[sec_type]))
             if minval is None:
-                minval = min(param_vals)
+                minval = min(param_vals[sec_type])
             else:
-                minval = min(minval, min(param_vals))
-
+                minval = min(minval, min(param_vals[sec_type]))
+    axes.set_xlabel('Distance to soma (um)')
+    distances_list = []
+    for dist_list in distances.itervalues():
+        distances_list.extend(dist_list)
+    xmax0 = max(0.1, max(distances_list))
+    xmin0 = min(0, min(distances_list))
+    xmin = xmin0 - 0.01 * (xmax0 - xmin0)
+    xmax = xmax0 + 0.01 * (xmax0 - xmin0)
+    axes.set_xlim(xmin, xmax)
     axes.set_ylabel(ylabel + ' (' + yunits + ')')
     if (maxval is not None) and (minval is not None):
-        buffer = 0.1 * (maxval - minval)
+        buffer = 0.01 * (maxval - minval)
         axes.set_ylim(minval - buffer, maxval + buffer)
-    axes.set_xlabel('Distance to soma (um)')
-    axes.set_xlim(-200., 525.)
-    axes.set_xticks([-150., 0., 150., 300., 450.])
-    plt.legend(loc='best', scatterpoints=1, frameon=False, framealpha=0.5, fontsize=mpl.rcParams['font.size'])
     if param_label is not None:
-        plt.title(param_label, fontsize=mpl.rcParams['font.size'])
+        axes.set_title(param_label, fontsize=mpl.rcParams['font.size'])
+    axes.legend(loc='best', scatterpoints=1, frameon=False, framealpha=0.5, fontsize=mpl.rcParams['font.size'])
     clean_axes(axes)
     axes.tick_params(direction='out')
     if not svg_title is None:
         if param_label is not None:
-            svg_title = svg_title+' - '+param_label+'.svg'
+            svg_title = svg_title + ' - ' + param_label + '.svg'
         else:
-            svg_title = svg_title+' - '+syn_type+'_'+param_name+' distribution.svg'
+            svg_title = svg_title + ' - ' + mech_name + '_' + param_name + ' distribution.svg'
         fig.set_size_inches(5.27, 4.37)
-        fig.savefig(data_dir+svg_title, format='svg', transparent=True)
-    plt.show()
+        fig.savefig(data_dir + svg_title, format='svg', transparent=True)
+    if show:
+        plt.show()
     plt.close()
     if svg_title is not None:
         mpl.rcParams['font.size'] = remember_font_size
+
+    if export is not None:
+        if overwrite:
+            f = h5py.File(data_dir + export + '.hdf5', 'w')
+        else:
+            f = h5py.File(data_dir + export + '.hdf5', 'a')
+        if 'mech_file_path' in f.attrs.keys():
+            if not (f.attrs['mech_file_path'] == '{}'.format(cell.mech_file_path)):
+                raise Exception('Specified mechanism filepath {} does not match the mechanism filepath '
+                                'of the cell {}'.format(f.attrs['mech_file_path'], cell.mech_file_path))
+        else:
+            f.attrs['mech_file_path'] = '{}'.format(cell.mech_file_path)
+        if mech_name in f.keys():
+            if param_name in f[mech_name].keys():
+                return
+            else:
+                f[mech_name].create_group(param_name)
+        else:
+            f.create_group(mech_name)
+            f[mech_name].create_group(param_name)
+        for sec_type in param_vals.keys():
+            f[mech_name][param_name].create_group(sec_type)
+            f[mech_name][param_name][sec_type].create_dataset('values', data=param_vals[sec_type])
+        if not 'distances' in f.keys():
+            f.create_group('distances')
+            for sec_type in distances.keys():
+                f['distances'].create_group(sec_type)
+                f['distances'][sec_type].create_dataset('values', data=distances[sec_type])
+        f.close()
 
 
 def plot_synaptic_attribute_distribution(cell, syn_category, syn_type, param_name, scale_factor=1., param_label=None,
@@ -1936,7 +1973,6 @@ def plot_mech_param_distribution_old(cell, mech_name, param_name, scale_factor=1
 def plot_mech_param_distribution(cell, mech_name, param_name, export=None, overwrite=False, scale_factor=10000.,
                         param_label=None, ylabel='Conductance density', yunits='pS/um2', svg_title=None, show=True):
     """
-    cell = DG_GC(morph_filename = 'DG_GC_355549.swc', mech_filename='120116 DG_GC pas no_spines', full_spines=False)
     Takes a cell as input rather than a file. No simulation is required, this method just takes a fully specified cell
     and plots the relationship between distance and the specified mechanism parameter for all dendritic segments. Used
     while debugging specification of mechanism parameters.
