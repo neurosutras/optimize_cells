@@ -247,10 +247,17 @@ def standard_modify_syn_mech_param_tests(cell, env):
     sec_index_map = syn_attrs.sec_index_map[cell.gid]
     sec_type = 'apical'
     syn_name = 'AMPA'
-    modify_syn_mech_param(cell, env, sec_type, syn_name, param_name='g_unit', value=0.0005,
-                          filters={'syn_types': ['excitatory']}, origin='soma', slope=0.00001, tau=50., xhalf=200.)
-    vals = []
-    distances = []
+    param_name = 'g_unit'
+    modify_syn_mech_param(cell, env, sec_type, syn_name, param_name=param_name, value=0.0005,
+                          filters={'syn_types': ['excitatory']}, origin='soma', slope=0.0001, tau=50., xhalf=200.)
+    modify_syn_mech_param(cell, env, sec_type, syn_name, param_name=param_name,
+                          filters={'syn_types': ['excitatory'], 'layers': ['OML']}, origin='apical',
+                          origin_filters={'syn_types': ['excitatory'], 'layers': ['MML']}, update_targets=True,
+                          append=True)
+    attr_vals = []
+    target_vals = []
+    attr_distances = []
+    target_distances = []
     if sec_type in cell.nodes:
         for node in cell.nodes[sec_type]:
             syn_indexes = get_filtered_syn_indexes(syn_id_attr_dict, sec_index_map[node.index],
@@ -259,10 +266,19 @@ def standard_modify_syn_mech_param_tests(cell, env):
             syn_locs = syn_id_attr_dict['syn_locs'][syn_indexes]
             for syn_id, syn_loc in zip(syn_ids, syn_locs):
                 if syn_attrs.has_mech_attrs(cell.gid, syn_id, syn_name):
-                    vals.append(syn_attrs.get_mech_attrs(cell.gid, syn_id, syn_name)['g_unit'])
-                    distances.append(get_distance_to_node(cell, cell.tree.root, node, syn_loc))
+                    attr_vals.append(syn_attrs.get_mech_attrs(cell.gid, syn_id, syn_name)[param_name])
+                    attr_distances.append(get_distance_to_node(cell, cell.tree.root, node, syn_loc))
+                if syn_attrs.has_netcon(cell.gid, syn_id, syn_name):
+                    this_nc = syn_attrs.get_netcon(cell.gid, syn_id, syn_name)
+                    target_vals.append(get_syn_mech_param(syn_name, syn_attrs.syn_param_rules, param_name,
+                                       mech_names=syn_attrs.syn_mech_names, nc=this_nc))
+                    target_distances.append(get_distance_to_node(cell, cell.tree.root, node, syn_loc))
     fig, axes = plt.subplots()
-    axes.scatter(distances, vals)
+    axes.scatter(attr_distances, np.multiply(attr_vals, 1000.), alpha=0.25, c='c', label='syn_attrs')
+    axes.scatter(target_distances, np.multiply(target_vals, 1000.), alpha=0.25, c='m', label='target_syn_vals')
+    axes.set_xlabel('Distance from soma (um)')
+    axes.set_ylabel('Unitary conductance (nS)')
+    axes.legend(loc='best', frameon=False, framealpha=0.5)
     clean_axes(axes)
     fig.show()
 
