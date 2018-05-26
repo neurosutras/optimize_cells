@@ -22,7 +22,7 @@ context = Context()
 @click.option("--export-file-path", type=str, default=None)
 @click.option("--label", type=str, default=None)
 @click.option("--disp", is_flag=True)
-@click.option("--verbose", type=int, default=1)
+@click.option("--verbose", type=int, default=2)
 def main(config_file_path, output_dir, export, export_file_path, label, disp, verbose):
     """
 
@@ -199,6 +199,13 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
     if not context.update_context_funcs:
         raise Exception('update_context function not found')
 
+    if 'comm' not in context():
+        try:
+            from mpi4py import MPI
+            context.comm = MPI.COMM_WORLD
+        except Exception:
+            raise Exception('optimize_DG_GC_hoc_spiking: config_interactive: problem importing from mpi4py')
+
     context.disp=disp
     context.rel_bounds_handler = RelativeBoundedStep(context.x0_array, context.param_names, context.bounds,
                                                      context.rel_bounds)
@@ -221,28 +228,37 @@ def config_controller(export_file_path, output_dir, **kwargs):
 
 def config_worker(update_context_funcs, param_names, default_params, feature_names, objective_names, target_val,
                   target_range, temp_output_path, export_file_path, output_dir, disp, mech_file_path, gid,
-                  population, spines, **kwargs):
+                  cell_type, correct_for_spines, **kwargs):
     """
     :param update_context_funcs: list of function references
     :param param_names: list of str
     :param default_params: dict
-    :param target_val: dict
-    :param target_range: dict
     :param feature_names: list of str
     :param objective_names: list of str
+    :param target_val: dict
+    :param target_range: dict
     :param temp_output_path: str
     :param export_file_path: str
     :param output_dir: str (dir path)
     :param disp: bool
     :param mech_file_path: str
     :param gid: int
-    :param population: str
-    :param spines: bool
+    :param cell_type: str
+    :param correct_for_spines: bool
     """
     context.update(locals())
     context.update(kwargs)
-    init_context()
-    setup_cell(**kwargs)
+    if not context_has_sim_env(context):
+        build_sim_env(context, **kwargs)
+
+
+def context_has_sim_env(context):
+    """
+
+    :param context: :class:'Context
+    :return: bool
+    """
+    return 'env' in context() and 'sim' in context() and 'cell' in context()
 
 
 def init_context():
@@ -252,12 +268,11 @@ def init_context():
     equilibrate = 250.  # time to steady-state
     stim_dur = 500.
     duration = equilibrate + stim_dur
-    dt = 0.02
+    dt = 0.025
     th_dvdt = 10.
     v_init = -77.
     v_active = -77.
-    i_holding = {'soma': 0., 'dend': 0., 'distal_dend': 0.}
-    i_th = {'soma': 0.1}
+    i_th_max = 0.4
 
     # GC experimental spike adaptation data from Brenner...Aldrich, Nat. Neurosci., 2005
     experimental_spike_times = [0., 8.57331572, 21.79656539, 39.24702774, 60.92470277, 83.34214003, 109.5640687,
@@ -267,10 +282,33 @@ def init_context():
     experimental_adaptation_indexes = []
     for i in xrange(3, len(experimental_spike_times) + 1):
         experimental_adaptation_indexes.append(get_adaptation_index(experimental_spike_times[:i]))
+
     # GC experimental f-I data from Kowalski J...Pernia-Andrade AJ, Hippocampus, 2016
     i_inj_increment = 0.05
     num_increments = 10
     context.update(locals())
+
+
+def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
+    """
+
+    :param context: :class:'Context'
+    :param verbose: int
+    :param cvode: bool
+    :param daspk: bool
+    """
+    init_context()
+    context.env = Env(comm=context.comm, **kwargs)
+    configure_env(context.env)
+    cell = get_biophys_cell(context.env, context.gid, context.cell_type)
+    init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path,
+                    correct_cm=context.correct_for_spines, correct_g_pas=context.correct_for_spines, env=context.env)
+    duration = context.duration
+    dt = context.dt
+    context.sim = QuickSim(context.duration, cvode=cvode, daspk=daspk, dt=context.dt, verbose=verbose>1)
+    context.spike_output_vec = h.Vector()
+    cell.spike_detector.record(context.spike_output_vec)
+    context.cell = cell
 
 
 def get_adaptation_index(spike_times):
@@ -290,151 +328,160 @@ def get_adaptation_index(spike_times):
     return np.mean(adi)
 
 
-def setup_cell(verbose=1, cvode=False, daspk=False, **kwargs):
+def config_sim_env(context):
     """
 
-    :param verbose: int
-    :param cvode: bool
-    :param daspk: bool
+    :param context: :class:'Context'
     """
-    if 'comm' not in context():
-        try:
-            from mpi4py import MPI
-            context.comm = MPI.COMM_WORLD
-        except Exception:
-            raise Exception('optimize_DG_GC_hoc_spiking: problem importing from mpi4py; '
-                            'required for config_interactive')
-    context.env = Env(comm=context.comm, **kwargs)
-    configure_env(context.env)
-    cell = get_biophys_cell(context.env, context.gid, context.population)
-    init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path, correct_cm=True,
-                    correct_g_pas=True, env=context.env)
-
-    # get the thickest apical dendrite ~200 um from the soma
-    candidate_branches = []
-    candidate_diams = []
-    candidate_locs = []
-    for branch in cell.apical:
-        if ((get_distance_to_node(cell, cell.tree.root, branch, 0.) >= 130.) &
-                (get_distance_to_node(cell, cell.tree.root, branch, 1.) > 280.) & (not is_terminal(branch))):
-            candidate_branches.append(branch)
-            for seg in branch.sec:
-                loc = seg.x
-                if get_distance_to_node(cell, cell.tree.root, branch, loc) > 250.:
-                    candidate_diams.append(branch.sec(loc).diam)
-                    candidate_locs.append(loc)
-                    break
-    index = candidate_diams.index(max(candidate_diams))
-    dend = candidate_branches[index]
-    dend_loc = candidate_locs[index]
-    axon_seg_locs = [seg.x for seg in cell.axon[0].sec]
-    rec_locs = {'soma': 0., 'dend': dend_loc, 'ais': 1., 'axon': axon_seg_locs[0]}
-    context.rec_locs = rec_locs
-    rec_nodes = {'soma': cell.tree.root, 'dend': dend, 'ais': cell.ais[0], 'axon': cell.axon[0]}
-    context.rec_nodes = rec_nodes
+    if 'previous_module' in context() and context.previous_module == __file__:
+        return
+    init_context()
+    if 'i_holding' not in context():
+        context.i_holding = defaultdict(dict)
+    if 'i_th' not in context():
+        context.i_th = defaultdict(dict)
+    cell = context.cell
+    sim = context.sim
+    if not sim.has_rec('soma'):
+        sim.append_rec(cell, cell.tree.root, name='soma', loc=0.5)
+    if context.v_active not in context.i_holding['soma']:
+        context.i_holding['soma'][context.v_active] = 0.
+    if context.v_active not in context.i_th['soma']:
+        context.i_th['soma'][context.v_active] = 0.1
+    if not sim.has_rec('dend'):
+        dend, dend_loc = get_DG_GC_thickest_dend_branch(context.cell, 200., terminal=False)
+        sim.append_rec(cell, dend, name='dend', loc=dend_loc)
+    if context.v_active not in context.i_holding['dend']:
+        context.i_holding['dend'][context.v_active] = 0.1
+    if context.v_active not in context.i_th['dend']:
+        context.i_th['dend'][context.v_active] = 0.1
+    if not sim.has_rec('ais'):
+        sim.append_rec(cell, cell.ais[0], name='ais', loc=1.)
+    if context.v_active not in context.i_holding['ais']:
+        context.i_holding['ais'][context.v_active] = 0.1
+    if not sim.has_rec('axon'):
+        axon_seg_locs = [seg.x for seg in cell.axon[0].sec]
+        sim.append_rec(cell, cell.axon[0], name='axon', loc=axon_seg_locs[0])
+    if context.v_active not in context.i_holding['axon']:
+        context.i_holding['axon'][context.v_active] = 0.1
 
     equilibrate = context.equilibrate
     stim_dur = context.stim_dur
     duration = context.duration
     dt = context.dt
 
-    sim = QuickSim(duration, cvode=cvode, daspk=daspk, dt=dt, verbose=verbose>1)
-    sim.append_stim(cell, cell.tree.root, loc=0., amp=0., delay=equilibrate, dur=stim_dur, description='step')
-    sim.append_stim(cell, cell.tree.root, loc=0., amp=0., delay=0., dur=duration, description='offset')
-    for description, node in rec_nodes.iteritems():
-        sim.append_rec(cell, node, loc=rec_locs[description], description=description)
+    if not sim.has_stim('step'):
+        sim.append_stim(cell, cell.tree.root, name='step', loc=0.5, amp=0., delay=equilibrate, dur=stim_dur)
+    if not sim.has_stim('holding'):
+        sim.append_stim(cell, cell.tree.root, name='holding', loc=0.5, amp=0., delay=0., dur=duration)
+
     sim.parameters['duration'] = duration
     sim.parameters['equilibrate'] = equilibrate
-    sim.parameters['spines'] = context.spines
-    context.sim = sim
-
-    context.spike_output_vec = h.Vector()
-    cell.spike_detector.record(context.spike_output_vec)
-    context.cell = cell
-
-
-def reset_mechanisms(x, local_context=None):
-    if local_context is None:
-        local_context = context
-    init_biophysics(local_context.cell, reset_cable=False, from_file=True, mech_file_path=local_context.mech_file_path,
-                    correct_g_pas=True, env=local_context.env)
+    context.previous_module = __file__
 
 
 def compute_features_spike_shape(x, export=False, plot=False):
     """
+    
     :param x: array
     :param export: bool
     :param plot: bool
-    :return: float
+    :return: dict
     """
     start_time = time.time()
+    config_sim_env(context)
     update_source_contexts(x, context)
-    result = {}
-    v_active = context.v_active
+
+    result = dict()
     equilibrate = context.equilibrate
     dt = context.dt
-    i_th = context.i_th
-
-    soma_vm = offset_vm('soma', v_active)
-    result['v_rest'] = soma_vm
+    sim = context.sim
+    cvode = sim.cvode
+    sim.cvode = False
+    v_active = context.v_active
+    vm_rest = offset_vm('soma', context, v_active)
+    spike_times = context.cell.spike_detector.get_recordvec().as_numpy()
+    if np.any(spike_times < equilibrate):
+        if context.verbose > 0:
+            print 'compute_features_spike_shape: pid: %i; aborting - spontaneous firing' % (os.getpid())
+        return None
+    result['vm_rest'] = vm_rest
+    rec_dict = sim.get_rec('soma')
+    loc = rec_dict['loc']
+    node = rec_dict['node']
+    soma_rec = rec_dict['vec']
+    i_th = context.i_th['soma'][v_active]
     stim_dur = 150.
-    step_stim_index = context.sim.get_stim_index('step')
-    context.sim.modify_stim(step_stim_index, node=context.cell.tree.root, loc=0., dur=stim_dur)
     duration = equilibrate + stim_dur
-    context.sim.tstop = duration
+    sim.tstop = duration
     t = np.arange(0., duration, dt)
-    spike = False
-    d_amp = 0.01
-    amp = max(0., i_th['soma'] - 0.02)
-    while not spike:
-        context.sim.modify_stim(step_stim_index, amp=amp)
-        context.sim.run(v_active)
-        vm = np.interp(t, context.sim.tvec, context.sim.get_rec('soma')['vec'])
-        if np.any(vm[:int(equilibrate / dt)] > -30.):
-            if context.disp:
-                print 'Process %i: Aborting - spontaneous firing' % (os.getpid())
+
+    sim.modify_stim('step', node=node, loc=loc, dur=stim_dur, amp=i_th)
+    sim.run(v_active)
+    spike_times = context.cell.spike_detector.get_recordvec().as_numpy()
+    if np.any((spike_times > equilibrate) & (spike_times < equilibrate + 50)):
+        spike = True
+        target = False
+        soma_vm = soma_rec.as_numpy()
+        ais_vm = sim.get_rec('ais')['vec'].as_numpy()
+        axon_vm = sim.get_rec('axon')['vec'].as_numpy()
+        dend_vm = sim.get_rec('dend')['vec'].as_numpy()
+        i_inc = -0.01
+        delta_str = 'decreased'
+    else:
+        delta_str = 'increased'
+        spike = False
+        target = True
+        i_inc = 0.01
+    while not spike == target:
+        prev_spike_times = np.array(spike_times)
+        if i_th > context.i_th_max:
+            if context.verbose > 0:
+                print 'compute_features_spike_shape: pid: %i; aborting - rheobase outside target range' % (os.getpid())
             return None
-        if np.any(vm[int(equilibrate / dt):int((equilibrate + 50.) / dt)] > -30.):
-            spike = True
-        elif amp >= 0.4:
-            if context.disp:
-                print 'Process %i: Aborting - rheobase outside target range' % (os.getpid())
-            return None
-        else:
-            amp += d_amp
-            if context.sim.verbose:
-                print 'increasing amp to %.3f' % amp
-    title = 'spike_shape_features'
-    description = 'rheobase: %.3f' % amp
-    context.sim.parameters['amp'] = amp
-    context.sim.parameters['title'] = title
-    context.sim.parameters['description'] = description
-    context.sim.parameters['duration'] = duration
-    i_th['soma'] = amp
-    spike_times = context.cell.spike_detector.get_recordvec().to_python()
-    peak, threshold, ADP, AHP = get_spike_shape(vm, spike_times)
-    result['v_th'] = threshold
+        i_th += i_inc
+        sim.modify_stim('step', amp=i_th)
+        sim.run(v_active)
+        spike_times = context.cell.spike_detector.get_recordvec().as_numpy()
+        if sim.verbose:
+            print 'compute_features_spike_shape: pid: %i; %s; %s i_th to %.3f nA; num_spikes: %i' % \
+                  (os.getpid(), 'soma', delta_str, i_th, len(spike_times))
+        spike = np.any((spike_times > equilibrate) & (spike_times < equilibrate + 50))
+    if target:
+        soma_vm = soma_rec.as_numpy()
+        ais_vm = sim.get_rec('ais')['vec'].as_numpy()
+        axon_vm = sim.get_rec('axon')['vec'].as_numpy()
+        dend_vm = sim.get_rec('dend')['vec'].as_numpy()
+    else:
+        i_th -= i_inc
+        spike_times = np.array(prev_spike_times)
+    title = 'spike_shape'
+    description = 'rheobase: %.3f' % i_th
+    sim.parameters['amp'] = i_th
+    sim.parameters['title'] = title
+    sim.parameters['description'] = description
+    sim.parameters['duration'] = duration
+
+    peak, threshold, ADP, AHP = get_spike_shape(soma_vm, spike_times, context)
+    result['soma_spike_amp'] = peak - threshold
+    result['vm_th'] = threshold
     result['ADP'] = ADP
     result['AHP'] = AHP
-    result['rheobase'] = amp
-    result['spont_firing'] = len(np.where(spike_times < equilibrate)[0])
-    result['th_count'] = len(spike_times)
-    dend_vm = np.interp(t, context.sim.tvec, context.sim.get_rec('dend')['vec'])
-    th_x = np.where(vm[int(equilibrate / dt):] >= threshold)[0][0] + int(equilibrate / dt)
+    result['rheobase'] = i_th
+    result['th_count'] = len(np.where(spike_times > equilibrate)[0])
+    start = int((equilibrate + 1.) / dt)
+    th_x = np.where(soma_vm[start:] >= threshold)[0][0] + start
     if len(spike_times) > 1:
         end = min(th_x + int(10. / dt), int((spike_times[1] - 5.) / dt))
     else:
         end = th_x + int(10. / dt)
-    result['soma_peak'] = peak
     dend_peak = np.max(dend_vm[th_x:end])
-    dend_pre = np.mean(dend_vm[int((equilibrate - 3.) / dt):int((equilibrate - 1.) / dt)])
-    result['dend_amp'] = (dend_peak - dend_pre) / (peak - soma_vm)
+    dend_pre = np.mean(dend_vm[th_x - int(3. / dt):th_x - int(1. / dt)])
+    result['dend_bAP_ratio'] = (dend_peak - dend_pre) / result['soma_spike_amp']
 
     # calculate AIS delay
-    soma_dvdt = np.gradient(vm, dt)
-    ais_vm = np.interp(t, context.sim.tvec, context.sim.get_rec('ais')['vec'])
+    soma_dvdt = np.gradient(soma_vm, dt)
     ais_dvdt = np.gradient(ais_vm, dt)
-    axon_vm = np.interp(t, context.sim.tvec, context.sim.get_rec('axon')['vec'])
     axon_dvdt = np.gradient(axon_vm, dt)
     left = th_x - int(2. / dt)
     right = th_x + int(5. / dt)
@@ -445,10 +492,15 @@ def compute_features_spike_shape(x, export=False, plot=False):
     axon_peak = np.max(axon_dvdt[left:right])
     axon_peak_t = np.where(axon_dvdt[left:right] == axon_peak)[0][0] * dt
     result['ais_delay'] = max(0., ais_peak_t + dt - soma_peak_t) + max(0., ais_peak_t + dt - axon_peak_t)
-    if context.disp:
-        print 'Process: %i: %s: %s took %.1f s' % (os.getpid(), title, description, time.time() - start_time)
+
+    sim.cvode = cvode
+    context.i_th['soma'][v_active] = i_th
+    sim.modify_stim('step', amp=0.)
+    if context.verbose > 0:
+        print 'compute_features_spike_shape: pid: %i; %s: %s took %.1f s; rheobase: %.3f; vm_th: %.1f' % \
+              (os.getpid(), title, description, time.time() - start_time, i_th, threshold)
     if plot:
-        context.sim.plot()
+        sim.plot()
     if export:
         export_sim_results()
     return result
@@ -480,51 +532,59 @@ def compute_features_fI(x, amp, extend_dur=False, export=False, plot=False):
     :return: dict
     """
     start_time = time.time()
+    config_sim_env(context)
     update_source_contexts(x, context)
 
-    soma_vm = offset_vm('soma', context.v_active)
-    context.sim.parameters['amp'] = amp
-    context.sim.parameters['description'] = 'f_I'
+    offset_vm('soma', context, context.v_active)
+    sim = context.sim
+    cvode = sim.cvode
+    sim.parameters['amp'] = amp
+    sim.parameters['description'] = 'f_I'
 
     stim_dur = context.stim_dur
     equilibrate = context.equilibrate
     v_active = context.v_active
     dt = context.dt
 
-    step_stim_index = context.sim.get_stim_index('step')
-    context.sim.modify_stim(step_stim_index, node=context.cell.tree.root, loc=0., dur=stim_dur, amp=amp)
+    rec_dict = sim.get_rec('soma')
+    loc = rec_dict['loc']
+    node = rec_dict['node']
+    soma_rec = rec_dict['vec']
+    sim.modify_stim('step', node=node, loc=loc, dur=stim_dur, amp=amp)
     if extend_dur:
         # extend duration of simulation to examine rebound
         duration = equilibrate + stim_dur + 100.
     else:
         duration = equilibrate + stim_dur
 
-    title = 'f_I_features'
+    title = 'f_I'
     description = 'step current amp: %.3f' % amp
-    context.sim.tstop = duration
-    context.sim.parameters['duration'] = duration
-    context.sim.parameters['title'] = title
-    context.sim.parameters['description'] = description
-    context.sim.run(v_active)
+    sim.tstop = duration
+    sim.parameters['duration'] = duration
+    sim.parameters['title'] = title
+    sim.parameters['description'] = description
+    sim.run(v_active)
     if plot:
-        context.sim.plot()
-    spike_times = np.subtract(context.cell.spike_detector.get_recordvec().to_python(), equilibrate)
+        sim.plot()
+    spike_times = np.subtract(context.cell.spike_detector.get_recordvec().as_numpy(), equilibrate)
     t = np.arange(0., duration, dt)
     result = {}
     result['spike_times'] = spike_times
     result['amp'] = amp
     if extend_dur:
-        vm = np.interp(t, context.sim.tvec, context.sim.get_rec('soma')['vec'])
+        vm = np.interp(t, sim.tvec, soma_rec)
         v_min_late = np.min(vm[int((equilibrate + stim_dur - 20.) / dt):int((equilibrate + stim_dur - 1.) / dt)])
         result['v_min_late'] = v_min_late
-        v_rest = np.mean(vm[int((equilibrate - 3.) / dt):int((equilibrate - 1.) / dt)])
+        vm_rest = np.mean(vm[int((equilibrate - 3.) / dt):int((equilibrate - 1.) / dt)])
         v_after = np.max(vm[-int(50. / dt):-1])
-        vm_stability = abs(v_after - v_rest)
+        vm_stability = abs(v_after - vm_rest)
         result['vm_stability'] = vm_stability
         result['rebound_firing'] = len(np.where(spike_times > stim_dur)[0])
-    if context.disp:
-        print 'Process: %i: %s: %s took %.1f s' % (os.getpid(), title, description, time.time() - start_time)
-        sys.stdout.flush()
+    if context.verbose > 0:
+        print 'compute_features_fI: pid: %i; %s: %s took %.1f s; num_spikes: %i' % \
+              (os.getpid(), title, description, time.time() - start_time, len(spike_times))
+    sim.modify_stim('step', amp=0.)
+    sim.cvode = cvode
     if export:
         export_sim_results()
     return result
@@ -550,7 +610,7 @@ def filter_features_fI(primitives, current_features, export=False):
         if 'rebound_firing' in this_dict:
             new_features['rebound_firing'] = this_dict['rebound_firing']
         if 'v_min_late' in this_dict:
-            new_features['slow_depo'] = this_dict['v_min_late'] - current_features['v_th']
+            new_features['slow_depo'] = this_dict['v_min_late'] - current_features['vm_th']
         spike_times = this_dict['spike_times']
         experimental_spike_times = context.experimental_spike_times
         experimental_adaptation_indexes = context.experimental_adaptation_indexes
@@ -607,13 +667,13 @@ def get_objectives_spiking(features):
     else:
         objectives = {}
         rheobase = features['rheobase']
-        for target in ['v_th', 'ADP', 'AHP', 'spont_firing', 'rebound_firing', 'vm_stability', 'ais_delay',
-                       'slow_depo', 'dend_amp', 'soma_peak', 'th_count']:
+        for target in ['vm_th', 'ADP', 'AHP', 'rebound_firing', 'vm_stability', 'ais_delay',
+                       'slow_depo', 'dend_bAP_ratio', 'soma_spike_amp', 'th_count']:
             # don't penalize AHP or slow_depo less than target
             if not ((target == 'AHP' and features[target] < context.target_val[target]) or
                         (target == 'slow_depo' and features[target] < context.target_val[target])):
-                objectives[target] = ((context.target_val[target] - features[target]) / context.target_range[
-                    target]) ** 2.
+                objectives[target] = ((context.target_val[target] - features[target]) /
+                                      context.target_range[target]) ** 2.
             else:
                 objectives[target] = 0.
         objectives['adi'] = 0.
@@ -642,144 +702,39 @@ def get_objectives_spiking(features):
     return features, objectives
 
 
-def offset_vm(description, vm_target=None):
-    """
-
-    :param description: str
-    :param vm_target: float
-    """
-    if vm_target is None:
-        vm_target = context.v_init
-    step_stim_index = context.sim.get_stim_index('step')
-    offset_stim_index = context.sim.get_stim_index('offset')
-    context.sim.modify_stim(step_stim_index, amp=0.)
-    node = context.rec_nodes[description]
-    loc = context.rec_locs[description]
-    rec_dict = context.sim.get_rec(description)
-    context.sim.modify_stim(offset_stim_index, node=node, loc=loc, amp=0.)
-    rec = rec_dict['vec']
-    offset = True
-
-    equilibrate = context.equilibrate
-    dt = context.dt
-    duration = context.duration
-
-    context.sim.tstop = equilibrate
-    t = np.arange(0., equilibrate, dt)
-    context.sim.modify_stim(offset_stim_index, amp=context.i_holding[description])
-    context.sim.run(vm_target)
-    vm = np.interp(t, context.sim.tvec, rec)
-    v_rest = np.mean(vm[int((equilibrate - 3.) / dt):int((equilibrate - 1.) / dt)])
-    initial_v_rest = v_rest
-    if v_rest < vm_target - 0.5:
-        context.i_holding[description] += 0.01
-        while offset:
-            if context.sim.verbose:
-                print 'increasing i_holding to %.3f (%s)' % (context.i_holding[description], description)
-            context.sim.modify_stim(offset_stim_index, amp=context.i_holding[description])
-            context.sim.run(vm_target)
-            vm = np.interp(t, context.sim.tvec, rec)
-            v_rest = np.mean(vm[int((equilibrate - 3.) / dt):int((equilibrate - 1.) / dt)])
-            if v_rest < vm_target - 0.5:
-                context.i_holding[description] += 0.01
-            else:
-                offset = False
-    elif v_rest > vm_target + 0.5:
-        context.i_holding[description] -= 0.01
-        while offset:
-            if context.sim.verbose:
-                print 'decreasing i_holding to %.3f (%s)' % (context.i_holding[description], description)
-            context.sim.modify_stim(offset_stim_index, amp=context.i_holding[description])
-            context.sim.run(vm_target)
-            vm = np.interp(t, context.sim.tvec, rec)
-            v_rest = np.mean(vm[int((equilibrate - 3.) / dt):int((equilibrate - 1.) / dt)])
-            if v_rest > vm_target + 0.5:
-                context.i_holding[description] -= 0.01
-            else:
-                offset = False
-    context.sim.tstop = duration
-    return v_rest
-
-
-def get_spike_shape(vm, spike_times):
-    """
-
-    :param vm: array
-    :param spike_times: array
-    :return: tuple of float: (v_peak, th_v, ADP, AHP)
-    """
-    equilibrate = context.equilibrate
-    dt = context.dt
-    th_dvdt = context.th_dvdt
-
-    start = int((equilibrate + 1.) / dt)
-    vm = vm[start:]
-    dvdt = np.gradient(vm, dt)
-    th_x = np.where(dvdt > th_dvdt)[0]
-    if th_x.any():
-        th_x = th_x[0] - int(1.6 / dt)
-    else:
-        th_x = np.where(vm > -30.)[0][0] - int(2. / dt)
-    th_v = vm[th_x]
-    v_before = np.mean(vm[th_x - int(0.1 / dt):th_x])
-    v_peak = np.max(vm[th_x:th_x + int(5. / dt)])
-    x_peak = np.where(vm[th_x:th_x + int(5. / dt)] == v_peak)[0][0]
-    if len(spike_times) > 1:
-        end = max(th_x + x_peak + int(2. / dt), int((spike_times[1] - 4.) / dt) - start)
-    else:
-        end = len(vm)
-    v_AHP = np.min(vm[th_x + x_peak:end])
-    x_AHP = np.where(vm[th_x + x_peak:end] == v_AHP)[0][0]
-    AHP = v_before - v_AHP
-    # if spike waveform includes an ADP before an AHP, return the value of the ADP in order to increase error function
-    ADP = 0.
-    rising_x = np.where(dvdt[th_x + x_peak + 1:th_x + x_peak + x_AHP - 1] > 0.)[0]
-    if rising_x.any():
-        v_ADP = np.max(vm[th_x + x_peak + 1 + rising_x[0]:th_x + x_peak + x_AHP])
-        pre_ADP = np.mean(vm[th_x + x_peak + 1 + rising_x[0] - int(0.1 / dt):th_x + x_peak + 1 + rising_x[0]])
-        ADP += v_ADP - pre_ADP
-    falling_x = np.where(dvdt[th_x + x_peak + x_AHP + 1:end] < 0.)[0]
-    if falling_x.any():
-        v_ADP = np.max(vm[th_x + x_peak + x_AHP + 1: th_x + x_peak + x_AHP + 1 + falling_x[0]])
-        ADP += v_ADP - v_AHP
-    return v_peak, th_v, ADP, AHP
-
-
-def update_mechanisms_spiking(x, local_context=None):
+def update_mechanisms_spiking(x, context=None):
     """
     :param x: array ['soma.gbar_nas', 'dend.gbar_nas', 'dend.gbar_nas slope', 'dend.gbar_nas min', 'dend.gbar_nas bo',
                     'axon.gbar_nax', 'ais.gbar_nax', 'soma.gkabar', 'dend.gkabar', 'soma.gkdrbar', 'axon.gkabar',
                     'soma.sh_nas/x', 'ais.sha_nax', 'soma.gCa factor', 'soma.gCadepK factor', 'soma.gkmbar',
                     'ais.gkmbar']
+    :param context: :class:'Context'
     """
-    if local_context is None:
-        local_context = context
-    cell = local_context.cell
-    x_dict = param_array_to_dict(x, local_context.param_names)
+    if context is None:
+        raise RuntimeError('update_mechanisms_spiking: missing required Context object')
+    cell = context.cell
+    x_dict = param_array_to_dict(x, context.param_names)
     modify_mech_param(cell, 'soma', 'nas', 'gbar', x_dict['soma.gbar_nas'])
     modify_mech_param(cell, 'soma', 'kdr', 'gkdrbar', x_dict['soma.gkdrbar'])
     modify_mech_param(cell, 'soma', 'kap', 'gkabar', x_dict['soma.gkabar'])
     slope = (x_dict['dend.gkabar'] - x_dict['soma.gkabar']) / 300.
     modify_mech_param(cell, 'soma', 'nas', 'sh', x_dict['soma.sh_nas/x'])
     for sec_type in ['apical']:
-        update_mechanism_by_sec_type(cell, sec_type, 'nas')
-        modify_mech_param(cell, sec_type, 'kap', 'gkabar', origin='soma', min_loc=75., value=0.)
-        modify_mech_param(cell, sec_type, 'kap', 'gkabar', origin='soma', max_loc=75., slope=slope, replace=False)
-        modify_mech_param(cell, sec_type, 'kad', 'gkabar', origin='soma', max_loc=75., value=0.)
+        modify_mech_param(cell, sec_type, 'kap', 'gkabar', origin='soma', max_loc=75., slope=slope, outside=0.)
         modify_mech_param(cell, sec_type, 'kad', 'gkabar', origin='soma', min_loc=75., max_loc=300., slope=slope,
-                          value=(x_dict['soma.gkabar'] + slope * 75.), replace=False)
+                          value=(x_dict['soma.gkabar'] + slope * 75.), outside=0.)
         modify_mech_param(cell, sec_type, 'kad', 'gkabar', origin='soma', min_loc=300.,
-                          value=(x_dict['soma.gkabar'] + slope * 300.), replace=False)
+                          value=(x_dict['soma.gkabar'] + slope * 300.), append=True)
         modify_mech_param(cell, sec_type, 'kdr', 'gkdrbar', origin='soma')
         modify_mech_param(cell, sec_type, 'nas', 'sha', 0.)  # 5.)
         modify_mech_param(cell, sec_type, 'nas', 'gbar', x_dict['dend.gbar_nas'])
         modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=x_dict['dend.gbar_nas slope'],
                           min=x_dict['dend.gbar_nas min'],
-                          custom={'method': 'custom_gradient_by_branch_order',
-                                  'branch_order': x_dict['dend.gbar_nas bo']}, replace=False)
+                          custom={'func': 'custom_filter_by_branch_order',
+                                  'branch_order': x_dict['dend.gbar_nas bo']}, append=True)
         modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=x_dict['dend.gbar_nas slope'],
-                          min=x_dict['dend.gbar_nas min'], custom={'method': 'custom_gradient_by_terminal'},
-                          replace=False)
+                          min=x_dict['dend.gbar_nas min'],
+                          custom={'func': 'custom_filter_by_terminal'}, append=True)
     update_mechanism_by_sec_type(cell, 'hillock', 'kap')
     update_mechanism_by_sec_type(cell, 'hillock', 'kdr')
     modify_mech_param(cell, 'ais', 'kdr', 'gkdrbar', origin='soma')
@@ -805,8 +760,7 @@ def export_sim_results():
     """
     Export the most recent time and recorded waveforms from the QuickSim object.
     """
-    with h5py.File(context.temp_output_path, 'a') as f:
-        context.sim.export_to_file(f)
+    context.sim.export_to_file(context.temp_output_path)
 
 
 if __name__ == '__main__':

@@ -22,7 +22,7 @@ context = Context()
 @click.option("--export-file-path", type=str, default=None)
 @click.option("--label", type=str, default=None)
 @click.option("--disp", is_flag=True)
-@click.option("--verbose", type=int, default=1)
+@click.option("--verbose", type=int, default=2)
 def main(config_file_path, output_dir, export, export_file_path, label, disp, verbose):
     """
 
@@ -189,6 +189,13 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
     if not context.update_context_funcs:
         raise Exception('update_context function not found')
 
+    if 'comm' not in context():
+        try:
+            from mpi4py import MPI
+            context.comm = MPI.COMM_WORLD
+        except Exception:
+            raise Exception('optimize_DG_GC_hoc_leak: config_interactive: problem importing from mpi4py')
+
     context.disp=disp
     context.rel_bounds_handler = RelativeBoundedStep(context.x0_array, context.param_names, context.bounds,
                                                      context.rel_bounds)
@@ -211,28 +218,37 @@ def config_controller(export_file_path, output_dir, **kwargs):
 
 def config_worker(update_context_funcs, param_names, default_params, feature_names, objective_names, target_val,
                   target_range, temp_output_path, export_file_path, output_dir, disp, mech_file_path, gid,
-                  population, spines, **kwargs):
+                  cell_type, correct_for_spines, **kwargs):
     """
     :param update_context_funcs: list of function references
     :param param_names: list of str
     :param default_params: dict
-    :param target_val: dict
-    :param target_range: dict
     :param feature_names: list of str
     :param objective_names: list of str
+    :param target_val: dict
+    :param target_range: dict
     :param temp_output_path: str
     :param export_file_path: str
     :param output_dir: str (dir path)
     :param disp: bool
     :param mech_file_path: str
     :param gid: int
-    :param population: str
-    :param spines: bool
+    :param cell_type: str
+    :param correct_for_spines: bool
     """
     context.update(locals())
     context.update(kwargs)
-    init_context()
-    setup_cell(**kwargs)
+    if not context_has_sim_env(context):
+        build_sim_env(context, **kwargs)
+
+
+def context_has_sim_env(context):
+    """
+
+    :param context: :class:'Context
+    :return: bool
+    """
+    return 'env' in context() and 'sim' in context() and 'cell' in context()
 
 
 def init_context():
@@ -242,101 +258,75 @@ def init_context():
     equilibrate = 250.  # time to steady-state
     stim_dur = 500.
     duration = equilibrate + stim_dur
-    dt = 0.02
+    dt = 0.025
     th_dvdt = 10.
     v_init = -77.
     v_active = -77.
-    i_holding = {'soma': 0., 'dend': 0., 'distal_dend': 0.}
     context.update(locals())
 
 
-def setup_cell(verbose=1, cvode=False, daspk=False, **kwargs):
+def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
     """
 
+    :param context: :class:'Context'
     :param verbose: int
     :param cvode: bool
     :param daspk: bool
     """
-    if 'comm' not in context():
-        try:
-            from mpi4py import MPI
-            context.comm = MPI.COMM_WORLD
-        except Exception:
-            raise Exception('optimize_DG_GC_hoc_leak: problem importing from mpi4py; '
-                            'required for config_interactive')
+    init_context()
     context.env = Env(comm=context.comm, **kwargs)
     configure_env(context.env)
-    cell = get_biophys_cell(context.env, context.gid, context.population)
-    init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path, correct_cm=True,
-                    correct_g_pas=True, env=context.env)
+    cell = get_biophys_cell(context.env, context.gid, context.cell_type)
+    init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path,
+                    correct_cm=context.correct_for_spines, correct_g_pas=context.correct_for_spines, env=context.env)
+    duration = context.duration
+    dt = context.dt
+    context.sim = QuickSim(context.duration, cvode=cvode, daspk=daspk, dt=context.dt, verbose=verbose>1)
+    context.spike_output_vec = h.Vector()
+    cell.spike_detector.record(context.spike_output_vec)
+    context.cell = cell
 
-    # get the thickest apical dendrite ~200 um from the soma
-    candidate_branches = []
-    candidate_distances = []
-    candidate_diams = []
-    candidate_locs = []
-    for branch in cell.apical:
-        if not is_terminal(branch):
-            for seg in branch.sec:
-                loc = seg.x
-                if get_distance_to_node(cell, cell.tree.root, branch, loc) > 130.:
-                    candidate_branches.append(branch)
-                    candidate_distances.append(get_distance_to_node(cell, cell.tree.root, branch, loc))
-                    candidate_diams.append(branch.sec(loc).diam)
-                    candidate_locs.append(loc)
-                    break
-    distance_diffs = np.absolute(np.array(candidate_distances) - 250.)
-    #Find the segments within 50 um of the target distance from the soma (250 um)
-    indexes = [ind for ind in range(len(distance_diffs)) if distance_diffs[ind] < 50.]
-    if len(indexes) == 0:
-        index = np.argmin(distance_diffs)
-    else:
-        diams = np.array([candidate_diams[ind] for ind in indexes])
-        index = indexes[np.argmin(diams)]
-    dend = candidate_branches[index]
-    dend_loc = candidate_locs[index]
 
-    # get the most distal terminal branch > 300 um from the soma
-    candidate_branches = []
-    candidate_end_distances = []
-    for branch in (branch for branch in cell.apical if is_terminal(branch)):
-        if get_distance_to_node(cell, cell.tree.root, branch, 0.) >= 250.:
-            candidate_branches.append(branch)
-            candidate_end_distances.append(get_distance_to_node(cell, cell.tree.root, branch, 1.))
-    index = candidate_end_distances.index(max(candidate_end_distances))
-    distal_dend = candidate_branches[index]
-    distal_dend_loc = 1.
+def config_sim_env(context):
+    """
 
-    rec_locs = {'soma': 0., 'dend': dend_loc, 'distal_dend': distal_dend_loc}
-    context.rec_locs = rec_locs
-    rec_nodes = {'soma': cell.tree.root, 'dend': dend, 'distal_dend': distal_dend}
-    context.rec_nodes = rec_nodes
+    :param context: :class:'Context'
+    """
+    if 'previous_module' in context() and context.previous_module == __file__:
+        return
+    init_context()
+    if 'i_holding' not in context():
+        context.i_holding = defaultdict(dict)
+    cell = context.cell
+    sim = context.sim
+    if not sim.has_rec('soma'):
+        sim.append_rec(cell, cell.tree.root, name='soma', loc=0.5)
+    if context.v_init not in context.i_holding['soma']:
+        context.i_holding['soma'][context.v_init] = 0.
+    if not sim.has_rec('dend'):
+        dend, dend_loc = get_DG_GC_thickest_dend_branch(context.cell, 200., terminal=False)
+        sim.append_rec(cell, dend, name='dend', loc=dend_loc)
+    if context.v_init not in context.i_holding['dend']:
+        context.i_holding['dend'][context.v_init] = 0.
+    if not sim.has_rec('term_dend'):
+        term_dend = get_DG_GC_distal_most_terminal_branch(context.cell, 250.)
+        sim.append_rec(cell, term_dend, name='term_dend', loc=1.)
+    if context.v_init not in context.i_holding['term_dend']:
+        context.i_holding['term_dend'][context.v_init] = 0.
 
     equilibrate = context.equilibrate
     stim_dur = context.stim_dur
     duration = context.duration
     dt = context.dt
 
-    sim = QuickSim(duration, cvode=cvode, daspk=daspk, dt=dt, verbose=verbose>1)
-    sim.append_stim(cell, cell.tree.root, loc=0., amp=0., delay=equilibrate, dur=stim_dur, description='step')
-    sim.append_stim(cell, cell.tree.root, loc=0., amp=0., delay=0., dur=duration, description='offset')
-    for description, node in rec_nodes.iteritems():
-        sim.append_rec(cell, node, loc=rec_locs[description], description=description)
+    if not sim.has_stim('step'):
+        sim.append_stim(cell, cell.tree.root, name='step', loc=0.5, amp=0., delay=equilibrate, dur=stim_dur)
+    if not sim.has_stim('holding'):
+        sim.append_stim(cell, cell.tree.root, name='holding', loc=0.5, amp=0., delay=0., dur=duration)
+
     sim.parameters['duration'] = duration
     sim.parameters['equilibrate'] = equilibrate
-    sim.parameters['spines'] = context.spines
-    context.sim = sim
-
-    context.spike_output_vec = h.Vector()
-    cell.spike_detector.record(context.spike_output_vec)
-    context.cell = cell
-
-
-def reset_mechanisms(x, local_context=None):
-    if local_context is None:
-        local_context = context
-    init_biophysics(local_context.cell, reset_cable=False, from_file=True, mech_file_path=local_context.mech_file_path,
-                    correct_g_pas=True, env=local_context.env)
+    context.previous_module = __file__
 
 
 def get_args_static_leak():
@@ -345,7 +335,7 @@ def get_args_static_leak():
     each set of parameters.
     :return: list of list
     """
-    return [['soma', 'dend', 'distal_dend']]
+    return [['soma', 'dend', 'term_dend']]
 
 
 def compute_features_leak(x, section, export=False, plot=False):
@@ -358,36 +348,43 @@ def compute_features_leak(x, section, export=False, plot=False):
     :return: dict: {str: float}
     """
     start_time = time.time()
+    config_sim_env(context)
     update_source_contexts(x, context)
     zero_na(context.cell)
 
     duration = context.duration
     stim_dur = context.stim_dur
     equilibrate = context.equilibrate
+    dt = context.dt
     v_init = context.v_init
-    title = 'Rinp_features'
-    description = 'step current: %s' % section
-    context.sim.tstop = duration
-    context.sim.parameters['section'] = section
-    context.sim.parameters['title'] = title
-    context.sim.parameters['description'] = description
-    context.sim.parameters['duration'] = duration
+    sim = context.sim
+    cvode = sim.cvode
+    sim.cvode = True
+    title = 'R_inp'
+    description = 'step current injection to %s' % section
+    sim.tstop = duration
+    sim.parameters['section'] = section
+    sim.parameters['title'] = title
+    sim.parameters['description'] = description
+    sim.parameters['duration'] = duration
     amp = -0.05
     context.sim.parameters['amp'] = amp
-    offset_vm(section)
-    loc = context.rec_locs[section]
-    node = context.rec_nodes[section]
-    rec = context.sim.get_rec(section)
-    step_stim_index = context.sim.get_stim_index('step')
-    context.sim.modify_stim(step_stim_index, node=node, loc=loc, amp=amp, dur=stim_dur)
-    context.sim.run(v_init)
-    Rinp = get_Rinp(np.array(context.sim.tvec), np.array(rec['vec']), equilibrate, duration, amp)[2]
-    result = {}
-    result[section+' R_inp'] = Rinp
-    print 'Process: %i: %s: %s took %.1f s, Rinp: %.1f' % (os.getpid(), title, description, time.time() - start_time,
-                                                                                    Rinp)
+    offset_vm(section, context, v_init)
+    rec_dict = sim.get_rec(section)
+    loc = rec_dict['loc']
+    node = rec_dict['node']
+    rec = rec_dict['vec']
+    sim.modify_stim('step', node=node, loc=loc, amp=amp, dur=stim_dur)
+    sim.run(v_init)
+    R_inp = get_R_inp(np.array(sim.tvec), np.array(rec), equilibrate, duration, amp, dt)[2]
+    result = dict()
+    result['%s R_inp' % section] = R_inp
+    if context.verbose > 0:
+        print 'compute_features_leak: pid: %i; %s: %s took %.1f s; R_inp: %.1f' % \
+              (os.getpid(), title, description, time.time() - start_time, R_inp)
+    sim.cvode = cvode
     if plot:
-        context.sim.plot()
+        sim.plot()
     if export:
         export_sim_results()
     return result
@@ -404,99 +401,39 @@ def get_objectives_leak(features):
         objective_name = feature_name
         objectives[objective_name] = ((context.target_val[objective_name] - features[feature_name]) /
                                                   context.target_range[objective_name]) ** 2.
-    this_feature = features['distal_dend R_inp'] - features['dend R_inp']
-    objective_name = 'distal_dend R_inp'
-    if this_feature < 0.:
-        objectives[objective_name] = (this_feature / context.target_range['dend R_inp']) ** 2.
+    delta_term_dend_R_inp = features['term_dend R_inp'] - features['dend R_inp']
+    objective_name = 'term_dend R_inp'
+    if delta_term_dend_R_inp < 0.:
+        objectives[objective_name] = (delta_term_dend_R_inp / context.target_range['dend R_inp']) ** 2.
     else:
         objectives[objective_name] = 0.
     return features, objectives
 
 
-def offset_vm(description, vm_target=None):
-    """
-
-    :param description: str
-    :param vm_target: float
-    """
-    if vm_target is None:
-        vm_target = context.v_init
-    step_stim_index = context.sim.get_stim_index('step')
-    offset_stim_index = context.sim.get_stim_index('offset')
-    context.sim.modify_stim(step_stim_index, amp=0.)
-    node = context.rec_nodes[description]
-    loc = context.rec_locs[description]
-    rec_dict = context.sim.get_rec(description)
-    context.sim.modify_stim(offset_stim_index, node=node, loc=loc, amp=0.)
-    rec = rec_dict['vec']
-    offset = True
-
-    equilibrate = context.equilibrate
-    dt = context.dt
-    duration = context.duration
-
-    context.sim.tstop = equilibrate
-    t = np.arange(0., equilibrate, dt)
-    context.sim.modify_stim(offset_stim_index, amp=context.i_holding[description])
-    context.sim.run(vm_target)
-    vm = np.interp(t, context.sim.tvec, rec)
-    v_rest = np.mean(vm[int((equilibrate - 3.)/dt):int((equilibrate - 1.)/dt)])
-    initial_v_rest = v_rest
-    if v_rest < vm_target - 0.5:
-        context.i_holding[description] += 0.01
-        while offset:
-            if context.sim.verbose:
-                print 'increasing i_holding to %.3f (%s)' % (context.i_holding[description], description)
-            context.sim.modify_stim(offset_stim_index, amp=context.i_holding[description])
-            context.sim.run(vm_target)
-            vm = np.interp(t, context.sim.tvec, rec)
-            v_rest = np.mean(vm[int((equilibrate - 3.)/dt):int((equilibrate - 1.)/dt)])
-            if v_rest < vm_target - 0.5:
-                context.i_holding[description] += 0.01
-            else:
-                offset = False
-    elif v_rest > vm_target + 0.5:
-        context.i_holding[description] -= 0.01
-        while offset:
-            if context.sim.verbose:
-                print 'decreasing i_holding to %.3f (%s)' % (context.i_holding[description], description)
-            context.sim.modify_stim(offset_stim_index, amp=context.i_holding[description])
-            context.sim.run(vm_target)
-            vm = np.interp(t, context.sim.tvec, rec)
-            v_rest = np.mean(vm[int((equilibrate - 3.)/dt):int((equilibrate - 1.)/dt)])
-            if v_rest > vm_target + 0.5:
-                context.i_holding[description] -= 0.01
-            else:
-                offset = False
-    context.sim.tstop = duration
-    return v_rest
-
-
-def update_mechanisms_leak(x, local_context=None):
+def update_mechanisms_leak(x, context):
     """
 
     :param x: array
-    :param local_context: :class:'Context'
+    :param context: :class:'Context'
     """
-    if local_context is None:
-        local_context = context
-    cell = local_context.cell
-    x_dict = param_array_to_dict(x, local_context.param_names)
+    if context is None:
+        raise RuntimeError('update_mechanisms_leak: missing required Context object')
+    cell = context.cell
+    x_dict = param_array_to_dict(x, context.param_names)
     modify_mech_param(cell, 'soma', 'pas', 'g', x_dict['soma.g_pas'])
     modify_mech_param(cell, 'apical', 'pas', 'g', origin='soma', slope=x_dict['dend.g_pas slope'],
                       tau=x_dict['dend.g_pas tau'])
-    for sec_type in ['axon_hill', 'axon', 'ais', 'apical', 'spine_neck', 'spine_head']:
+    for sec_type in ['axon_hill', 'ais', 'axon', 'apical', 'spine_neck', 'spine_head']:
         update_mechanism_by_sec_type(cell, sec_type, 'pas')
-    if not local_context.spines:
-        correct_cell_for_spines_g_pas(cell, local_context.env)
+    if context.correct_for_spines:
+        correct_cell_for_spines_g_pas(cell, context.env)
 
 
 def export_sim_results():
     """
-    Export the most recent time and recorded waveforms from the QuickSim object.
+    Export the most recent simulation data to file.
     """
-    with h5py.File(context.temp_output_path, 'a') as f:
-        context.sim.export_to_file(f)
+    context.sim.export_to_file(context.temp_output_path)
 
 
 if __name__ == '__main__':

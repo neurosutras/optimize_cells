@@ -63,25 +63,24 @@ default_params:
   dend.gbar_nas bo: 5
 feature_names:
 - dend R_inp
-- distal_dend R_inp
+- term_dend R_inp
 - soma R_inp
-- v_th
+- vm_th
 - ADP
 - AHP
-- spont_firing
 - rebound_firing
 - vm_stability
 - ais_delay
 - slow_depo
-- dend_amp
+- dend_bAP_ratio
 - rheobase
-- soma_peak
+- soma_spike_amp
 - adi
 - f_I_slope
 - f_I_residuals
 update_context:
 - - optimize_DG_GC_hoc_leak
-  - reset_mechanisms
+  - reset_biophysics
 - - optimize_DG_GC_hoc_leak
   - update_mechanisms_leak
 - - optimize_DG_GC_hoc_spiking
@@ -102,10 +101,10 @@ get_objectives:
 kwargs:
   mech_file_path: mechanisms/20180209_DG_GC_hoc_leak_mech.yaml
   gid: 0
-  population: GC
-  spines: False
+  cell_type: GC
+  correct_for_spines: True
   cvode: False
-  verbose: 1
+  verbose: 2
   daspk: True
   configFile: ../dentate/config/Small_Scale_Control_log_normal_weights.yaml
   templatePaths: ../dgc/Mateos-Aparicio2014:../dentate/templates
@@ -115,18 +114,17 @@ kwargs:
   resultsPath: data
 objective_names:
 - dend R_inp
-- distal_dend R_inp
+- term_dend R_inp
 - soma R_inp
-- v_th
+- vm_th
 - ADP
 - AHP
-- spont_firing
 - rebound_firing
 - vm_stability
 - ais_delay
 - slow_depo
-- dend_amp
-- soma_peak
+- dend_bAP_ratio
+- soma_spike_amp
 - th_count
 - adi
 - f_I_slope
@@ -188,13 +186,12 @@ target_range:
   ADP: 0.01
   AHP: 0.005
   ais_delay: 0.0005
-  dend_amp: 0.0002
+  dend_bAP_ratio: 0.0002
   rebound_firing: 0.002
   slow_depo: 0.1
-  soma_peak: 2.0
-  spont_firing: 0.002
+  soma_spike_amp: 2.0
   th_count: 0.002
-  v_th: 0.01
+  vm_th: 0.01
   vm_stability: 0.1
   f_I_slope: 0.5
 target_val:
@@ -203,13 +200,12 @@ target_val:
   ADP: 0.0
   AHP: 4.0
   ais_delay: 0.0
-  dend_amp: 0.3
+  dend_bAP_ratio: 0.3
   rebound_firing: 0
   slow_depo: 10.0
-  soma_peak: 40.0
-  spont_firing: 0
+  soma_spike_amp: 90.0
   th_count: 1
-  v_th: -48.0
+  vm_th: -48.0
   vm_stability: 0.0
   f_I_slope: 53.0
 x0:

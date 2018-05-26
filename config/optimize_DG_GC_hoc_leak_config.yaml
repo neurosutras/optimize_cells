@@ -10,11 +10,11 @@ bounds:
   - 1.0E-7
 feature_names:
 - dend R_inp
-- distal_dend R_inp
+- term_dend R_inp
 - soma R_inp
 update_context:
 - - optimize_DG_GC_hoc_leak
-  - reset_mechanisms
+  - reset_biophysics
 - - optimize_DG_GC_hoc_leak
   - update_mechanisms_leak
 get_features_stages:
@@ -26,10 +26,10 @@ get_objectives:
 kwargs:
   mech_file_path: mechanisms/20180209_DG_GC_hoc_leak_mech.yaml
   gid: 0
-  population: GC
-  spines: False
+  cell_type: GC
+  correct_for_spines: True
   cvode: True
-  verbose: 1
+  verbose: 2
   daspk: True
   configFile: ../dentate/config/Small_Scale_Control_log_normal_weights.yaml
   templatePaths: ../dgc/Mateos-Aparicio2014:../dentate/templates
@@ -39,7 +39,7 @@ kwargs:
   resultsPath: data
 objective_names:
 - dend R_inp
-- distal_dend R_inp
+- term_dend R_inp
 - soma R_inp
 optimization_title: DG_GC_hoc_leak
 param_gen: PopulationAnnealing
