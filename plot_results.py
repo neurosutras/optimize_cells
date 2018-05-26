@@ -767,7 +767,7 @@ def plot_cable_param_distribution(cell, mech_name, export=None, overwrite=False,
     Takes a cell as input rather than a file. No simulation is required, this method just takes a fully specified cell
     and plots the relationship between distance and the specified mechanism parameter for all dendritic segments. Used
     while debugging specification of mechanism parameters.
-    :param cell: :class:'HocCell'
+    :param cell: :class:'BiophysCell'
     :param mech_name: str
     :param param_name: str
     :param export: str (name of hdf5 file for export)
