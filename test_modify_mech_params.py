@@ -299,7 +299,7 @@ def standard_modify_syn_mech_param_tests(cell, env):
 @click.option("--hoc-lib-path", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
               default='../dentate')
 @click.option("--dataset-prefix", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
-              default='../dentate/datasets')  # '/mnt/s')  # '../dentate/datasets'
+              default='/mnt/s')  # '/mnt/s')  # '../dentate/datasets'
 @click.option("--mech-file-path", required=True, type=click.Path(exists=True, file_okay=True, dir_okay=False),
               default='mechanisms/20180209_DG_GC_hoc_leak_mech.yaml')
 @click.option('--verbose', '-v', is_flag=True)
@@ -324,10 +324,10 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
 
     # init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=mech_file_path, correct_cm=True,
     #                correct_g_pas=True, env=env)
-    # standard_modify_mech_param_tests(cell)
+    standard_modify_mech_param_tests(cell)
     # cm_correction_test(cell, env, mech_file_path)
     # count_spines(cell, env)
-    standard_modify_syn_mech_param_tests(cell, env)
+    # standard_modify_syn_mech_param_tests(cell, env)
 
 
 if __name__ == '__main__':
