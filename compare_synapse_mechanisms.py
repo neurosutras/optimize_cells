@@ -114,9 +114,9 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     duration = input_spike_train[-1] + 150.
     # duration = 940.
     sim = QuickSim(duration, cvode=False)
-    sim.append_rec(cell, cell.tree.root, 0.5, description='soma Vm')
+    sim.append_rec(cell, cell.tree.root, 'soma', 0.5)
     if syn_node != cell.tree.root:
-        sim.append_rec(cell, syn_node, 0.5, description='%s Vm' % syn_node.name)
+        sim.append_rec(cell, syn_node, syn_node.name, 0.5)
 
     rec_description_dict = defaultdict(lambda: defaultdict(dict))
     syns_set = set()
@@ -128,8 +128,7 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
                     syns_set.add(syn)
                     for param_name in recordings[syn_name]['mech_params']:
                         description = '%s_%s_%i' % (param_name, syn_name, syn_id)
-                        sim.append_rec(cell, syn_node, object=syn, param='_ref_'+param_name,
-                                       description=description)
+                        sim.append_rec(cell, syn_node, description, object=syn, param='_ref_'+param_name)
                         rec_description_dict[syn_id][syn_name][param_name] = description
 
             if 'netcon_params' in recordings[syn_name]:
@@ -137,7 +136,7 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
                 for param_name, j in recordings[syn_name]['netcon_params'].iteritems():
                     if j > 1:
                         description = '%s_%s_%i' % (param_name, syn_name, syn_id)
-                        sim.append_rec(cell, syn_node, description=description)
+                        sim.append_rec(cell, syn_node, description)
                         h.record_netcon_weight_element(sim.get_rec(description)['vec'], this_netcon, j, sim.dt)
                         rec_description_dict[syn_id][syn_name][param_name] = description
     context.update(locals())
@@ -156,7 +155,7 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     left = start + int((10. - 3.) / sim.dt)
     right = left + int(2. / sim.dt)
     window = right + int(25. / sim.dt)
-    soma_vm = sim.get_rec('soma Vm')['vec'].as_numpy()
+    soma_vm = sim.get_rec('soma')['vec'].as_numpy()
     unit_amp = np.max(soma_vm[right:window]) - np.mean(soma_vm[left:right])
     print 'unit amp: %.3f' % unit_amp
 
@@ -175,8 +174,8 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
             axes[i].plot(t[start:], scale*this_sum[start:], label='%s_%s' % (param_name, syn_name), zorder=j)
             axes[i].set_ylabel(ylabel)
             axes[i].set_ylim(ylim)
-    axes[2].plot(t[start:], sim.get_rec('soma Vm')['vec'].as_numpy()[start:], label='soma Vm')
-    axes[2].plot(t[start:], sim.get_rec('%s Vm' % syn_node.name)['vec'].as_numpy()[start:], label='dend Vm')
+    axes[2].plot(t[start:], sim.get_rec('soma')['vec'].as_numpy()[start:], label='soma Vm')
+    axes[2].plot(t[start:], sim.get_rec('%s' % syn_node.name)['vec'].as_numpy()[start:], label='dend Vm')
     axes[2].set_xlabel('Time (ms)')
     axes[2].set_ylabel('Voltage (mV)')
     axes[2].set_ylim(-80., -10.)

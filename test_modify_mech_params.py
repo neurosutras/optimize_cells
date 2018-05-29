@@ -52,7 +52,7 @@ def standard_modify_mech_param_tests(cell):
     plot_mech_param_distribution(cell, 'kap', 'gkabar', export='old_dend_kap.hdf5', param_label='dend.kap', show=False,
                                  sec_types='all', overwrite=True)
     plot_mech_param_distribution(cell, 'kad', 'gkabar', export='old_dend_kad.hdf5', param_label='dend.kad',
-                                 show=False, sec_types='all')
+                                 show=False, sec_types='all', overwrite=True)
 
     slope = (x['dend.gkabar'] - x['soma.gkabar']) / 300.
     for sec_type in ['apical']:
@@ -72,7 +72,7 @@ def standard_modify_mech_param_tests(cell):
     plot_mech_param_distribution(cell, 'kap', 'gkabar', export='new_dend_kap.hdf5', param_label='dend.kap', show=False,
                                  sec_types='all', overwrite=True)
     plot_mech_param_distribution(cell, 'kad', 'gkabar', export='new_dend_kad.hdf5', param_label='dend.kad', show=False,
-                                 sec_types='all')
+                                 sec_types='all', overwrite=True)
 
     plot_mech_param_from_file('kap', 'gkabar', ['old_dend_kap.hdf5', 'new_dend_kap.hdf5'], ['old', 'new'],
                               param_label='dend.kap')
@@ -121,7 +121,7 @@ def compare_nseg(nseg, distances, labels):
     for j, this_nseg in enumerate(nseg):
         for i, sec_type in enumerate(this_nseg):
             this_distances = distances[j]
-            plt.scatter(this_distances[sec_type], this_nseg[sec_type], c=colors[i], marker=markers[j],
+            plt.scatter(this_distances[sec_type], this_nseg[sec_type], c=colors[j], marker=markers[i],
                         label=sec_type+'_'+labels[j], alpha=0.5)
             print '%s_%s nseg: %s' % (sec_type, labels[j], str(this_nseg[sec_type]))
     plt.legend(loc='best', frameon=False, framealpha=0.5)
@@ -299,7 +299,7 @@ def standard_modify_syn_mech_param_tests(cell, env):
 @click.option("--hoc-lib-path", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
               default='../dentate')
 @click.option("--dataset-prefix", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
-              default='/mnt/s')  # '/mnt/s')  # '../dentate/datasets'
+              default='../dentate/datasets')  # '/mnt/s')  # '../dentate/datasets'
 @click.option("--mech-file-path", required=True, type=click.Path(exists=True, file_okay=True, dir_okay=False),
               default='mechanisms/20180529_DG_GC_mech.yaml')
 @click.option('--verbose', '-v', is_flag=True)
@@ -322,10 +322,10 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     cell = get_biophys_cell(env, gid, pop_name)
     context.update(locals())
 
-    # init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=mech_file_path, correct_cm=True,
-    #                correct_g_pas=True, env=env)
-    standard_modify_mech_param_tests(cell)
-    # cm_correction_test(cell, env, mech_file_path)
+    init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=mech_file_path, correct_cm=True,
+                    correct_g_pas=True, env=env)
+    # standard_modify_mech_param_tests(cell)
+    cm_correction_test(cell, env, mech_file_path)
     # count_spines(cell, env)
     # standard_modify_syn_mech_param_tests(cell, env)
 

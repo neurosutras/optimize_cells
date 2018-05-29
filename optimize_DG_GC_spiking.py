@@ -10,7 +10,7 @@ from nested.optimize_utils import *
 from optimize_cells_utils import *
 import collections
 import click
-from plot_results import *
+# from plot_results import *
 
 context = Context()
 
@@ -22,9 +22,8 @@ context = Context()
 @click.option("--export", is_flag=True)
 @click.option("--export-file-path", type=str, default=None)
 @click.option("--label", type=str, default=None)
-@click.option("--disp", is_flag=True)
 @click.option("--verbose", type=int, default=2)
-def main(config_file_path, output_dir, export, export_file_path, label, disp, verbose):
+def main(config_file_path, output_dir, export, export_file_path, label, verbose):
     """
 
     :param config_file_path: str (path)
@@ -32,13 +31,13 @@ def main(config_file_path, output_dir, export, export_file_path, label, disp, ve
     :param export: bool
     :param export_file_path: str
     :param label: str
-    :param disp: bool
     :param verbose: bool
     """
     # requires a global variable context: :class:'Context'
     context.update(locals())
+    disp = verbose > 0
     config_interactive(context, __file__, config_file_path=config_file_path, output_dir=output_dir, export=export,
-                       export_file_path=export_file_path, label=label, disp=disp, verbose=verbose)
+                       export_file_path=export_file_path, label=label, disp=disp)
     # Stage 0:
     args = []
     group_size = 1
