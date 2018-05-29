@@ -1,4 +1,4 @@
-from neuron_wrapper_utils import *
+from biophysics_utils import *
 from optimize_cells.plot_results import *
 import click
 
@@ -301,7 +301,7 @@ def standard_modify_syn_mech_param_tests(cell, env):
 @click.option("--dataset-prefix", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
               default='/mnt/s')  # '/mnt/s')  # '../dentate/datasets'
 @click.option("--mech-file-path", required=True, type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='mechanisms/20180209_DG_GC_hoc_leak_mech.yaml')
+              default='mechanisms/20180529_DG_GC_mech.yaml')
 @click.option('--verbose', '-v', is_flag=True)
 def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefix, mech_file_path, verbose):
     """

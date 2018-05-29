@@ -10,38 +10,29 @@ bounds:
   - 1.0E-7
 feature_names:
 - dend R_inp
-- term_dend R_inp
+- distal_dend R_inp
 - soma R_inp
 update_context:
-- - optimize_DG_GC_hoc_leak
-  - reset_biophysics
-- - optimize_DG_GC_hoc_leak
-  - update_mechanisms_leak
+  optimize_DG_GC_leak: update_context_leak
 get_features_stages:
-- source: optimize_DG_GC_hoc_leak
+- source: optimize_DG_GC_leak
   compute_features: compute_features_leak
   get_args_static: get_args_static_leak
 get_objectives:
-  optimize_DG_GC_hoc_leak: get_objectives_leak
+  optimize_DG_GC_leak: get_objectives_leak
 kwargs:
-  mech_file_path: mechanisms/20180209_DG_GC_hoc_leak_mech.yaml
-  gid: 0
-  cell_type: GC
-  correct_for_spines: True
+  mech_file_path: cells/mechanisms/090717 GC optimizing spiking.yaml
+  neuroH5_file_path: cells/morphologies/121516_DGC_trees.pkl
+  neuroH5_index: 0
+  spines: False
   cvode: True
-  verbose: 2
+  verbose: True
   daspk: True
-  configFile: ../dentate/config/Small_Scale_Control_log_normal_weights.yaml
-  templatePaths: ../dgc/Mateos-Aparicio2014:../dentate/templates
-  hoclibPath: ../dentate
-  # datasetPrefix: /mnt/s
-  datasetPrefix: ../dentate/datasets
-  resultsPath: data
 objective_names:
 - dend R_inp
-- term_dend R_inp
+- distal_dend R_inp
 - soma R_inp
-optimization_title: DG_GC_hoc_leak
+optimization_title: DG_GC_leak
 param_gen: PopulationAnnealing
 param_names:
 - dend.g_pas slope

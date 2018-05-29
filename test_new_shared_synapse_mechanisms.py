@@ -1,4 +1,4 @@
-from neuron_wrapper_utils import *
+from biophysics_utils import *
 
 context = Context()
 
@@ -15,7 +15,7 @@ context = Context()
 @click.option("--results-path", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
               default='data')
 @click.option("--mech-file-path", required=True, type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='mechanisms/20180209_DG_GC_hoc_leak_mech.yaml')
+              default='mechanisms/20180529_DG_GC_mech.yaml')
 @click.option('--verbose', '-v', is_flag=True)
 @click.option('--mech-name', type=str, default='SatExp2Syn')
 @click.option('--num-syns', type=int, default=1)

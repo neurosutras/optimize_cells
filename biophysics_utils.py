@@ -1,7 +1,7 @@
 """
 Tools for pulling individual neurons out of the dentate network simulation environment for single-cell tuning.
 """
-__author__ = 'Ivan Raikov, Grace Ng, Aaron D. Milstein'
+__author__ = 'Grace Ng, Aaron D. Milstein, Ivan Raikov'
 import click
 from dentate.utils import *
 from dentate.neuron_utils import *
@@ -437,7 +437,7 @@ def get_biophys_cell(env, gid, pop_name):
 @click.option("--dataset-prefix", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
               default='/mnt/s')  # '/mnt/s')  # '../dentate/datasets'
 @click.option("--mech-file-path", required=True, type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='mechanisms/20180209_DG_GC_hoc_leak_mech.yaml')
+              default='mechanisms/20180529_DG_GC_mech.yaml')
 @click.option('--verbose', '-v', is_flag=True)
 def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefix, mech_file_path, verbose):
     """
