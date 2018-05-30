@@ -5,24 +5,25 @@ Requires a YAML file to specify required configuration parameters.
 Requires use of a nested.parallel interface.
 """
 __author__ = 'Aaron D. Milstein and Grace Ng'
+from specify_cells4 import *
 from plot_results import *
 from nested.optimize_utils import *
 import collections
 import click
-from neuron_wrapper_utils import *
+
 
 context = Context()
 
 
 @click.command()
 @click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='config/optimize_DG_GC_hoc_spiking_config.yaml')
-@click.option("--output-dir", type=click.Path(exists=True, file_okay=False, dir_okay=True), default='data')
+              default='config/optimize_DG_GC_spiking_config.yaml')
+@click.option("--output-dir", type=str, default='data')
 @click.option("--export", is_flag=True)
 @click.option("--export-file-path", type=str, default=None)
 @click.option("--label", type=str, default=None)
 @click.option("--disp", is_flag=True)
-@click.option("--verbose", type=int, default=1)
+@click.option("--verbose", is_flag=True)
 def main(config_file_path, output_dir, export, export_file_path, label, disp, verbose):
     """
 
@@ -35,9 +36,10 @@ def main(config_file_path, output_dir, export, export_file_path, label, disp, ve
     :param verbose: bool
     """
     # requires a global variable context: :class:'Context'
+
     context.update(locals())
-    config_interactive(config_file_path=config_file_path, output_dir=output_dir, export=export,
-                       export_file_path=export_file_path, label=label, disp=disp, verbose=verbose)
+    config_interactive(config_file_path=config_file_path, output_dir=output_dir, export_file_path=export_file_path,
+                       label=label, verbose=verbose)
     # Stage 0:
     args = []
     group_size = 1
@@ -53,7 +55,7 @@ def main(config_file_path, output_dir, export, export_file_path, label, disp, ve
     this_features = filter_features_fI(primitives, features, context.export)
     features.update(this_features)
 
-    features, objectives = get_objectives_spiking(features)
+    features, objectives = get_objectives(features)
     print 'params:'
     pprint.pprint(context.x0_dict)
     print 'features:'
@@ -62,18 +64,16 @@ def main(config_file_path, output_dir, export, export_file_path, label, disp, ve
     pprint.pprint(objectives)
 
 
-def config_interactive(config_file_path=None, output_dir=None, temp_output_path=None, export=False,
-                       export_file_path=None, label=None, disp=True, verbose=2, **kwargs):
+def config_interactive(config_file_path=None, output_dir=None, temp_output_path=None, export_file_path=None,
+                       label=None, verbose=True, **kwargs):
     """
 
     :param config_file_path: str (.yaml file path)
     :param output_dir: str (dir path)
     :param temp_output_path: str (.hdf5 file path)
-    :param export: bool
     :param export_file_path: str (.hdf5 file path)
     :param label: str
-    :param disp: bool
-    :param verbose: int
+    :param verbose: bool
     """
 
     if config_file_path is not None:
@@ -82,18 +82,11 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
             not os.path.isfile(context.config_file_path):
         raise Exception('config_file_path specifying required parameters is missing or invalid.')
     config_dict = read_from_yaml(context.config_file_path)
-    if 'param_names' not in config_dict or config_dict['param_names'] is None:
-        raise Exception('config_file at path: %s is missing the following required field: %s' %
-                        (context.config_file_path, 'param_names'))
-    else:
-        context.param_names = config_dict['param_names']
+    context.param_names = config_dict['param_names']
     if 'default_params' not in config_dict or config_dict['default_params'] is None:
         context.default_params = {}
     else:
         context.default_params = config_dict['default_params']
-    if 'bounds' not in config_dict or config_dict['bounds'] is None:
-        raise Exception('config_file at path: %s is missing the following required field: %s' %
-                        (context.config_file_path, 'bounds'))
     for param in context.default_params:
         config_dict['bounds'][param] = (context.default_params[param], context.default_params[param])
     context.bounds = [config_dict['bounds'][key] for key in context.param_names]
@@ -106,41 +99,19 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
     else:
         context.x0 = config_dict['x0']
         context.x0_dict = context.x0
-        for param_name in context.default_params:
-            context.x0_dict[param_name] = context.default_params[param_name]
         context.x0_array = param_dict_to_array(context.x0_dict, context.param_names)
-
-    missing_config = []
-    if 'feature_names' not in config_dict or config_dict['feature_names'] is None:
-        missing_config.append('feature_names')
-    else:
-        context.feature_names = config_dict['feature_names']
-    if 'objective_names' not in config_dict or config_dict['objective_names'] is None:
-        missing_config.append('objective_names')
-    else:
-        context.objective_names = config_dict['objective_names']
-    if 'target_val' in config_dict:
-        context.target_val = config_dict['target_val']
-    else:
-        context.target_val = None
-    if 'target_range' in config_dict:
-        context.target_range = config_dict['target_range']
-    else:
-        context.target_range = None
-    if 'optimization_title' in config_dict:
-        if config_dict['optimization_title'] is None:
-            context.optimization_title = ''
-        else:
-            context.optimization_title = config_dict['optimization_title']
-    if 'kwargs' in config_dict and config_dict['kwargs'] is not None:
-        context.kwargs = config_dict['kwargs']  # Extra arguments to be passed to imported sources
-    else:
-        context.kwargs = {}
-    context.kwargs.update(kwargs)
+    context.feature_names = config_dict['feature_names']
+    context.objective_names = config_dict['objective_names']
+    context.target_val = config_dict['target_val']
+    context.target_range = config_dict['target_range']
+    context.optimization_title = config_dict['optimization_title']
+    context.kwargs = config_dict['kwargs']  # Extra arguments to be passed to imported sources
+    context.kwargs['verbose'] = verbose
     context.update(context.kwargs)
 
+    missing_config = []
     if 'update_context' not in config_dict or config_dict['update_context'] is None:
-        context.update_context_list = []
+        missing_config.append('update_context')
     else:
         context.update_context_list = config_dict['update_context']
     if 'get_features_stages' not in config_dict or config_dict['get_features_stages'] is None:
@@ -175,10 +146,9 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
         context.temp_output_path = temp_output_path
     if 'temp_output_path' not in context() or context.temp_output_path is None:
         context.temp_output_path = '%s%s_pid%i_%s%s_temp_output.hdf5' % \
-                                   (output_dir_str, datetime.datetime.today().strftime('%Y%m%d%H%M'), os.getpid(),
-                                    context.optimization_title, label)
-
-    context.export = export
+                               (output_dir_str, datetime.datetime.today().strftime('%Y%m%d%H%M'), os.getpid(),
+                                context.optimization_title, label)
+    
     if export_file_path is not None:
         context.export_file_path = export_file_path
     if 'export_file_path' not in context() or context.export_file_path is None:
@@ -199,13 +169,10 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
     if not context.update_context_funcs:
         raise Exception('update_context function not found')
 
-    context.disp=disp
-    context.rel_bounds_handler = RelativeBoundedStep(context.x0_array, context.param_names, context.bounds,
-                                                     context.rel_bounds)
-    config_worker(context.update_context_funcs, context.param_names, context.default_params, context.feature_names,
-                  context.objective_names, context.target_val, context.target_range, context.temp_output_path,
-                  context.export_file_path, context.output_dir, context.disp, **context.kwargs)
-    update_source_contexts(context.x0_array, context)
+    config_worker(context.update_context_funcs, context.param_names, context.default_params, context.target_val,
+                  context.target_range, context.temp_output_path, context.export_file_path, context.output_dir,
+                  context.disp, **context.kwargs)
+    update_source_contexts(context.x0_array)
 
 
 def config_controller(export_file_path, output_dir, **kwargs):
@@ -214,33 +181,35 @@ def config_controller(export_file_path, output_dir, **kwargs):
     :param export_file_path: str (path)
     :param output_dir: str (dir)
     """
+    processed_export_file_path = export_file_path.replace('.hdf5', '_processed.hdf5')
     context.update(locals())
     context.update(kwargs)
     init_context()
 
 
-def config_worker(update_context_funcs, param_names, default_params, feature_names, objective_names, target_val,
-                  target_range, temp_output_path, export_file_path, output_dir, disp, mech_file_path, gid,
-                  population, spines, **kwargs):
+def config_worker(update_context_funcs, param_names, default_params, target_val, target_range, temp_output_path,
+                  export_file_path, output_dir, disp, mech_file_path, neuroH5_file_path, neuroH5_index, spines,
+                  **kwargs):
     """
     :param update_context_funcs: list of function references
     :param param_names: list of str
     :param default_params: dict
     :param target_val: dict
     :param target_range: dict
-    :param feature_names: list of str
-    :param objective_names: list of str
     :param temp_output_path: str
     :param export_file_path: str
     :param output_dir: str (dir path)
     :param disp: bool
     :param mech_file_path: str
-    :param gid: int
-    :param population: str
+    :param neuroH5_file_path: str
+    :param neuroH5_index: int
     :param spines: bool
     """
-    context.update(locals())
     context.update(kwargs)
+    neuroH5_dict = read_from_pkl(neuroH5_file_path)[neuroH5_index]
+    param_indexes = {param_name: i for i, param_name in enumerate(param_names)}
+    processed_export_file_path = export_file_path.replace('.hdf5', '_processed.hdf5')
+    context.update(locals())
     init_context()
     setup_cell(**kwargs)
 
@@ -290,47 +259,39 @@ def get_adaptation_index(spike_times):
     return np.mean(adi)
 
 
-def setup_cell(verbose=1, cvode=False, daspk=False, **kwargs):
+def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
     """
 
-    :param verbose: int
+    :param verbose: bool
     :param cvode: bool
     :param daspk: bool
     """
-    if 'comm' not in context():
-        try:
-            from mpi4py import MPI
-            context.comm = MPI.COMM_WORLD
-        except Exception:
-            raise Exception('optimize_DG_GC_hoc_spiking: problem importing from mpi4py; '
-                            'required for config_interactive')
-    context.env = Env(comm=context.comm, **kwargs)
-    configure_env(context.env)
-    cell = get_biophys_cell(context.env, context.gid, context.population)
-    init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path, correct_cm=True,
-                    correct_g_pas=True, env=context.env)
+    cell = DG_GC(neuroH5_dict=context.neuroH5_dict, mech_file_path=context.mech_file_path,
+                 full_spines=context.spines)
+    context.cell = cell
 
     # get the thickest apical dendrite ~200 um from the soma
     candidate_branches = []
     candidate_diams = []
     candidate_locs = []
     for branch in cell.apical:
-        if ((get_distance_to_node(cell, cell.tree.root, branch, 0.) >= 130.) &
-                (get_distance_to_node(cell, cell.tree.root, branch, 1.) > 280.) & (not is_terminal(branch))):
+        if ((cell.get_distance_to_node(cell.tree.root, branch, 0.) >= 200.) &
+                (cell.get_distance_to_node(cell.tree.root, branch, 1.) > 300.) & (not cell.is_terminal(branch))):
             candidate_branches.append(branch)
             for seg in branch.sec:
                 loc = seg.x
-                if get_distance_to_node(cell, cell.tree.root, branch, loc) > 250.:
+                if cell.get_distance_to_node(cell.tree.root, branch, loc) > 250.:
                     candidate_diams.append(branch.sec(loc).diam)
                     candidate_locs.append(loc)
                     break
     index = candidate_diams.index(max(candidate_diams))
     dend = candidate_branches[index]
     dend_loc = candidate_locs[index]
-    axon_seg_locs = [seg.x for seg in cell.axon[0].sec]
+    axon_seg_locs = [seg.x for seg in cell.axon[2].sec]
+
     rec_locs = {'soma': 0., 'dend': dend_loc, 'ais': 1., 'axon': axon_seg_locs[0]}
     context.rec_locs = rec_locs
-    rec_nodes = {'soma': cell.tree.root, 'dend': dend, 'ais': cell.ais[0], 'axon': cell.axon[0]}
+    rec_nodes = {'soma': cell.tree.root, 'dend': dend, 'ais': cell.axon[1], 'axon': cell.axon[2]}
     context.rec_nodes = rec_nodes
 
     equilibrate = context.equilibrate
@@ -338,7 +299,7 @@ def setup_cell(verbose=1, cvode=False, daspk=False, **kwargs):
     duration = context.duration
     dt = context.dt
 
-    sim = QuickSim(duration, cvode=cvode, daspk=daspk, dt=dt, verbose=verbose>1)
+    sim = QuickSim(duration, cvode=cvode, daspk=daspk, dt=dt, verbose=verbose)
     sim.append_stim(cell, cell.tree.root, loc=0., amp=0., delay=equilibrate, dur=stim_dur, description='step')
     sim.append_stim(cell, cell.tree.root, loc=0., amp=0., delay=0., dur=duration, description='offset')
     for description, node in rec_nodes.iteritems():
@@ -350,14 +311,21 @@ def setup_cell(verbose=1, cvode=False, daspk=False, **kwargs):
 
     context.spike_output_vec = h.Vector()
     cell.spike_detector.record(context.spike_output_vec)
-    context.cell = cell
 
 
-def reset_mechanisms(x, local_context=None):
+def update_source_contexts(x, local_context=None):
+    """
+
+    :param x: array
+    :param local_context: :class:'Context'
+    """
     if local_context is None:
         local_context = context
-    init_biophysics(local_context.cell, reset_cable=False, from_file=True, mech_file_path=local_context.mech_file_path,
-                    correct_g_pas=True, env=local_context.env)
+    local_context.cell.reinit_mechanisms(from_file=True)
+    if not local_context.spines:
+        local_context.cell.correct_g_pas_for_spines()
+    for update_func in local_context.update_context_funcs:
+        update_func(x, local_context)
 
 
 def compute_features_spike_shape(x, export=False, plot=False):
@@ -390,11 +358,11 @@ def compute_features_spike_shape(x, export=False, plot=False):
         context.sim.modify_stim(step_stim_index, amp=amp)
         context.sim.run(v_active)
         vm = np.interp(t, context.sim.tvec, context.sim.get_rec('soma')['vec'])
-        if np.any(vm[:int(equilibrate / dt)] > -30.):
+        if np.any(vm[:int(equilibrate/dt)] > -30.):
             if context.disp:
                 print 'Process %i: Aborting - spontaneous firing' % (os.getpid())
             return None
-        if np.any(vm[int(equilibrate / dt):int((equilibrate + 50.) / dt)] > -30.):
+        if np.any(vm[int(equilibrate/dt):int((equilibrate+50.)/dt)] > -30.):
             spike = True
         elif amp >= 0.4:
             if context.disp:
@@ -422,7 +390,7 @@ def compute_features_spike_shape(x, export=False, plot=False):
     dend_vm = np.interp(t, context.sim.tvec, context.sim.get_rec('dend')['vec'])
     th_x = np.where(vm[int(equilibrate / dt):] >= threshold)[0][0] + int(equilibrate / dt)
     if len(spike_times) > 1:
-        end = min(th_x + int(10. / dt), int((spike_times[1] - 5.) / dt))
+        end = min(th_x + int(10. / dt), int((spike_times[1] - 5.)/dt))
     else:
         end = th_x + int(10. / dt)
     result['soma_peak'] = peak
@@ -456,7 +424,7 @@ def compute_features_spike_shape(x, export=False, plot=False):
 
 def get_args_dynamic_fI(x, features):
     """
-    A nested map operation is required to compute fI features. The arguments to be mapped depend on each set of
+    A nested map operation is required to compute fI features. The arguments to be mapped depend on each set of 
     parameters and prior features (dynamic).
     :param x: array
     :param features: dict
@@ -466,12 +434,12 @@ def get_args_dynamic_fI(x, features):
     # Calculate firing rates for a range of I_inj amplitudes using a stim duration of 500 ms
     num_incr = context.num_increments
     i_inj_increment = context.i_inj_increment
-    return [[rheobase + i_inj_increment * (i + 1) for i in xrange(num_incr)], [False] * (num_incr - 1) + [True]]
+    return [[rheobase + i_inj_increment * (i + 1) for i in xrange(num_incr)], [False] * (num_incr-1) + [True]]
 
 
 def compute_features_fI(x, amp, extend_dur=False, export=False, plot=False):
     """
-
+    
     :param x: array
     :param amp: float
     :param extend_dur: bool
@@ -576,12 +544,10 @@ def filter_features_fI(primitives, current_features, export=False):
     amps = map(amps.__getitem__, adapt_ind)
     experimental_f_I_slope = context.target_val['f_I_slope']  # Hz/ln(pA); rate = slope * ln(current - rheobase)
     if export:
-        print 'filter_features_fI trying to export'
         description = 'f_I_features'
-        with h5py.File(context.export_file_path, 'a') as f:
+        with h5py.File(context.processed_export_file_path, 'a') as f:
             if description not in f:
                 f.create_group(description)
-                f[description].attrs['enumerated'] = False
             group = f[description]
             group.create_dataset('amps', compression='gzip', compression_opts=9, data=amps)
             group.create_dataset('adi', compression='gzip', compression_opts=9, data=new_features['adi'])
@@ -591,12 +557,12 @@ def filter_features_fI(primitives, current_features, export=False):
             i_inj_increment = context.i_inj_increment
             rheobase = current_features['rheobase']
             exp_f_I = [experimental_f_I_slope * np.log((rheobase + i_inj_increment * (i + 1)) / rheobase)
-                       for i in xrange(num_increments)]
+                          for i in xrange(num_increments)]
             group.create_dataset('exp_f_I', compression='gzip', compression_opts=9, data=exp_f_I)
     return new_features
 
 
-def get_objectives_spiking(features):
+def get_objectives(features):
     """
 
     :param features: dict
@@ -612,8 +578,7 @@ def get_objectives_spiking(features):
             # don't penalize AHP or slow_depo less than target
             if not ((target == 'AHP' and features[target] < context.target_val[target]) or
                         (target == 'slow_depo' and features[target] < context.target_val[target])):
-                objectives[target] = ((context.target_val[target] - features[target]) / context.target_range[
-                    target]) ** 2.
+                objectives[target] = ((context.target_val[target] - features[target]) / context.target_range[target]) ** 2.
             else:
                 objectives[target] = 0.
         objectives['adi'] = 0.
@@ -669,7 +634,7 @@ def offset_vm(description, vm_target=None):
     context.sim.modify_stim(offset_stim_index, amp=context.i_holding[description])
     context.sim.run(vm_target)
     vm = np.interp(t, context.sim.tvec, rec)
-    v_rest = np.mean(vm[int((equilibrate - 3.) / dt):int((equilibrate - 1.) / dt)])
+    v_rest = np.mean(vm[int((equilibrate - 3.)/dt):int((equilibrate - 1.)/dt)])
     initial_v_rest = v_rest
     if v_rest < vm_target - 0.5:
         context.i_holding[description] += 0.01
@@ -679,7 +644,7 @@ def offset_vm(description, vm_target=None):
             context.sim.modify_stim(offset_stim_index, amp=context.i_holding[description])
             context.sim.run(vm_target)
             vm = np.interp(t, context.sim.tvec, rec)
-            v_rest = np.mean(vm[int((equilibrate - 3.) / dt):int((equilibrate - 1.) / dt)])
+            v_rest = np.mean(vm[int((equilibrate - 3.)/dt):int((equilibrate - 1.)/dt)])
             if v_rest < vm_target - 0.5:
                 context.i_holding[description] += 0.01
             else:
@@ -692,7 +657,7 @@ def offset_vm(description, vm_target=None):
             context.sim.modify_stim(offset_stim_index, amp=context.i_holding[description])
             context.sim.run(vm_target)
             vm = np.interp(t, context.sim.tvec, rec)
-            v_rest = np.mean(vm[int((equilibrate - 3.) / dt):int((equilibrate - 1.) / dt)])
+            v_rest = np.mean(vm[int((equilibrate - 3.)/dt):int((equilibrate - 1.)/dt)])
             if v_rest > vm_target + 0.5:
                 context.i_holding[description] -= 0.01
             else:
@@ -712,31 +677,31 @@ def get_spike_shape(vm, spike_times):
     dt = context.dt
     th_dvdt = context.th_dvdt
 
-    start = int((equilibrate + 1.) / dt)
+    start = int((equilibrate+1.)/dt)
     vm = vm[start:]
     dvdt = np.gradient(vm, dt)
     th_x = np.where(dvdt > th_dvdt)[0]
     if th_x.any():
-        th_x = th_x[0] - int(1.6 / dt)
+        th_x = th_x[0] - int(1.6/dt)
     else:
-        th_x = np.where(vm > -30.)[0][0] - int(2. / dt)
+        th_x = np.where(vm > -30.)[0][0] - int(2./dt)
     th_v = vm[th_x]
-    v_before = np.mean(vm[th_x - int(0.1 / dt):th_x])
-    v_peak = np.max(vm[th_x:th_x + int(5. / dt)])
-    x_peak = np.where(vm[th_x:th_x + int(5. / dt)] == v_peak)[0][0]
+    v_before = np.mean(vm[th_x-int(0.1/dt):th_x])
+    v_peak = np.max(vm[th_x:th_x+int(5./dt)])
+    x_peak = np.where(vm[th_x:th_x+int(5./dt)] == v_peak)[0][0]
     if len(spike_times) > 1:
-        end = max(th_x + x_peak + int(2. / dt), int((spike_times[1] - 4.) / dt) - start)
+        end = max(th_x + x_peak + int(2./dt), int((spike_times[1] - 4.) / dt) - start)
     else:
         end = len(vm)
-    v_AHP = np.min(vm[th_x + x_peak:end])
-    x_AHP = np.where(vm[th_x + x_peak:end] == v_AHP)[0][0]
+    v_AHP = np.min(vm[th_x+x_peak:end])
+    x_AHP = np.where(vm[th_x+x_peak:end] == v_AHP)[0][0]
     AHP = v_before - v_AHP
     # if spike waveform includes an ADP before an AHP, return the value of the ADP in order to increase error function
     ADP = 0.
-    rising_x = np.where(dvdt[th_x + x_peak + 1:th_x + x_peak + x_AHP - 1] > 0.)[0]
+    rising_x = np.where(dvdt[th_x+x_peak+1:th_x+x_peak+x_AHP-1] > 0.)[0]
     if rising_x.any():
-        v_ADP = np.max(vm[th_x + x_peak + 1 + rising_x[0]:th_x + x_peak + x_AHP])
-        pre_ADP = np.mean(vm[th_x + x_peak + 1 + rising_x[0] - int(0.1 / dt):th_x + x_peak + 1 + rising_x[0]])
+        v_ADP = np.max(vm[th_x+x_peak+1+rising_x[0]:th_x+x_peak+x_AHP])
+        pre_ADP = np.mean(vm[th_x+x_peak+1+rising_x[0] - int(0.1/dt):th_x+x_peak+1+rising_x[0]])
         ADP += v_ADP - pre_ADP
     falling_x = np.where(dvdt[th_x + x_peak + x_AHP + 1:end] < 0.)[0]
     if falling_x.any():
@@ -745,7 +710,7 @@ def get_spike_shape(vm, spike_times):
     return v_peak, th_v, ADP, AHP
 
 
-def update_mechanisms_spiking(x, local_context=None):
+def update_context_spike_shape(x, local_context=None):
     """
     :param x: array ['soma.gbar_nas', 'dend.gbar_nas', 'dend.gbar_nas slope', 'dend.gbar_nas min', 'dend.gbar_nas bo',
                     'axon.gbar_nax', 'ais.gbar_nax', 'soma.gkabar', 'dend.gkabar', 'soma.gkdrbar', 'axon.gkabar',
@@ -755,50 +720,51 @@ def update_mechanisms_spiking(x, local_context=None):
     if local_context is None:
         local_context = context
     cell = local_context.cell
-    x_dict = param_array_to_dict(x, local_context.param_names)
-    modify_mech_param(cell, 'soma', 'nas', 'gbar', x_dict['soma.gbar_nas'])
-    modify_mech_param(cell, 'soma', 'kdr', 'gkdrbar', x_dict['soma.gkdrbar'])
-    modify_mech_param(cell, 'soma', 'kap', 'gkabar', x_dict['soma.gkabar'])
-    slope = (x_dict['dend.gkabar'] - x_dict['soma.gkabar']) / 300.
-    modify_mech_param(cell, 'soma', 'nas', 'sh', x_dict['soma.sh_nas/x'])
+    param_indexes = local_context.param_indexes
+    cell.modify_mech_param('soma', 'nas', 'gbar', x[param_indexes['soma.gbar_nas']])
+    cell.modify_mech_param('soma', 'kdr', 'gkdrbar', x[param_indexes['soma.gkdrbar']])
+    cell.modify_mech_param('soma', 'kap', 'gkabar', x[param_indexes['soma.gkabar']])
+    slope = (x[param_indexes['dend.gkabar']] - x[param_indexes['soma.gkabar']]) / 300.
+    cell.modify_mech_param('soma', 'nas', 'sh', x[param_indexes['soma.sh_nas/x']])
     for sec_type in ['apical']:
-        update_mechanism_by_sec_type(cell, sec_type, 'nas')
-        modify_mech_param(cell, sec_type, 'kap', 'gkabar', origin='soma', min_loc=75., value=0.)
-        modify_mech_param(cell, sec_type, 'kap', 'gkabar', origin='soma', max_loc=75., slope=slope, replace=False)
-        modify_mech_param(cell, sec_type, 'kad', 'gkabar', origin='soma', max_loc=75., value=0.)
-        modify_mech_param(cell, sec_type, 'kad', 'gkabar', origin='soma', min_loc=75., max_loc=300., slope=slope,
-                          value=(x_dict['soma.gkabar'] + slope * 75.), replace=False)
-        modify_mech_param(cell, sec_type, 'kad', 'gkabar', origin='soma', min_loc=300.,
-                          value=(x_dict['soma.gkabar'] + slope * 300.), replace=False)
-        modify_mech_param(cell, sec_type, 'kdr', 'gkdrbar', origin='soma')
-        modify_mech_param(cell, sec_type, 'nas', 'sha', 0.)  # 5.)
-        modify_mech_param(cell, sec_type, 'nas', 'gbar', x_dict['dend.gbar_nas'])
-        modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=x_dict['dend.gbar_nas slope'],
-                          min=x_dict['dend.gbar_nas min'],
-                          custom={'method': 'custom_gradient_by_branch_order',
-                                  'branch_order': x_dict['dend.gbar_nas bo']}, replace=False)
-        modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=x_dict['dend.gbar_nas slope'],
-                          min=x_dict['dend.gbar_nas min'], custom={'method': 'custom_gradient_by_terminal'},
-                          replace=False)
-    update_mechanism_by_sec_type(cell, 'hillock', 'kap')
-    update_mechanism_by_sec_type(cell, 'hillock', 'kdr')
-    modify_mech_param(cell, 'ais', 'kdr', 'gkdrbar', origin='soma')
-    modify_mech_param(cell, 'ais', 'kap', 'gkabar', x_dict['axon.gkabar'])
-    modify_mech_param(cell, 'axon', 'kdr', 'gkdrbar', origin='ais')
-    modify_mech_param(cell, 'axon', 'kap', 'gkabar', origin='ais')
-    modify_mech_param(cell, 'hillock', 'nax', 'sh', x_dict['soma.sh_nas/x'])
-    modify_mech_param(cell, 'hillock', 'nax', 'gbar', x_dict['soma.gbar_nas'])
-    modify_mech_param(cell, 'axon', 'nax', 'gbar', x_dict['axon.gbar_nax'])
+        cell.reinitialize_subset_mechanisms(sec_type, 'nas')
+        cell.modify_mech_param(sec_type, 'kap', 'gkabar', origin='soma', min_loc=75., value=0.)
+        cell.modify_mech_param(sec_type, 'kap', 'gkabar', origin='soma', max_loc=75., slope=slope, replace=False)
+        cell.modify_mech_param(sec_type, 'kad', 'gkabar', origin='soma', max_loc=75., value=0.)
+        cell.modify_mech_param(sec_type, 'kad', 'gkabar', origin='soma', min_loc=75., max_loc=300., slope=slope,
+                               value=(x[param_indexes['soma.gkabar']] + slope * 75.), replace=False)
+        cell.modify_mech_param(sec_type, 'kad', 'gkabar', origin='soma', min_loc=300.,
+                               value=(x[param_indexes['soma.gkabar']] + slope * 300.), replace=False)
+        cell.modify_mech_param(sec_type, 'kdr', 'gkdrbar', origin='soma')
+        cell.modify_mech_param(sec_type, 'nas', 'sha', 0.)  # 5.)
+        cell.modify_mech_param(sec_type, 'nas', 'gbar',
+                               x[param_indexes['dend.gbar_nas']])
+        cell.modify_mech_param(sec_type, 'nas', 'gbar', origin='parent', slope=x[param_indexes['dend.gbar_nas slope']],
+                               min=x[param_indexes['dend.gbar_nas min']],
+                               custom={'method': 'custom_gradient_by_branch_order',
+                                       'branch_order': x[param_indexes['dend.gbar_nas bo']]}, replace=False)
+        cell.modify_mech_param(sec_type, 'nas', 'gbar', origin='parent',
+                               slope=x[param_indexes['dend.gbar_nas slope']], min=x[param_indexes['dend.gbar_nas min']],
+                               custom={'method': 'custom_gradient_by_terminal'}, replace=False)
+    cell.reinitialize_subset_mechanisms('axon_hill', 'kap')
+    cell.reinitialize_subset_mechanisms('axon_hill', 'kdr')
+    cell.modify_mech_param('ais', 'kdr', 'gkdrbar', origin='soma')
+    cell.modify_mech_param('ais', 'kap', 'gkabar', x[param_indexes['axon.gkabar']])
+    cell.modify_mech_param('axon', 'kdr', 'gkdrbar', origin='ais')
+    cell.modify_mech_param('axon', 'kap', 'gkabar', origin='ais')
+    cell.modify_mech_param('axon_hill', 'nax', 'sh', x[param_indexes['soma.sh_nas/x']])
+    cell.modify_mech_param('axon_hill', 'nax', 'gbar', x[param_indexes['soma.gbar_nas']])
+    cell.modify_mech_param('axon', 'nax', 'gbar', x[param_indexes['axon.gbar_nax']])
     for sec_type in ['ais', 'axon']:
-        modify_mech_param(cell, sec_type, 'nax', 'sh', origin='hillock')
-    modify_mech_param(cell, 'soma', 'Ca', 'gcamult', x_dict['soma.gCa factor'])
-    modify_mech_param(cell, 'soma', 'CadepK', 'gcakmult', x_dict['soma.gCadepK factor'])
-    modify_mech_param(cell, 'soma', 'km3', 'gkmbar', x_dict['soma.gkmbar'])
-    modify_mech_param(cell, 'ais', 'km3', 'gkmbar', x_dict['ais.gkmbar'])
-    modify_mech_param(cell, 'hillock', 'km3', 'gkmbar', origin='soma')
-    modify_mech_param(cell, 'axon', 'km3', 'gkmbar', origin='ais')
-    modify_mech_param(cell, 'ais', 'nax', 'sha', x_dict['ais.sha_nax'])
-    modify_mech_param(cell, 'ais', 'nax', 'gbar', x_dict['ais.gbar_nax'])
+        cell.modify_mech_param(sec_type, 'nax', 'sh', origin='axon_hill')
+    cell.modify_mech_param('soma', 'Ca', 'gcamult', x[param_indexes['soma.gCa factor']])
+    cell.modify_mech_param('soma', 'CadepK', 'gcakmult', x[param_indexes['soma.gCadepK factor']])
+    cell.modify_mech_param('soma', 'km3', 'gkmbar', x[param_indexes['soma.gkmbar']])
+    cell.modify_mech_param('ais', 'km3', 'gkmbar', x[param_indexes['ais.gkmbar']])
+    cell.modify_mech_param('axon_hill', 'km3', 'gkmbar', origin='soma')
+    cell.modify_mech_param('axon', 'km3', 'gkmbar', origin='ais')
+    cell.modify_mech_param('ais', 'nax', 'sha', x[param_indexes['ais.sha_nax']])
+    cell.modify_mech_param('ais', 'nax', 'gbar', x[param_indexes['ais.gbar_nax']])
 
 
 def export_sim_results():
@@ -807,7 +773,7 @@ def export_sim_results():
     """
     with h5py.File(context.temp_output_path, 'a') as f:
         context.sim.export_to_file(f)
-
+        
 
 if __name__ == '__main__':
     main(args=sys.argv[(list_find(lambda s: s.find(os.path.basename(__file__)) != -1, sys.argv) + 1):],

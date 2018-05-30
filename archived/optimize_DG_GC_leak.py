@@ -5,39 +5,43 @@ Requires a YAML file to specify required configuration parameters.
 Requires use of a nested.parallel interface.
 """
 __author__ = 'Aaron D. Milstein and Grace Ng'
+from specify_cells4 import *
 from plot_results import *
 from nested.optimize_utils import *
 import collections
 import click
-from neuron_wrapper_utils import *
+
+
+script_filename='optimize_DG_GC_leak.py'
 
 context = Context()
 
 
 @click.command()
 @click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='config/optimize_DG_GC_hoc_leak_config.yaml')
-@click.option("--output-dir", type=click.Path(exists=True, file_okay=False, dir_okay=True), default='data')
+              default='config/optimize_DG_GC_leak_config.yaml')
 @click.option("--export", is_flag=True)
+@click.option("--output-dir", type=str, default='data')
 @click.option("--export-file-path", type=str, default=None)
 @click.option("--label", type=str, default=None)
 @click.option("--disp", is_flag=True)
-@click.option("--verbose", type=int, default=1)
-def main(config_file_path, output_dir, export, export_file_path, label, disp, verbose):
+@click.option("--verbose", is_flag=True)
+def main(config_file_path, export, output_dir, export_file_path, label, disp, verbose):
     """
 
     :param config_file_path: str (path)
-    :param output_dir: str (path)
     :param export: bool
+    :param output_dir: str
     :param export_file_path: str
     :param label: str
     :param disp: bool
     :param verbose: bool
     """
     # requires a global variable context: :class:'Context'
+
     context.update(locals())
-    config_interactive(config_file_path=config_file_path, output_dir=output_dir, export=export,
-                       export_file_path=export_file_path, label=label, disp=disp, verbose=verbose)
+    config_interactive(config_file_path=config_file_path, output_dir=output_dir, export_file_path=export_file_path,
+                       label=label, verbose=verbose)
     args = get_args_static_leak()
     group_size = len(args[0])
     sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size]
@@ -52,18 +56,16 @@ def main(config_file_path, output_dir, export, export_file_path, label, disp, ve
     pprint.pprint(objectives)
 
 
-def config_interactive(config_file_path=None, output_dir=None, temp_output_path=None, export=False,
-                       export_file_path=None, label=None, disp=True, verbose=2, **kwargs):
+def config_interactive(config_file_path=None, output_dir=None, temp_output_path=None, export_file_path=None,
+                       label=None, verbose=True, **kwargs):
     """
 
     :param config_file_path: str (.yaml file path)
     :param output_dir: str (dir path)
     :param temp_output_path: str (.hdf5 file path)
-    :param export: bool
     :param export_file_path: str (.hdf5 file path)
     :param label: str
-    :param disp: bool
-    :param verbose: int
+    :param verbose: bool
     """
 
     if config_file_path is not None:
@@ -72,18 +74,11 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
             not os.path.isfile(context.config_file_path):
         raise Exception('config_file_path specifying required parameters is missing or invalid.')
     config_dict = read_from_yaml(context.config_file_path)
-    if 'param_names' not in config_dict or config_dict['param_names'] is None:
-        raise Exception('config_file at path: %s is missing the following required field: %s' %
-                        (context.config_file_path, 'param_names'))
-    else:
-        context.param_names = config_dict['param_names']
+    context.param_names = config_dict['param_names']
     if 'default_params' not in config_dict or config_dict['default_params'] is None:
         context.default_params = {}
     else:
         context.default_params = config_dict['default_params']
-    if 'bounds' not in config_dict or config_dict['bounds'] is None:
-        raise Exception('config_file at path: %s is missing the following required field: %s' %
-                        (context.config_file_path, 'bounds'))
     for param in context.default_params:
         config_dict['bounds'][param] = (context.default_params[param], context.default_params[param])
     context.bounds = [config_dict['bounds'][key] for key in context.param_names]
@@ -96,43 +91,21 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
     else:
         context.x0 = config_dict['x0']
         context.x0_dict = context.x0
-        for param_name in context.default_params:
-            context.x0_dict[param_name] = context.default_params[param_name]
         context.x0_array = param_dict_to_array(context.x0_dict, context.param_names)
-
-    missing_config = []
-    if 'feature_names' not in config_dict or config_dict['feature_names'] is None:
-        missing_config.append('feature_names')
-    else:
-        context.feature_names = config_dict['feature_names']
-    if 'objective_names' not in config_dict or config_dict['objective_names'] is None:
-        missing_config.append('objective_names')
-    else:
-        context.objective_names = config_dict['objective_names']
-    if 'target_val' in config_dict:
-        context.target_val = config_dict['target_val']
-    else:
-        context.target_val = None
-    if 'target_range' in config_dict:
-        context.target_range = config_dict['target_range']
-    else:
-        context.target_range = None
-    if 'optimization_title' in config_dict:
-        if config_dict['optimization_title'] is None:
-            context.optimization_title = ''
-        else:
-            context.optimization_title = config_dict['optimization_title']
-    if 'kwargs' in config_dict and config_dict['kwargs'] is not None:
-        context.kwargs = config_dict['kwargs']  # Extra arguments to be passed to imported sources
-    else:
-        context.kwargs = {}
-    context.kwargs.update(kwargs)
+    context.feature_names = config_dict['feature_names']
+    context.objective_names = config_dict['objective_names']
+    context.target_val = config_dict['target_val']
+    context.target_range = config_dict['target_range']
+    context.optimization_title = config_dict['optimization_title']
+    context.kwargs = config_dict['kwargs']  # Extra arguments to be passed to imported sources
+    context.kwargs['verbose'] = verbose
     context.update(context.kwargs)
 
+    missing_config = []
     if 'update_context' not in config_dict or config_dict['update_context'] is None:
-        context.update_context_list = []
+        missing_config.append('update_context')
     else:
-        context.update_context_list = config_dict['update_context']
+        context.update_context_dict = config_dict['update_context']
     if 'get_features_stages' not in config_dict or config_dict['get_features_stages'] is None:
         missing_config.append('get_features_stages')
     else:
@@ -165,10 +138,9 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
         context.temp_output_path = temp_output_path
     if 'temp_output_path' not in context() or context.temp_output_path is None:
         context.temp_output_path = '%s%s_pid%i_%s%s_temp_output.hdf5' % \
-                                   (output_dir_str, datetime.datetime.today().strftime('%Y%m%d%H%M'), os.getpid(),
-                                    context.optimization_title, label)
-
-    context.export = export
+                               (output_dir_str, datetime.datetime.today().strftime('%Y%m%d%H%M'), os.getpid(),
+                                context.optimization_title, label)
+    
     if export_file_path is not None:
         context.export_file_path = export_file_path
     if 'export_file_path' not in context() or context.export_file_path is None:
@@ -177,25 +149,22 @@ def config_interactive(config_file_path=None, output_dir=None, temp_output_path=
                                     context.optimization_title, label)
 
     context.update_context_funcs = []
-    for source, func_name in context.update_context_list:
-        if source == os.path.basename(__file__).split('.')[0]:
+    for source, func_name in context.update_context_dict.iteritems():
+        if source == script_filename.split('.')[0]:
             try:
                 func = globals()[func_name]
                 if not isinstance(func, collections.Callable):
-                    raise Exception('update_context function: %s not callable' % func_name)
+                    raise Exception
                 context.update_context_funcs.append(func)
             except:
                 raise Exception('update_context function: %s not found' % func_name)
     if not context.update_context_funcs:
         raise Exception('update_context function not found')
 
-    context.disp=disp
-    context.rel_bounds_handler = RelativeBoundedStep(context.x0_array, context.param_names, context.bounds,
-                                                     context.rel_bounds)
-    config_worker(context.update_context_funcs, context.param_names, context.default_params, context.feature_names,
-                  context.objective_names, context.target_val, context.target_range, context.temp_output_path,
-                  context.export_file_path, context.output_dir, context.disp, **context.kwargs)
-    update_source_contexts(context.x0_array, context)
+    config_worker(context.update_context_funcs, context.param_names, context.default_params, context.target_val,
+                  context.target_range, context.temp_output_path, context.export_file_path, context.output_dir,
+                  context.disp, **context.kwargs)
+    update_source_contexts(context.x0_array)
 
 
 def config_controller(export_file_path, output_dir, **kwargs):
@@ -204,33 +173,35 @@ def config_controller(export_file_path, output_dir, **kwargs):
     :param export_file_path: str (path)
     :param output_dir: str (dir)
     """
+    processed_export_file_path = export_file_path.replace('.hdf5', '_processed.hdf5')
     context.update(locals())
     context.update(kwargs)
     init_context()
 
 
-def config_worker(update_context_funcs, param_names, default_params, feature_names, objective_names, target_val,
-                  target_range, temp_output_path, export_file_path, output_dir, disp, mech_file_path, gid,
-                  population, spines, **kwargs):
+def config_worker(update_context_funcs, param_names, default_params, target_val, target_range, temp_output_path,
+                  export_file_path, output_dur, disp, mech_file_path, neuroH5_file_path, neuroH5_index, spines,
+                  **kwargs):
     """
     :param update_context_funcs: list of function references
     :param param_names: list of str
     :param default_params: dict
     :param target_val: dict
     :param target_range: dict
-    :param feature_names: list of str
-    :param objective_names: list of str
     :param temp_output_path: str
     :param export_file_path: str
-    :param output_dir: str (dir path)
+    :param output_dur: str (dir path)
     :param disp: bool
     :param mech_file_path: str
-    :param gid: int
-    :param population: str
+    :param neuroH5_file_path: str
+    :param neuroH5_index: int
     :param spines: bool
     """
-    context.update(locals())
     context.update(kwargs)
+    neuroH5_dict = read_from_pkl(neuroH5_file_path)[neuroH5_index]
+    param_indexes = {param_name: i for i, param_name in enumerate(param_names)}
+    processed_export_file_path = export_file_path.replace('.hdf5', '_processed.hdf5')
+    context.update(locals())
     init_context()
     setup_cell(**kwargs)
 
@@ -250,59 +221,42 @@ def init_context():
     context.update(locals())
 
 
-def setup_cell(verbose=1, cvode=False, daspk=False, **kwargs):
+def setup_cell(verbose=False, cvode=False, daspk=False, **kwargs):
     """
 
-    :param verbose: int
+    :param verbose: bool
     :param cvode: bool
     :param daspk: bool
     """
-    if 'comm' not in context():
-        try:
-            from mpi4py import MPI
-            context.comm = MPI.COMM_WORLD
-        except Exception:
-            raise Exception('optimize_DG_GC_hoc_leak: problem importing from mpi4py; '
-                            'required for config_interactive')
-    context.env = Env(comm=context.comm, **kwargs)
-    configure_env(context.env)
-    cell = get_biophys_cell(context.env, context.gid, context.population)
-    init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path, correct_cm=True,
-                    correct_g_pas=True, env=context.env)
+    cell = DG_GC(neuroH5_dict=context.neuroH5_dict, mech_file_path=context.mech_file_path,
+                 full_spines=context.spines)
+    context.cell = cell
 
     # get the thickest apical dendrite ~200 um from the soma
     candidate_branches = []
-    candidate_distances = []
     candidate_diams = []
     candidate_locs = []
     for branch in cell.apical:
-        if not is_terminal(branch):
+        if ((cell.get_distance_to_node(cell.tree.root, branch, 0.) >= 200.) &
+                (cell.get_distance_to_node(cell.tree.root, branch, 1.) > 300.) & (not cell.is_terminal(branch))):
+            candidate_branches.append(branch)
             for seg in branch.sec:
                 loc = seg.x
-                if get_distance_to_node(cell, cell.tree.root, branch, loc) > 130.:
-                    candidate_branches.append(branch)
-                    candidate_distances.append(get_distance_to_node(cell, cell.tree.root, branch, loc))
+                if cell.get_distance_to_node(cell.tree.root, branch, loc) > 250.:
                     candidate_diams.append(branch.sec(loc).diam)
                     candidate_locs.append(loc)
                     break
-    distance_diffs = np.absolute(np.array(candidate_distances) - 250.)
-    #Find the segments within 50 um of the target distance from the soma (250 um)
-    indexes = [ind for ind in range(len(distance_diffs)) if distance_diffs[ind] < 50.]
-    if len(indexes) == 0:
-        index = np.argmin(distance_diffs)
-    else:
-        diams = np.array([candidate_diams[ind] for ind in indexes])
-        index = indexes[np.argmin(diams)]
+    index = candidate_diams.index(max(candidate_diams))
     dend = candidate_branches[index]
     dend_loc = candidate_locs[index]
 
     # get the most distal terminal branch > 300 um from the soma
     candidate_branches = []
     candidate_end_distances = []
-    for branch in (branch for branch in cell.apical if is_terminal(branch)):
-        if get_distance_to_node(cell, cell.tree.root, branch, 0.) >= 250.:
+    for branch in (branch for branch in cell.apical if cell.is_terminal(branch)):
+        if cell.get_distance_to_node(cell.tree.root, branch, 0.) >= 300.:
             candidate_branches.append(branch)
-            candidate_end_distances.append(get_distance_to_node(cell, cell.tree.root, branch, 1.))
+            candidate_end_distances.append(cell.get_distance_to_node(cell.tree.root, branch, 1.))
     index = candidate_end_distances.index(max(candidate_end_distances))
     distal_dend = candidate_branches[index]
     distal_dend_loc = 1.
@@ -317,7 +271,7 @@ def setup_cell(verbose=1, cvode=False, daspk=False, **kwargs):
     duration = context.duration
     dt = context.dt
 
-    sim = QuickSim(duration, cvode=cvode, daspk=daspk, dt=dt, verbose=verbose>1)
+    sim = QuickSim(duration, cvode=cvode, daspk=daspk, dt=dt, verbose=verbose)
     sim.append_stim(cell, cell.tree.root, loc=0., amp=0., delay=equilibrate, dur=stim_dur, description='step')
     sim.append_stim(cell, cell.tree.root, loc=0., amp=0., delay=0., dur=duration, description='offset')
     for description, node in rec_nodes.iteritems():
@@ -329,14 +283,21 @@ def setup_cell(verbose=1, cvode=False, daspk=False, **kwargs):
 
     context.spike_output_vec = h.Vector()
     cell.spike_detector.record(context.spike_output_vec)
-    context.cell = cell
 
 
-def reset_mechanisms(x, local_context=None):
+def update_source_contexts(x, local_context=None):
+    """
+
+    :param x: array
+    :param local_context: :class:'Context'
+    """
     if local_context is None:
         local_context = context
-    init_biophysics(local_context.cell, reset_cable=False, from_file=True, mech_file_path=local_context.mech_file_path,
-                    correct_g_pas=True, env=local_context.env)
+    local_context.cell.reinit_mechanisms(from_file=True)
+    if not local_context.spines:
+        local_context.cell.correct_g_pas_for_spines()
+    for update_func in local_context.update_context_funcs:
+        update_func(x, local_context)
 
 
 def get_args_static_leak():
@@ -359,7 +320,7 @@ def compute_features_leak(x, section, export=False, plot=False):
     """
     start_time = time.time()
     update_source_contexts(x, context)
-    zero_na(context.cell)
+    context.cell.zero_na()
 
     duration = context.duration
     stim_dur = context.stim_dur
@@ -472,7 +433,7 @@ def offset_vm(description, vm_target=None):
     return v_rest
 
 
-def update_mechanisms_leak(x, local_context=None):
+def update_context_leak(x, local_context=None):
     """
 
     :param x: array
@@ -481,14 +442,14 @@ def update_mechanisms_leak(x, local_context=None):
     if local_context is None:
         local_context = context
     cell = local_context.cell
-    x_dict = param_array_to_dict(x, local_context.param_names)
-    modify_mech_param(cell, 'soma', 'pas', 'g', x_dict['soma.g_pas'])
-    modify_mech_param(cell, 'apical', 'pas', 'g', origin='soma', slope=x_dict['dend.g_pas slope'],
-                      tau=x_dict['dend.g_pas tau'])
+    param_indexes = local_context.param_indexes
+    cell.modify_mech_param('soma', 'pas', 'g', x[param_indexes['soma.g_pas']])
+    cell.modify_mech_param('apical', 'pas', 'g', origin='soma', slope=x[param_indexes['dend.g_pas slope']],
+                           tau=x[param_indexes['dend.g_pas tau']])
     for sec_type in ['axon_hill', 'axon', 'ais', 'apical', 'spine_neck', 'spine_head']:
-        update_mechanism_by_sec_type(cell, sec_type, 'pas')
+        cell.reinitialize_subset_mechanisms(sec_type, 'pas')
     if not local_context.spines:
-        correct_cell_for_spines_g_pas(cell, local_context.env)
+        cell.correct_g_pas_for_spines()
 
 
 def export_sim_results():
@@ -500,5 +461,4 @@ def export_sim_results():
 
 
 if __name__ == '__main__':
-    main(args=sys.argv[(list_find(lambda s: s.find(os.path.basename(__file__)) != -1, sys.argv) + 1):],
-         standalone_mode=False)
+    main(args=sys.argv[(list_find(lambda s: s.find(script_filename) != -1, sys.argv) + 1):], standalone_mode=False)

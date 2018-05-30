@@ -1,5 +1,6 @@
 __author__ = 'Aaron D. Milstein and Grace Ng'
 from nested.utils import *
+from dentate.cells import *
 
 
 def time2index(tvec, start, stop):
@@ -43,7 +44,7 @@ def interpolate_tvec_vec(tvec, vec, duration, dt=0.02):
     return interp_t, interp_vm
 
 
-def get_Rinp(tvec, vec, start, stop, amp, dt=0.02):
+def get_R_inp(tvec, vec, start, stop, amp, dt=0.025):
     """
     Calculate peak and steady-state input resistance from a step current injection. For waveform current injections, the
     peak but not the steady-state will have meaning.
@@ -339,3 +340,188 @@ def flush_engine_buffer(result):
             for line in stdout.splitlines():
                 print line
     sys.stdout.flush()
+
+
+def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.01, vm_tol=0.5):
+    """
+
+    :param rec_name: str
+    :param local_context: :class:'Context'
+    :param vm_target: float
+    :param i_inc: float (nA)
+    :param vm_tol: float (mV)
+    """
+    if context is None:
+        raise RuntimeError('offset_vm: pid: %i; missing required Context object' % os.getpid())
+    sim = context.sim
+    if not sim.has_rec(rec_name):
+        raise RuntimeError('offset_vm: pid: %i; no recording with name: %s' % (os.getpid(), rec_name))
+    if not sim.has_stim('holding'):
+        raise RuntimeError('offset_vm: pid: %i; missing required stimulus named \'holding\'' % os.getpid())
+    cvode = sim.cvode
+    sim.cvode = True
+    if vm_target is None:
+        vm_target = context.v_init
+    if sim.has_stim('step'):
+        sim.modify_stim('step', amp=0.)
+    rec_dict = sim.get_rec(rec_name)
+    node = rec_dict['node']
+    loc = rec_dict['loc']
+    rec = rec_dict['vec']
+
+    equilibrate = context.equilibrate
+    dt = context.dt
+    duration = context.duration
+
+    sim.tstop = equilibrate
+    t = np.arange(0., equilibrate, dt)
+    if vm_target not in context.i_holding[rec_name]:
+        context.i_holding[rec_name][vm_target] = 0.
+    i_holding = context.i_holding[rec_name][vm_target]
+    sim.modify_stim('holding', node=node, loc=loc, amp=i_holding)
+    sim.run(vm_target)
+    vm = np.interp(t, sim.tvec, rec)
+    vm_rest = np.mean(vm[int((equilibrate - 3.) / dt):int((equilibrate - 1.) / dt)])
+    if sim.verbose:
+        print 'offset_vm: pid: %i; %s; vm_rest: %.1f, vm_target: %.1f' % (os.getpid(), rec_name, vm_rest, vm_target)
+
+    if vm_rest > vm_target + vm_tol:
+        i_inc *= -1
+        delta_str = 'decreased'
+    else:
+        delta_str = 'increased'
+    while not (vm_target - vm_tol < vm_rest < vm_target + vm_tol):
+        i_holding += i_inc
+        sim.modify_stim('holding', amp=i_holding)
+        sim.run(vm_target)
+        vm = np.interp(t, sim.tvec, rec)
+        vm_rest = np.mean(vm[int((equilibrate - 3.) / dt):int((equilibrate - 1.) / dt)])
+        if sim.verbose:
+            print 'offset_vm: pid: %i; %s; %s i_holding to %.3f nA; vm_rest: %.1f' % \
+                  (os.getpid(), rec_name, delta_str, i_holding, vm_rest)
+    sim.tstop = duration
+    sim.cvode = cvode
+    context.i_holding[rec_name][vm_target] = i_holding
+    return vm_rest
+
+
+def get_spike_shape(vm, spike_times, context=None):
+    """
+
+    :param vm: array
+    :param spike_times: array
+    :param context: :class:'Context'
+    :return: tuple of float: (v_peak, th_v, ADP, AHP)
+    """
+    if context is None:
+        raise RuntimeError('get_spike_shape: pid: %i; missing required Context object' % os.getpid())
+    equilibrate = context.equilibrate
+    dt = context.dt
+    th_dvdt = context.th_dvdt
+
+    start = int((equilibrate + 1.) / dt)
+    vm = vm[start:]
+    dvdt = np.gradient(vm, dt)
+    th_x = np.where(dvdt > th_dvdt)[0]
+    if th_x.any():
+        th_x = th_x[0] - int(1.6 / dt)
+    else:
+        th_x = np.where(vm > -30.)[0][0] - int(2. / dt)
+    th_v = vm[th_x]
+    v_before = np.mean(vm[th_x - int(0.1 / dt):th_x])
+    v_peak = np.max(vm[th_x:th_x + int(5. / dt)])
+    x_peak = np.where(vm[th_x:th_x + int(5. / dt)] == v_peak)[0][0]
+    if len(spike_times) > 1:
+        end = max(th_x + x_peak + int(2. / dt), int((spike_times[1] - 4.) / dt) - start)
+    else:
+        end = len(vm)
+    v_AHP = np.min(vm[th_x + x_peak:end])
+    x_AHP = np.where(vm[th_x + x_peak:end] == v_AHP)[0][0]
+    AHP = v_before - v_AHP
+    # if spike waveform includes an ADP before an AHP, return the value of the ADP in order to increase objective error
+    ADP = 0.
+    rising_x = np.where(dvdt[th_x + x_peak + 1:th_x + x_peak + x_AHP - 1] > 0.)[0]
+    if rising_x.any():
+        v_ADP = np.max(vm[th_x + x_peak + 1 + rising_x[0]:th_x + x_peak + x_AHP])
+        pre_ADP = np.mean(vm[th_x + x_peak + 1 + rising_x[0] - int(0.1 / dt):th_x + x_peak + 1 + rising_x[0]])
+        ADP += v_ADP - pre_ADP
+    falling_x = np.where(dvdt[th_x + x_peak + x_AHP + 1:end] < 0.)[0]
+    if falling_x.any():
+        v_ADP = np.max(vm[th_x + x_peak + x_AHP + 1: th_x + x_peak + x_AHP + 1 + falling_x[0]])
+        ADP += v_ADP - v_AHP
+    return v_peak, th_v, ADP, AHP
+
+
+def get_DG_GC_thickest_dend_branch(cell, distance_target=None, distance_tolerance=50., terminal=False):
+    """
+    Get the thickest apical dendrite with a segment closest to a target distance from the soma.
+    :param cell: "class:'BiophysCell'
+    :param distance_target: float (um)
+    :param distance_tolerance: float (um)
+    :param terminal: bool
+    :return: node, loc: :class:'SHocNode', float
+    """
+    candidate_branches = []
+    candidate_distances = []
+    candidate_diams = []
+    candidate_locs = []
+    for branch in cell.apical:
+        if terminal == is_terminal(branch):
+            for seg in branch.sec:
+                loc = seg.x
+                distance = get_distance_to_node(cell, cell.tree.root, branch, loc)
+                if distance_target is None or \
+                        distance_target - distance_tolerance < distance < distance_target + distance_tolerance:
+                    candidate_branches.append(branch)
+                    candidate_distances.append(distance)
+                    candidate_diams.append(branch.sec(loc).diam)
+                    candidate_locs.append(loc)
+    delta_distance = np.absolute(np.array(candidate_distances) - 250.)
+    indexes = range(len(delta_distance))
+    if len(indexes) == 0:
+        raise RuntimeError('get_DG_GC_thickest_dend_branch: pid: %i; %s cell %i: cannot find branch to satisfy '
+                           'provided filter' % (os.getpid(), cell.pop_name, cell.gid))
+    elif len(indexes) == 1:
+        index = 0
+    else:
+        diams = np.array(candidate_diams)[indexes]
+        index = indexes[np.argmax(diams)]
+    return candidate_branches[index], candidate_locs[index]
+
+
+def get_DG_GC_distal_most_terminal_branch(cell, distance_target=None):
+    """
+    Get a terminal branch with a branch origin greater than a target distance from the soma.
+    :param cell: "class:'BiophysCell'
+    :param distance_target: float (um)
+    :return: node: :class:'SHocNode'
+    """
+    candidate_branches = []
+    candidate_distances = []
+    for branch in cell.apical:
+        if is_terminal(branch):
+            distance = get_distance_to_node(cell, cell.tree.root, branch, 0.)
+            if distance_target is None or distance > distance_target:
+                candidate_branches.append(branch)
+                candidate_distances.append(get_distance_to_node(cell, cell.tree.root, branch, 1.))
+    indexes = range(len(candidate_distances))
+    if len(indexes) == 0:
+        raise RuntimeError('get_DG_GC_distal_most_terminal_branch: pid: %i; %s cell %i: cannot find branch to satisfy '
+                           'provided filter' % (os.getpid(), cell.pop_name, cell.gid))
+    elif len(indexes) == 1:
+        index = 0
+    else:
+        index = indexes[np.argmax(candidate_distances)]
+    return candidate_branches[index]
+
+
+def reset_biophysics(x, context=None):
+    """
+
+    :param x: array
+    :param context: :class:'Context'
+    """
+    if context is None:
+        raise RuntimeError('reset_biophysics: missing required Context object')
+    init_biophysics(context.cell, reset_cable=False, from_file=True, correct_g_pas=context.correct_for_spines,
+                    env=context.env)

@@ -1,4 +1,4 @@
-from neuron_wrapper_utils import *
+from biophysics_utils import *
 
 context = Context()
 

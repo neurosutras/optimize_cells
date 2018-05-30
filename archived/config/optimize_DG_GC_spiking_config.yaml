@@ -1,13 +1,4 @@
 bounds:
-  dend.g_pas slope: !!python/tuple
-  - 1.0E-10
-  - 1.0E-5
-  dend.g_pas tau: !!python/tuple
-  - 25.
-  - 400.
-  soma.g_pas: !!python/tuple
-  - 1.0E-12
-  - 1.0E-7
   ais.gbar_nax: !!python/tuple
   - 0.02
   - 0.5
@@ -39,11 +30,11 @@ bounds:
   - 0.01
   - 0.25
   soma.gCa factor: !!python/tuple
-  - 0.01
-  - 2.0
+  - 0.1
+  - 5.0
   soma.gCadepK factor: !!python/tuple
-  - 0.01
-  - 2.0
+  - 0.1
+  - 5.0
   soma.gbar_nas: !!python/tuple
   - 0.01
   - 0.05
@@ -62,9 +53,6 @@ bounds:
 default_params:
   dend.gbar_nas bo: 5
 feature_names:
-- dend R_inp
-- distal_dend R_inp
-- soma R_inp
 - v_th
 - ADP
 - AHP
@@ -80,43 +68,28 @@ feature_names:
 - f_I_slope
 - f_I_residuals
 update_context:
-- - optimize_DG_GC_hoc_leak
-  - reset_mechanisms
-- - optimize_DG_GC_hoc_leak
-  - update_mechanisms_leak
-- - optimize_DG_GC_hoc_spiking
-  - update_mechanisms_spiking
+- - optimize_DG_GC_spiking
+  - reinit_mechanisms
+- - optimize_DG_GC_spiking
+  - update_context_spike_shape
 get_features_stages:
-- source: optimize_DG_GC_hoc_leak
-  compute_features: compute_features_leak
-  get_args_static: get_args_static_leak
-- source: optimize_DG_GC_hoc_spiking
+- source: optimize_DG_GC_spiking
   compute_features: compute_features_spike_shape
-- source: optimize_DG_GC_hoc_spiking
+- source: optimize_DG_GC_spiking
   get_args_dynamic: get_args_dynamic_fI
   compute_features: compute_features_fI
   filter_features: filter_features_fI
 get_objectives:
-  optimize_DG_GC_hoc_leak: get_objectives_leak
-  optimize_DG_GC_hoc_spiking: get_objectives_spiking
+    optimize_DG_GC_spiking: get_objectives
 kwargs:
-  mech_file_path: mechanisms/20180209_DG_GC_hoc_leak_mech.yaml
-  gid: 0
-  population: GC
+  mech_file_path: cells/mechanisms/090717 GC optimizing spiking.yaml
+  neuroH5_file_path: cells/morphologies/121516_DGC_trees.pkl
+  neuroH5_index: 0
   spines: False
+  verbose: False
   cvode: False
-  verbose: 1
   daspk: True
-  configFile: ../dentate/config/Small_Scale_Control_log_normal_weights.yaml
-  templatePaths: ../dgc/Mateos-Aparicio2014:../dentate/templates
-  hoclibPath: ../dentate
-  datasetPrefix: /mnt/s
-  # datasetPrefix: ../dentate/datasets
-  resultsPath: data
 objective_names:
-- dend R_inp
-- distal_dend R_inp
-- soma R_inp
 - v_th
 - ADP
 - AHP
@@ -130,12 +103,9 @@ objective_names:
 - th_count
 - adi
 - f_I_slope
-optimization_title: DG_GC_hoc_leak_spiking
+optimization_title: DG_GC_spiking
 param_gen: PopulationAnnealing
 param_names:
-- dend.g_pas slope
-- dend.g_pas tau
-- soma.g_pas
 - soma.gbar_nas
 - dend.gbar_nas
 - dend.gbar_nas bo
@@ -159,7 +129,7 @@ rel_bounds:
   - 1.0
   - soma.gbar_nas
 - - dend.gbar_nas
-  - '<='
+  - <
   - 1.0
   - soma.gbar_nas
 - - dend.gbar_nas
@@ -183,8 +153,6 @@ rel_bounds:
   - 3.0
   - soma.gkabar
 target_range:
-  dend R_inp: 1.
-  soma R_inp: 0.5
   ADP: 0.01
   AHP: 0.005
   ais_delay: 0.0005
@@ -198,8 +166,6 @@ target_range:
   vm_stability: 0.1
   f_I_slope: 0.5
 target_val:
-  dend R_inp: 375.
-  soma R_inp: 295.
   ADP: 0.0
   AHP: 4.0
   ais_delay: 0.0
@@ -213,9 +179,6 @@ target_val:
   vm_stability: 0.0
   f_I_slope: 53.0
 x0:
-  dend.g_pas slope: 1.058E-08
-  dend.g_pas tau: 3.886E+01
-  soma.g_pas: 1.050E-10
   ais.gbar_nax: 0.1681
   ais.gkmbar: 0.01286
   ais.sha_nax: -2.659
@@ -227,7 +190,7 @@ x0:
   dend.gbar_nas slope: -0.0001
   dend.gkabar: 0.04
   soma.gCa factor: 0.3364
-  soma.gCadepK factor: 2.
+  soma.gCadepK factor: 4.096
   soma.gbar_nas: 0.03
   soma.gkabar: 0.02108
   soma.gkdrbar: 0.04299
