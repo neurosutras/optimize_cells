@@ -736,10 +736,11 @@ def plot_mech_param_distribution(cell, mech_name, param_name, export=None, overw
         else:
             f = h5py.File(data_dir + '/' + export, 'a')
         if 'mech_file_path' in f.attrs.keys():
-            if not f.attrs['mech_file_path'] == cell.mech_file_path:
-                raise Exception('Specified mechanism file path: %s does not match the mechanism file path '
-                                'of the cell: %s' % (f.attrs['mech_file_path'], cell.mech_file_path))
-        else:
+            if cell.mech_file_path is None or not f.attrs['mech_file_path'] == cell.mech_file_path:
+                raise ValueError('plot_mech_param_distribution: provided mech_file_path: %s does not match the '
+                                'mech_file_path of %s cell %i: %s' %
+                                (f.attrs['mech_file_path'], cell.pop_name, cell.gid, cell.mech_file_path))
+        elif cell.mech_file_path is not None:
             f.attrs['mech_file_path'] = cell.mech_file_path
         # TODO: Use enumerated groups to store multiple versions of the same mech param in one file.
         if mech_name in f:

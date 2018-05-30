@@ -3,12 +3,12 @@ Tools for pulling individual neurons out of the dentate network simulation envir
 """
 __author__ = 'Grace Ng, Aaron D. Milstein, Ivan Raikov'
 import click
-from dentate.utils import *
+from nested.utils import *
 from dentate.neuron_utils import *
 from neuroh5.h5py_io_utils import *
 from dentate.env import Env
 from dentate.cells import *
-from nested.utils import *
+from dentate.synapses import *
 
 
 context = Context()
