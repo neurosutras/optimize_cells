@@ -16,13 +16,14 @@ context = Context()
 
 @click.command()
 @click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='config/optimize_DG_GC_spiking_config.yaml')
+              default='config/optimize_DG_GC_iEPSP_propagation_config.yaml')
 @click.option("--output-dir", type=click.Path(exists=True, file_okay=False, dir_okay=True), default='data')
 @click.option("--export", is_flag=True)
 @click.option("--export-file-path", type=str, default=None)
 @click.option("--label", type=str, default=None)
 @click.option("--verbose", type=int, default=2)
-def main(config_file_path, output_dir, export, export_file_path, label, verbose):
+@click.option("--plot", is_flag=True)
+def main(config_file_path, output_dir, export, export_file_path, label, verbose, plot):
     """
 
     :param config_file_path: str (path)
@@ -31,6 +32,7 @@ def main(config_file_path, output_dir, export, export_file_path, label, verbose)
     :param export_file_path: str
     :param label: str
     :param verbose: bool
+    :param plot: bool
     """
     # requires a global variable context: :class:'Context'
     context.update(locals())
@@ -40,19 +42,21 @@ def main(config_file_path, output_dir, export, export_file_path, label, verbose)
     # Stage 0:
     args = []
     group_size = 1
-    sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size]
-    primitives = map(compute_features_spike_shape, *sequences)
+    sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
+                [[context.plot] * group_size]
+    primitives = map(compute_features_iEPSP_i_unit, *sequences)
     features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
 
     # Stage 1:
-    args = get_args_dynamic_fI(context.x0_array, features)
+    args = get_args_dynamic_iEPSP_attenuation(context.x0_array, features)
     group_size = len(args[0])
-    sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size]
-    primitives = map(compute_features_fI, *sequences)
-    this_features = filter_features_fI(primitives, features, context.export)
+    sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
+                [[context.plot] * group_size]
+    primitives = map(compute_features_iEPSP_attenuation, *sequences)
+    this_features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
     features.update(this_features)
 
-    features, objectives = get_objectives_spiking(features)
+    features, objectives = get_objectives_iEPSP_propagation(features)
     print 'params:'
     pprint.pprint(context.x0_dict)
     print 'features:'
@@ -114,7 +118,7 @@ def init_context():
     ISI = {'long': 10., 'short': 1.}  # inter-stimulus interval for synaptic stim (ms)
     equilibrate = 250.  # time to steady-state
     stim_dur = 50.
-    num_pulses = 5.
+    num_pulses = 5
     sim_duration = {'long': equilibrate + (num_pulses - 1.) * ISI['long'] + stim_dur,
                     'short': equilibrate + (num_pulses - 1.) * ISI['short'] + stim_dur,
                     'unit': equilibrate + stim_dur}
@@ -125,7 +129,6 @@ def init_context():
     v_active = -77.
     syn_mech_name = 'EPSC'
 
-    target_iEPSP_amp = 1.  # mV
     context.update(locals())
 
 
@@ -172,7 +175,7 @@ def config_sim_env(context):
         sim.append_rec(cell, dend, name='dend', loc=dend_loc)
     if context.v_active not in context.i_holding['dend']:
         context.i_holding['dend'][context.v_active] = 0.1
-    if context.v_active not in context.i_EPSC['dend']:
+    if 'dend' not in context.i_EPSC:
         context.i_EPSC['dend'] = -0.15
 
     equilibrate = context.equilibrate
@@ -182,13 +185,13 @@ def config_sim_env(context):
         sim.append_stim(cell, cell.tree.root, name='holding', loc=0.5, amp=0., delay=0., dur=duration)
 
     if 'i_syn' not in context():
-        rec = sim.get_rec('dend')
-        node = rec.node
-        loc = rec.loc
+        rec_dict = sim.get_rec('dend')
+        node = rec_dict['node']
+        loc = rec_dict['loc']
         seg = node.sec(loc)
         context.i_syn = add_unique_synapse(context.syn_mech_name, seg)
         config_syn(context.syn_mech_name, context.env.synapse_attributes.syn_param_rules, syn=context.i_syn,
-                   i_unit=context.i_EPSC['dend'])
+                   i_unit=context.i_EPSC['dend'], tau_rise=0.1, tau_decay=5.)
     if 'i_nc' not in context():
         context.i_nc, context.i_vs = mknetcon_vecstim(context.i_syn)
 
@@ -211,20 +214,18 @@ def iEPSP_amp_error(x):
     sim = context.sim
     sim.run(context.v_active)
 
-    rec = context.sim.get_rec('soma')['vec']
-    t = np.arange(0., sim.tstop, dt)
-    vm = np.interp(t, sim.tvec, rec)
+    vm = np.array(context.sim.get_rec('soma')['vec'])
     baseline = np.mean(vm[int((equilibrate - 3.) / dt):int((equilibrate - 1.) / dt)])
     vm -= baseline
     iEPSP_amp = np.max(vm[int(equilibrate / dt):])
-    Err = ((iEPSP_amp - context.target_iEPSP_amp) / 0.01) ** 2.
+    Err = ((iEPSP_amp - context.target_val['iEPSP_unit_amp']) / (0.01 * context.target_val['iEPSP_unit_amp'])) ** 2.
     if context.verbose > 1:
         print 'iEPSP_amp_error: %s.i_unit: %.3f, soma iEPSP amp: %.2f; took %.1f s' % \
               (context.syn_mech_name, x[0], iEPSP_amp, time.time() - start_time)
     return Err
 
 
-def compute_features_iEPSP_unit(x, export=False, plot=False):
+def compute_features_iEPSP_i_unit(x, export=False, plot=False):
     """
 
     :param x: array
@@ -237,49 +238,46 @@ def compute_features_iEPSP_unit(x, export=False, plot=False):
     update_source_contexts(x, context)
     zero_na(context.cell)
 
-    result = dict()
-    sim = context.sim
-    orig_cvode = sim.cvode
-    sim.cvode = False
     dt = context.dt
-    orig_dt = sim.dt
-    sim.dt = dt
-    orig_duration = sim.tstop
     duration = context.sim_duration['unit']
-    sim.tstop = duration
 
     v_active = context.v_active
     offset_vm('soma', context, v_active)
+
+    sim = context.sim
+    sim.backup_state()
+    sim.set_state(dt=dt, tstop=duration, cvode=False)
+
     context.i_vs.play(h.Vector([context.equilibrate]))
     i_EPSC = context.i_EPSC['dend']
-    bounds = [-0.3, -0.01]
+    bounds = [(-0.3, -0.01)]
     i_EPSC_result = scipy.optimize.minimize(iEPSP_amp_error, [i_EPSC], method='L-BFGS-B', bounds=bounds,
                                    options={'ftol': 1e-3, 'disp': context.verbose > 1, 'maxiter': 5})
     i_EPSC = i_EPSC_result.x[0]
     context.i_EPSC['dend'] = i_EPSC
-    result['i_EPSC'] = i_EPSC
 
-    title = 'iEPSP_unit_amp'
-    description = 'i_EPSC: %.3f (nA)' % i_EPSC
+    result = dict()
+    result['iEPSP_i_unit'] = i_EPSC
+
+    title = 'iEPSP'
+    description = 'i_unit: %.3f (nA)' % i_EPSC
     sim.parameters['duration'] = duration
     sim.parameters['title'] = title
     sim.parameters['description'] = description
 
     if context.verbose > 0:
-        print 'compute_features_iEPSP_unit: pid: %i; %s: %s took %.3f s' % \
+        print 'compute_features_iEPSP_i_unit: pid: %i; %s: %s took %.3f s' % \
               (os.getpid(), title, description, time.time() - start_time)
     if plot:
         context.sim.plot()
     if export:
         context.sim.export_to_file(context.temp_output_path)
-    sim.cvode = orig_cvode
-    sim.dt = orig_dt
-    sim.tstop = orig_duration
+    sim.restore_state()
     context.i_vs.play(h.Vector())
     return result
 
 
-def get_args_dynamic_iEPSP_propagation(x, features):
+def get_args_dynamic_iEPSP_attenuation(x, features):
     """
     A nested map operation is required to compute iEPSP_propagation features. The arguments to be mapped depend on each
     set of parameters and prior features (dynamic).
@@ -287,11 +285,11 @@ def get_args_dynamic_iEPSP_propagation(x, features):
     :param features: dict
     :return: list of list
     """
-    i_EPSC = features['i_EPSC']
+    i_EPSC = features['iEPSP_i_unit']
     return [['long', 'short'], [i_EPSC, i_EPSC]]
 
 
-def compute_features_iEPSP_propagation(x, ISI_key, i_EPSC, export=False, plot=False):
+def compute_features_iEPSP_attenuation(x, ISI_key, i_EPSC, export=False, plot=False):
     """
 
     :param x:
@@ -307,107 +305,65 @@ def compute_features_iEPSP_propagation(x, ISI_key, i_EPSC, export=False, plot=Fa
     zero_na(context.cell)
 
     result = dict()
-    sim = context.sim
-    orig_cvode = sim.cvode
-    sim.cvode = False
+
     dt = context.dt
-    orig_dt = sim.dt
-    sim.dt = dt
-    orig_duration = sim.tstop
     duration = context.sim_duration[ISI_key]
     ISI = context.ISI[ISI_key]
-    sim.tstop = duration
     equilibrate = context.equilibrate
     context.i_EPSC['dend'] = i_EPSC
 
     v_active = context.v_active
     offset_vm('soma', context, v_active)
 
+    sim = context.sim
+    sim.backup_state()
+    sim.set_state(dt=dt, tstop=duration, cvode=False)
+
     context.i_vs.play(h.Vector([equilibrate + i * ISI for i in xrange(context.num_pulses)]))
     config_syn(context.syn_mech_name, context.env.synapse_attributes.syn_param_rules, syn=context.i_syn, i_unit=i_EPSC)
-    sim.run(context.v_active)
+    sim.run(v_active)
 
-    t = np.arange(0., duration, dt)
-    soma_rec = sim.get_rec('soma')['vec']
-    soma_vm = np.interp(t, sim.tvec, soma_rec)
+    soma_vm = np.array(sim.get_rec('soma')['vec'])
     soma_baseline = np.mean(soma_vm[int((equilibrate - 3.) / dt):int((equilibrate - 1.) / dt)])
     soma_vm -= soma_baseline
     soma_iEPSP_amp = np.max(soma_vm[int(equilibrate / dt):])
 
-    dend_rec = sim.get_rec('dend')['vec']
-    dend_vm = np.interp(t, sim.tvec, dend_rec)
+    dend_vm = np.array(sim.get_rec('dend')['vec'])
     dend_baseline = np.mean(dend_vm[int((equilibrate - 3.) / dt):int((equilibrate - 1.) / dt)])
     dend_vm -= dend_baseline
     dend_iEPSP_amp = np.max(dend_vm[int(equilibrate / dt):])
 
-    result['iEPSP_amp_%s_ISI_soma' % ISI_key] = soma_iEPSP_amp
-    result['iEPSP_amp_%s_ISI_dend' % ISI_key] = dend_iEPSP_amp
-    result['iEPSP_ratio_%s_ISI' % ISI_key] = soma_iEPSP_amp / dend_iEPSP_amp
+    result['iEPSP_attenuation_%s' % ISI_key] = soma_iEPSP_amp / dend_iEPSP_amp
 
+    title = 'iEPSP_attenuation'
     description = 'ISI: %.1f' % ISI
-    title = 'iEPSP_propagation'
-
     sim.parameters['duration'] = duration
     sim.parameters['title'] = title
     sim.parameters['description'] = description
 
     if context.verbose > 0:
-        print 'compute_features_iEPSP_propagation: pid: %i; %s: %s took %.3f s' % \
+        print 'compute_features_iEPSP_attenuation: pid: %i; %s: %s took %.3f s' % \
               (os.getpid(), title, description, time.time() - start_time)
     if plot:
         context.sim.plot()
     if export:
         context.sim.export_to_file(context.temp_output_path)
-    sim.cvode = orig_cvode
-    sim.dt = orig_dt
-    sim.tstop = orig_duration
+    sim.restore_state()
     context.i_vs.play(h.Vector())
     return result
 
 
-def get_objectives_spiking(features):
+def get_objectives_iEPSP_propagation(features):
     """
 
     :param features: dict
     :return: tuple of dict
     """
-    if features is None:  # No rheobase value found
-        objectives = None
-    else:
-        objectives = {}
-        rheobase = features['rheobase']
-        for target in ['vm_th', 'ADP', 'AHP', 'rebound_firing', 'vm_stability', 'ais_delay',
-                       'slow_depo', 'dend_bAP_ratio', 'soma_spike_amp', 'th_count']:
-            # don't penalize AHP or slow_depo less than target
-            if not ((target == 'AHP' and features[target] < context.target_val[target]) or
-                        (target == 'slow_depo' and features[target] < context.target_val[target])):
-                objectives[target] = ((context.target_val[target] - features[target]) /
-                                      context.target_range[target]) ** 2.
-            else:
-                objectives[target] = 0.
-        objectives['adi'] = 0.
-        all_adi = []
-        all_exp_adi = []
-        for i, this_adi in enumerate(features['adi']):
-            if this_adi is not None and features['exp_adi'] is not None:
-                objectives['adi'] += ((this_adi - features['exp_adi'][i]) / (0.01 * features['exp_adi'][i])) ** 2.
-                all_adi.append(this_adi)
-                all_exp_adi.append(features['exp_adi'][i])
-        features['adi'] = np.mean(all_adi)
-        features['exp_adi'] = np.mean(all_exp_adi)
-        num_increments = context.num_increments
-        i_inj_increment = context.i_inj_increment
-        target_f_I = [context.target_val['f_I_slope'] * np.log((rheobase + i_inj_increment * (i + 1)) / rheobase)
-                      for i in xrange(num_increments)]
-        f_I_residuals = [(features['f_I'][i] - target_f_I[i]) for i in xrange(num_increments)]
-        features['f_I_residuals'] = np.mean(np.abs(f_I_residuals))
-        objectives['f_I_slope'] = 0.
-        for i in xrange(num_increments):
-            objectives['f_I_slope'] += (f_I_residuals[i] / (0.01 * target_f_I[i])) ** 2.
-        I_inj = [np.log((rheobase + i_inj_increment * (i + 1)) / rheobase) for i in xrange(num_increments)]
-        slope, intercept, r_value, p_value, std_err = stats.linregress(I_inj, features['f_I'])
-        features['f_I_slope'] = slope
-        features.pop('f_I')
+    objectives = dict()
+    for ISI_key in context.ISI:
+        target = 'iEPSP_attenuation_%s' % ISI_key
+        objectives[target] = \
+            ((features[target] - context.target_val[target]) / (0.01 * context.target_val[target])) ** 2.
     return features, objectives
 
 

@@ -224,7 +224,7 @@ def compute_features_leak(x, section, export=False, plot=False):
     sim.set_state(dt=dt, tstop=duration, cvode=True)
     sim.run(v_init)
 
-    R_inp = get_R_inp(sim.tvec.as_numpy(), rec.as_numpy(), equilibrate, duration, amp, dt)[2]
+    R_inp = get_R_inp(np.array(sim.tvec), np.array(rec), equilibrate, duration, amp, dt)[2]
     result = dict()
     result['%s R_inp' % section] = R_inp
     if context.verbose > 0:

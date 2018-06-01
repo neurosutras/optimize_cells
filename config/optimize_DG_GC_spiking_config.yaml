@@ -65,7 +65,6 @@ feature_names:
 - soma_spike_amp
 - f_I_slope
 - dend_spike_amp
-- dend_spike_dvdt
 update_context:
 - - optimize_DG_GC_spiking
   - reset_biophysics
@@ -81,6 +80,7 @@ get_features_stages:
 - source: optimize_DG_GC_spiking
   get_args_static: get_args_static_dend_spike
   compute_features: compute_features_dend_spike
+  filter_features: filter_features_dend_spike
 get_objectives:
     optimize_DG_GC_spiking: get_objectives_spiking
 kwargs:
@@ -109,6 +109,7 @@ objective_names:
 - th_count
 - adi_residuals
 - f_I_residuals
+- dend_spike_score
 optimization_title: DG_GC_spiking
 param_gen: PopulationAnnealing
 param_names:
@@ -169,6 +170,7 @@ target_range:
   th_count: 0.002
   vm_th: 0.01
   vm_stability: 0.1
+  dend_spike_amp: 0.1
 target_val:
   ADP: 0.0
   AHP: 4.0
@@ -181,6 +183,7 @@ target_val:
   vm_th: -48.0
   vm_stability: 0.0
   f_I_slope: 53.0
+  dend_spike_amp: 15.
 x0:
   ais.gbar_nax: 0.1681
   ais.gkmbar: 0.01286
