@@ -63,9 +63,9 @@ feature_names:
 - dend_bAP_ratio
 - rheobase
 - soma_spike_amp
-- adi
 - f_I_slope
-- f_I_residuals
+- dend_spike_amp
+- dend_spike_dvdt
 update_context:
 - - optimize_DG_GC_spiking
   - reset_biophysics
@@ -78,6 +78,9 @@ get_features_stages:
   get_args_dynamic: get_args_dynamic_fI
   compute_features: compute_features_fI
   filter_features: filter_features_fI
+- source: optimize_DG_GC_spiking
+  get_args_static: get_args_static_dend_spike
+  compute_features: compute_features_dend_spike
 get_objectives:
     optimize_DG_GC_spiking: get_objectives_spiking
 kwargs:
@@ -86,7 +89,6 @@ kwargs:
   cell_type: GC
   correct_for_spines: True
   verbose: 2
-  cvode: False
   daspk: True
   configFile: ../dentate/config/Small_Scale_Control_log_normal_weights.yaml
   templatePaths: ../dgc/Mateos-Aparicio2014:../dentate/templates
@@ -105,8 +107,8 @@ objective_names:
 - dend_bAP_ratio
 - soma_spike_amp
 - th_count
-- adi
-- f_I_slope
+- adi_residuals
+- f_I_residuals
 optimization_title: DG_GC_spiking
 param_gen: PopulationAnnealing
 param_names:
@@ -148,10 +150,10 @@ rel_bounds:
   - '>'
   - 2.0
   - axon.gbar_nax
-#- - dend.gkabar
-#  - '>'
-#  - 1.0
-#  - soma.gkabar
+- - dend.gkabar
+  - '>'
+  - 1.0
+  - soma.gkabar
 - - axon.gkabar
   - <
   - 3.0
@@ -167,7 +169,6 @@ target_range:
   th_count: 0.002
   vm_th: 0.01
   vm_stability: 0.1
-  f_I_slope: 0.5
 target_val:
   ADP: 0.0
   AHP: 4.0

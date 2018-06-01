@@ -43,6 +43,7 @@ class QuickSim(object):
         self.tvec = h.Vector()
         self.tvec.record(h._ref_t, self.dt)
         self.parameters = {}
+        self.backup_state()
 
     def run(self, v_init=-65.):
         """
@@ -60,6 +61,35 @@ class QuickSim(object):
         h.run()
         if self.verbose:
             print 'Simulation runtime: %.2f s' % (time.time() - start_time)
+
+    def backup_state(self):
+        """
+        Store backup of current state of simulation parameters: dt, tstop, cvode, daspk.
+        """
+        self._backup = {'dt': self.dt, 'tstop': self.tstop, 'cvode': self._cvode, 'daspk': self.daspk}
+
+    def set_state(self, dt=None, tstop=None, cvode=None, daspk=None):
+        """
+        Convenience function for setting simulation parameters that are frequently modified.
+        :param dt: float
+        :param tstop: float
+        :param cvode: bool
+        :param daspk: bool
+        """
+        if dt is not None:
+            self.dt = dt
+        if tstop is not None:
+            self.tstop = tstop
+        if cvode is not None:
+            self.cvode = cvode
+        if daspk is not None:
+            self.daspk = daspk
+
+    def restore_state(self):
+        """
+        Restore state of simulation parameters from backup: dt, tstop, cvode, daspk.
+        """
+        self.set_state(**self._backup)
 
     def append_rec(self, cell, node, name=None, loc=None, param='_ref_v', object=None, ylabel='Vm', units='mV',
                    description=''):

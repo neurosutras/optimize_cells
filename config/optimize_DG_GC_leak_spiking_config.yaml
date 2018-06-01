@@ -75,9 +75,7 @@ feature_names:
 - dend_bAP_ratio
 - rheobase
 - soma_spike_amp
-- adi
 - f_I_slope
-- f_I_residuals
 update_context:
 - - optimize_DG_GC_leak
   - reset_biophysics
@@ -103,7 +101,6 @@ kwargs:
   gid: 0
   cell_type: GC
   correct_for_spines: True
-  cvode: False
   verbose: 2
   daspk: True
   configFile: ../dentate/config/Small_Scale_Control_log_normal_weights.yaml
@@ -126,8 +123,8 @@ objective_names:
 - dend_bAP_ratio
 - soma_spike_amp
 - th_count
-- adi
-- f_I_slope
+- adi_residuals
+- f_I_residuals
 optimization_title: DG_GC_leak_spiking
 param_gen: PopulationAnnealing
 param_names:
@@ -172,10 +169,10 @@ rel_bounds:
   - '>'
   - 2.0
   - axon.gbar_nax
-#- - dend.gkabar
-#  - '>'
-#  - 1.0
-#  - soma.gkabar
+- - dend.gkabar
+  - '>'
+  - 1.0
+  - soma.gkabar
 - - axon.gkabar
   - <
   - 3.0
@@ -193,7 +190,6 @@ target_range:
   th_count: 0.002
   vm_th: 0.01
   vm_stability: 0.1
-  f_I_slope: 0.5
 target_val:
   dend R_inp: 375.
   soma R_inp: 295.

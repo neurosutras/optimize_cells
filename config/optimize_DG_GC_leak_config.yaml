@@ -28,7 +28,6 @@ kwargs:
   gid: 0
   cell_type: GC
   correct_for_spines: True
-  cvode: True
   verbose: 2
   daspk: True
   configFile: ../dentate/config/Small_Scale_Control_log_normal_weights.yaml
