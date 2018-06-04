@@ -480,6 +480,8 @@ def filter_features_fI(primitives, current_features, export=False):
             adi_done = True
         this_rate = len(spike_times) / stim_dur * 1000.
         rate.append(this_rate)
+    if not adi_done:
+        return None
     indexes = range(len(i_amp))
     indexes.sort(key=i_amp.__getitem__)
     new_features['f_I'] = map(rate.__getitem__, indexes)
@@ -609,7 +611,8 @@ def get_objectives_spiking(features):
     :param features: dict
     :return: tuple of dict
     """
-    if features is None or features['adi'] is None:  # No rheobase value found, or adi could not be calculated
+    # No rheobase value found, or adi could not be calculated
+    if features is None or 'adi' not in features or features['adi'] is None:
         return None, None
 
     objectives = dict()
