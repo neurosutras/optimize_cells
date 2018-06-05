@@ -97,7 +97,7 @@ apical:
         tau: 79.079346599999994
         value: 0.0017105237899999999
         custom:
-          func: custom_inherit_by_branch_order
+          func: custom_filter_by_branch_order
           branch_order: 5
           custom_origin: parent
     NMDA:
