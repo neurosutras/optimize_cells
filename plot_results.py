@@ -1161,56 +1161,83 @@ def plot_best_norm_features_scatter(storage, target_val, target_range):
     mpl.rcParams['font.size'] = orig_fontsize
 
 
-def plot_parallel_optimize_exported_f_I_features(processed_export_file_path):
+def plot_exported_f_I(file_path, group_name='f_I'):
     """
 
-    :param processed_export_file_path: str (path)
+    :param file_path: str (path)
+    :param group_name: str
     """
     orig_fontsize = mpl.rcParams['font.size']
     # mpl.rcParams['font.size'] = 20.
-    description = 'f_I_features'
-    with h5py.File(processed_export_file_path, 'r') as f:
-        group  = f[description]
-        amps = group['amps']
+    if not os.path.isfile(file_path):
+        raise IOError('plot_exported_f_I: invalid file path: %s' % file_path)
+    with h5py.File(file_path, 'r') as f:
+        if group_name not in f:
+            raise AttributeError('plot_exported_f_I: provided file path: %s does not contain required top-level group '
+                                 'with name: %s' % (file_path, group_name))
+        group = f[group_name]
         fig, axes = plt.subplots(1, 2)
-        axes[0].scatter(amps, group['adi'], label='Simulation', c='r', alpha=0.6)
-        axes[0].scatter(amps, group['exp_adi'], label='Experiment', c='k', alpha=0.6)
+        i_amp = group['i_amp']
+        rate = group['rate']
+        exp_rate = group['exp_rate']
+        adi = group['adi']
+        exp_adi = group['exp_adi']
+        spike_num = range(3, len(adi) + 3)
+        axes[0].scatter(spike_num, adi, label='Simulation', c='r', linewidth=0, alpha=0.5)
+        axes[0].scatter(spike_num, exp_adi[:len(adi)], label='Experiment', c='grey', linewidth=0, alpha=0.5)
         axes[0].legend(loc='best', frameon=False, framealpha=0.5)
-        axes[0].set_xlabel('Current injection amp (nA)')
+        axes[0].set_xlabel('Spike number in train')
         axes[0].set_ylabel('Adaptation index')
-        axes[1].scatter(amps, group['f_I'], label='Simulation', c='r', alpha=0.6)
-        axes[1].scatter(amps, group['exp_f_I'], label='Experiment', c='k', alpha=0.6)
+        axes[0].set_title('Spike rate adaptation', fontsize=mpl.rcParams['font.size'])
+        axes[1].scatter(i_amp, rate, label='Simulation', c='r', linewidth=0, alpha=0.5)
+        axes[1].scatter(i_amp, exp_rate, label='Experiment', c='grey', linewidth=0, alpha=0.5)
         axes[1].legend(loc='best', frameon=False, framealpha=0.5)
         axes[1].set_xlabel('Current injection amp (nA)')
         axes[1].set_ylabel('Firing Rate (Hz)')
+        axes[1].set_title('f-I', fontsize=mpl.rcParams['font.size'])
     clean_axes(axes)
     fig.tight_layout()
-    plt.show()
-    plt.close()
+    fig.show()
     mpl.rcParams['font.size'] = orig_fontsize
 
 
-def plot_parallel_optimize_exported_traces(export_file_path):
+def plot_sim_from_file(file_path, group_name='sim_output'):
     """
 
-    :param export_file_path: str (path)
+    :param file_path: str (path)
+    :param group_name: str
     """
     orig_fontsize = mpl.rcParams['font.size']
     # mpl.rcParams['font.size'] = 20.
-    with h5py.File(export_file_path, 'r') as f:
-        for trial in f.itervalues():
-            # amplitude = trial.attrs['amp']
-            fig, axes = plt.subplots(1)
-            for rec in trial['rec'].itervalues():
-                axes.plot(trial['time'], rec, label=rec.attrs['description'])
+    if not os.path.isfile(file_path):
+        raise IOError('plot_sim_from_file: invalid file path: %s' % file_path)
+    with h5py.File(file_path, 'r') as f:
+        if group_name not in f:
+            raise AttributeError('plot_sim_from_file: provided file path: %s does not contain required top-level group '
+                                 'with name: %s' % (file_path, group_name))
+        for trial in f[group_name].itervalues():
+            fig, axes = plt.subplots()
+            for name, rec in trial['recs'].iteritems():
+                description = str(rec.attrs['description'])
+                node_name = '%s%i' % (rec.attrs['type'], rec.attrs['index'])
+                label = '%s: %s(%.2f) %s' % (name, node_name, rec.attrs['loc'], description)
+                axes.plot(trial['time'], rec, label=label)
+                axes.set_xlabel('Time (ms)')
+                axes.set_ylabel('%s (%s)' % (rec.attrs['ylabel'], rec.attrs['units']))
             axes.legend(loc='best', frameon=False, framealpha=0.5)
-            axes.set_xlabel('Time (ms)')
-            axes.set_ylabel('Vm (mV)')
-            axes.set_title('%s: %s' % (trial.attrs['title'], trial.attrs['description']))
+            title = None
+            if 'title' in trial.attrs:
+                title = trial.attrs['title']
+            if 'description' in trial.attrs:
+                if title is not None:
+                    title = title + '; ' + trial.attrs['description']
+                else:
+                    title = trial.attrs['description']
+            if title is not None:
+                axes.set_title(title, fontsize=mpl.rcParams['font.size'])
             clean_axes(axes)
             fig.tight_layout()
-    plt.show()
-    plt.close()
+            fig.show()
     mpl.rcParams['font.size'] = orig_fontsize
 
 

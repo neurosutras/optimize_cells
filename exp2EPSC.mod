@@ -4,17 +4,17 @@ Adapted exp2syn to generate a current rather than a conductance (Milstein 2015):
 
 --------------------------------------------------------------------------------
 
-Two state kinetic scheme synapse described by rise time tau1,
-and decay time constant tau2. The normalized peak current is 1.
+Two state kinetic scheme synapse described by rise time tau_rise,
+and decay time constant tau_decay. The normalized peak current is 1.
 Decay time MUST be greater than rise time.
 
-The solution of A->G->bath with rate constants 1/tau1 and 1/tau2 is
- A = a*exp(-t/tau1) and
- G = a*tau2/(tau2-tau1)*(-exp(-t/tau1) + exp(-t/tau2))
-	where tau1 < tau2
+The solution of A->G->bath with rate constants 1/tau_rise and 1/tau_decay is
+ A = a*exp(-t/tau_rise) and
+ G = a*tau_decay/(tau_decay-tau_rise)*(-exp(-t/tau_rise) + exp(-t/tau_decay))
+	where tau_rise < tau_decay
 
-If tau2-tau1 -> 0 then we have a alphasynapse.
-and if tau1 -> 0 then we have just single exponential decay.
+If tau_decay-tau_rise -> 0 then we have a alphasynapse.
+and if tau_rise -> 0 then we have just single exponential decay.
 
 The factor is evaluated in the
 initial block such that an event of weight 1 generates a
@@ -28,7 +28,7 @@ ENDCOMMENT
 
 NEURON {
 	POINT_PROCESS EPSC
-	RANGE tau1, tau2, i, inward, imax
+	RANGE tau_rise, tau_decay, i, i_unit
 	NONSPECIFIC_CURRENT i
 }
 
@@ -38,10 +38,9 @@ UNITS {
 }
 
 PARAMETER {
-	tau1 = 0.2   (ms)    <1e-9,1e9>
-	tau2 = 5.0    (ms)   <1e-9,1e9>
-    inward = -1.0                     : for inward currents
-    imax = 1.0           <0,1>        : to scale amplitude
+	tau_rise = 0.2   (ms)    <1e-9,1e9>
+	tau_decay = 5.0    (ms)   <1e-9,1e9>
+    i_unit = -1.0           <0,1>        : to scale amplitude
 }
 
 ASSIGNED {
@@ -57,24 +56,24 @@ STATE {
 
 INITIAL {
 	LOCAL tp
-	if (tau1/tau2 > .9999) {
-		tau1 = .9999*tau2
+	if (tau_rise/tau_decay > .9999) {
+		tau_rise = .9999*tau_decay
 	}
 	A = 0
 	B = 0
-	tp = (tau1*tau2)/(tau2 - tau1) * log(tau2/tau1)
-	factor = -exp(-tp/tau1) + exp(-tp/tau2)
+	tp = (tau_rise*tau_decay)/(tau_decay - tau_rise) * log(tau_decay/tau_rise)
+	factor = -exp(-tp/tau_rise) + exp(-tp/tau_decay)
 	factor = 1/factor
 }
 
 BREAKPOINT {
 	SOLVE state METHOD cnexp
-	i = inward * imax * (B - A)
+	i = i_unit * (B - A)
 }
 
 DERIVATIVE state {
-	A' = -A/tau1
-	B' = -B/tau2
+	A' = -A/tau_rise
+	B' = -B/tau_decay
 }
 
 NET_RECEIVE(weight (nA)) {

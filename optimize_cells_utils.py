@@ -29,44 +29,41 @@ def time2index(tvec, start, stop):
     return left, right
 
 
-def interpolate_tvec_vec(tvec, vec, duration, dt=0.02):
+def interp(t, x, duration, dt=0.025):
     """
-    Interpolates the array for tvec from t=0 to t=duration according to the dt time step, and interpolates the
-    vec array to correlate with the interpolated tvec array.
-    :param tvec: vector of times
-    :param vec: vector of voltage recordings
-    :param duration: length of time of voltage trace
-    :param dt:
-    :return:
+    Interpolates the arrays t and x from t=0 to t=duration with resolution dt.
+    :param t: array
+    :param x: array
+    :param duration: float
+    :param dt: float
+    :return: array, array
     """
     interp_t = np.arange(0., duration, dt)
-    interp_vm = np.interp(interp_t, tvec, vec)
-    return interp_t, interp_vm
+    interp_x = np.interp(interp_t, t, x)
+    return interp_t, interp_x
 
 
-def get_R_inp(tvec, vec, start, stop, amp, dt=0.025):
+def get_R_inp(t, vm, start, stop, amp, dt=0.025):
     """
-    Calculate peak and steady-state input resistance from a step current injection. For waveform current injections, the
-    peak but not the steady-state will have meaning.
-    :param tvec: array
-    :param vec: array
+    Calculate peak and steady-state input resistance from a step current injection.
+    :param t: array
+    :param vm: array
     :param start: float
     :param stop: float
     :param amp: float
     :param dt: float
     :return: tuple of float
     """
-
-    interp_t, interp_vm = interpolate_tvec_vec(tvec, vec, stop, dt)
+    interp_t, interp_vm = interp(t, vm, stop, dt)
     left = int((start-3.) / dt)
     right = left + int(2. / dt)
     baseline = np.mean(interp_vm[left:right])
-    temp_vec = np.abs(interp_vm - baseline)
+    interp_vm = np.abs(interp_vm - baseline)
     start_index = int(start / dt)
-    peak = np.max(temp_vec[start_index:])
+    peak = np.max(interp_vm[start_index:])
     left = int((stop-3.) / dt)
     right = left + int(2. / dt)
-    plateau = np.mean(temp_vec[left:right])
+    plateau = np.mean(interp_vm[left:right])
     return baseline, peak/abs(amp), plateau/abs(amp)
 
 
@@ -357,9 +354,8 @@ def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.01, vm_tol=0.5):
     if not sim.has_rec(rec_name):
         raise RuntimeError('offset_vm: pid: %i; no recording with name: %s' % (os.getpid(), rec_name))
     if not sim.has_stim('holding'):
-        raise RuntimeError('offset_vm: pid: %i; missing required stimulus named \'holding\'' % os.getpid())
-    cvode = sim.cvode
-    sim.cvode = True
+        raise RuntimeError('offset_vm: pid: %i; missing required stimulus with name: \'holding\'' % os.getpid())
+    
     if vm_target is None:
         vm_target = context.v_init
     if sim.has_stim('step'):
@@ -371,17 +367,18 @@ def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.01, vm_tol=0.5):
 
     equilibrate = context.equilibrate
     dt = context.dt
-    duration = context.duration
+    duration = equilibrate
 
-    sim.tstop = equilibrate
-    t = np.arange(0., equilibrate, dt)
     if vm_target not in context.i_holding[rec_name]:
         context.i_holding[rec_name][vm_target] = 0.
     i_holding = context.i_holding[rec_name][vm_target]
     sim.modify_stim('holding', node=node, loc=loc, amp=i_holding)
+    sim.backup_state()
+    sim.set_state(dt=dt, tstop=duration, cvode=True)
     sim.run(vm_target)
+    t = np.arange(0., duration, dt)
     vm = np.interp(t, sim.tvec, rec)
-    vm_rest = np.mean(vm[int((equilibrate - 3.) / dt):int((equilibrate - 1.) / dt)])
+    vm_rest = np.mean(vm[int((duration - 3.) / dt):int((duration - 1.) / dt)])
     if sim.verbose:
         print 'offset_vm: pid: %i; %s; vm_rest: %.1f, vm_target: %.1f' % (os.getpid(), rec_name, vm_rest, vm_target)
 
@@ -395,13 +392,12 @@ def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.01, vm_tol=0.5):
         sim.modify_stim('holding', amp=i_holding)
         sim.run(vm_target)
         vm = np.interp(t, sim.tvec, rec)
-        vm_rest = np.mean(vm[int((equilibrate - 3.) / dt):int((equilibrate - 1.) / dt)])
+        vm_rest = np.mean(vm[int((duration - 3.) / dt):int((duration - 1.) / dt)])
         if sim.verbose:
             print 'offset_vm: pid: %i; %s; %s i_holding to %.3f nA; vm_rest: %.1f' % \
                   (os.getpid(), rec_name, delta_str, i_holding, vm_rest)
-    sim.tstop = duration
-    sim.cvode = cvode
     context.i_holding[rec_name][vm_target] = i_holding
+    sim.restore_state()
     return vm_rest
 
 

@@ -8,9 +8,8 @@ __author__ = 'Aaron D. Milstein and Grace Ng'
 from biophysics_utils import *
 from nested.optimize_utils import *
 from optimize_cells_utils import *
-import collections
 import click
-# from plot_results import *
+
 
 context = Context()
 
@@ -23,7 +22,8 @@ context = Context()
 @click.option("--export-file-path", type=str, default=None)
 @click.option("--label", type=str, default=None)
 @click.option("--verbose", type=int, default=2)
-def main(config_file_path, output_dir, export, export_file_path, label, verbose):
+@click.option("--plot", is_flag=True)
+def main(config_file_path, output_dir, export, export_file_path, label, verbose, plot):
     """
 
     :param config_file_path: str (path)
@@ -32,6 +32,7 @@ def main(config_file_path, output_dir, export, export_file_path, label, verbose)
     :param export_file_path: str
     :param label: str
     :param verbose: bool
+    :param plot: bool
     """
     # requires a global variable context: :class:'Context'
     context.update(locals())
@@ -40,7 +41,8 @@ def main(config_file_path, output_dir, export, export_file_path, label, verbose)
                        export_file_path=export_file_path, label=label, disp=disp)
     args = get_args_static_leak()
     group_size = len(args[0])
-    sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size]
+    sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
+                [[context.plot] * group_size]
     primitives = map(compute_features_leak, *sequences)
     features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
     features, objectives = get_objectives_leak(features)
@@ -103,7 +105,7 @@ def init_context():
 
     """
     equilibrate = 250.  # time to steady-state
-    stim_dur = 500.
+    stim_dur = 750.  # 500.
     duration = equilibrate + stim_dur
     dt = 0.025
     th_dvdt = 10.
@@ -162,7 +164,6 @@ def config_sim_env(context):
     equilibrate = context.equilibrate
     stim_dur = context.stim_dur
     duration = context.duration
-    dt = context.dt
 
     if not sim.has_stim('step'):
         sim.append_stim(cell, cell.tree.root, name='step', loc=0.5, amp=0., delay=equilibrate, dur=stim_dur)
@@ -200,14 +201,12 @@ def compute_features_leak(x, section, export=False, plot=False):
     duration = context.duration
     stim_dur = context.stim_dur
     equilibrate = context.equilibrate
-    dt = context.dt
     v_init = context.v_init
+    dt = context.dt
     sim = context.sim
-    cvode = sim.cvode
-    sim.cvode = True
+
     title = 'R_inp'
     description = 'step current injection to %s' % section
-    sim.tstop = duration
     sim.parameters['section'] = section
     sim.parameters['title'] = title
     sim.parameters['description'] = description
@@ -219,19 +218,24 @@ def compute_features_leak(x, section, export=False, plot=False):
     loc = rec_dict['loc']
     node = rec_dict['node']
     rec = rec_dict['vec']
+
     sim.modify_stim('step', node=node, loc=loc, amp=amp, dur=stim_dur)
+    sim.backup_state()
+    sim.set_state(dt=dt, tstop=duration, cvode=True)
     sim.run(v_init)
+
     R_inp = get_R_inp(np.array(sim.tvec), np.array(rec), equilibrate, duration, amp, dt)[2]
     result = dict()
     result['%s R_inp' % section] = R_inp
     if context.verbose > 0:
         print 'compute_features_leak: pid: %i; %s: %s took %.1f s; R_inp: %.1f' % \
               (os.getpid(), title, description, time.time() - start_time, R_inp)
-    sim.cvode = cvode
     if plot:
         sim.plot()
     if export:
         context.sim.export_to_file(context.temp_output_path)
+    sim.restore_state()
+    sim.modify_stim('step', amp=0.)
     return result
 
 

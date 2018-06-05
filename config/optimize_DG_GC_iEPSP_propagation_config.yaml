@@ -1,28 +1,22 @@
 bounds:
-  dend.g_pas slope: !!python/tuple
-  - 1.0E-10
-  - 1.0E-5
-  dend.g_pas tau: !!python/tuple
-  - 25.
-  - 400.
   soma.g_pas: !!python/tuple
   - 1.0E-12
   - 1.0E-7
 feature_names:
-- dend R_inp
-- term_dend R_inp
-- soma R_inp
+- iEPSP_i_unit
+- iEPSP_attenuation_short
+- iEPSP_attenuation_long
 update_context:
-- - optimize_DG_GC_leak
+- - optimize_DG_GC_iEPSP_propagation
   - reset_biophysics
-- - optimize_DG_GC_leak
-  - update_mechanisms_leak
 get_features_stages:
-- source: optimize_DG_GC_leak
-  compute_features: compute_features_leak
-  get_args_static: get_args_static_leak
+- source: optimize_DG_GC_iEPSP_propagation
+  compute_features: compute_features_iEPSP_i_unit
+- source: optimize_DG_GC_iEPSP_propagation
+  compute_features: compute_features_iEPSP_attenuation
+  get_args_dynamic: get_args_dynamic_iEPSP_attenuation
 get_objectives:
-  optimize_DG_GC_leak: get_objectives_leak
+  optimize_DG_GC_iEPSP_propagation: get_objectives_iEPSP_propagation
 kwargs:
   mech_file_path: mechanisms/20180529_DG_GC_mech.yaml
   gid: 0
@@ -37,22 +31,16 @@ kwargs:
   datasetPrefix: ../dentate/datasets
   resultsPath: data
 objective_names:
-- dend R_inp
-- term_dend R_inp
-- soma R_inp
-optimization_title: DG_GC_leak
+- iEPSP_attenuation_short
+- iEPSP_attenuation_long
+optimization_title: DG_GC_iEPSP_propagation
 param_gen: PopulationAnnealing
 param_names:
-- dend.g_pas slope
-- dend.g_pas tau
 - soma.g_pas
 target_range:
-  dend R_inp: 1.
-  soma R_inp: 0.5
 target_val:
-  dend R_inp: 375.
-  soma R_inp: 295.
+  iEPSP_unit_amp: 1.
+  iEPSP_attenuation_short: 0.17
+  iEPSP_attenuation_long: 0.23
 x0:
-  dend.g_pas slope: 1.058E-08
-  dend.g_pas tau: 3.886E+01
   soma.g_pas: 1.050E-10
