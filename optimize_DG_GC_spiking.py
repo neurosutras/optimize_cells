@@ -23,7 +23,8 @@ context = Context()
 @click.option("--label", type=str, default=None)
 @click.option("--verbose", type=int, default=2)
 @click.option("--plot", is_flag=True)
-def main(config_file_path, output_dir, export, export_file_path, label, verbose, plot):
+@click.option("--debug", is_flag=True)
+def main(config_file_path, output_dir, export, export_file_path, label, verbose, plot, debug):
     """
 
     :param config_file_path: str (path)
@@ -33,12 +34,17 @@ def main(config_file_path, output_dir, export, export_file_path, label, verbose,
     :param label: str
     :param verbose: bool
     :param plot: bool
+    :param debug: bool
     """
     # requires a global variable context: :class:'Context'
     context.update(locals())
     disp = verbose > 0
     config_interactive(context, __file__, config_file_path=config_file_path, output_dir=output_dir, export=export,
                        export_file_path=export_file_path, label=label, disp=disp)
+
+    if debug:
+        add_diagnostic_recordings(context)
+
     # Stage 0:
     args = []
     group_size = 1
@@ -704,6 +710,23 @@ def update_mechanisms_spiking(x, context=None):
     modify_mech_param(cell, 'axon', 'km3', 'gkmbar', origin='ais')
     modify_mech_param(cell, 'ais', 'nax', 'sha', x_dict['ais.sha_nax'])
     modify_mech_param(cell, 'ais', 'nax', 'gbar', x_dict['ais.gbar_nax'])
+
+
+def add_diagnostic_recordings(context):
+    """
+
+    :param context: :class:'Context'
+    """
+    cell = context.cell
+    sim = context.sim
+    if not sim.has_rec('ica'):
+        sim.append_rec(cell, cell.tree.root, name='ica', param='_ref_ica', loc=0.5)
+    if not sim.has_rec('isk'):
+        sim.append_rec(cell, cell.tree.root, name='isk', param='_ref_isk_CadepK', loc=0.5)
+    if not sim.has_rec('ibk'):
+        sim.append_rec(cell, cell.tree.root, name='ibk', param='_ref_ibk_CadepK', loc=0.5)
+    if not sim.has_rec('cai'):
+        sim.append_rec(cell, cell.tree.root, name='cai', param='_ref_cai', loc=0.5)
 
 
 if __name__ == '__main__':
