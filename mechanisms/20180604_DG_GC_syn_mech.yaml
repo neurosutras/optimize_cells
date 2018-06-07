@@ -89,17 +89,20 @@ apical:
   synapses:
     AMPA:
       g_unit:
-        filters:
-          syn_types:
-            - excitatory
-        origin: soma
-        slope: 6.6515892499999994e-05
-        tau: 79.079346599999994
-        value: 0.0017105237899999999
-        custom:
-          func: custom_filter_by_branch_order
-          branch_order: 5
-          custom_origin: parent
+        - filters:
+            syn_types:
+              - excitatory
+          origin: soma
+          slope: 6.6515892499999994e-05
+          tau: 79.079346599999994
+          value: 0.0017105237899999999
+        - filters:
+            syn_types:
+              - excitatory
+          origin: parent
+          custom:
+            func: custom_filter_by_branch_order
+            branch_order: 5
     NMDA:
       Kd:
         value: 7.5099999999999998

@@ -6,7 +6,7 @@ import scipy.stats as stats
 import matplotlib.gridspec as gridspec
 from matplotlib import cm
 #from dentate.cells import *
-from dentate.synapses import get_syn_mech_param
+from dentate.synapses import get_syn_mech_param, get_syn_filter_dict
 
 mpl.rcParams['svg.fonttype'] = 'none'
 mpl.rcParams['font.size'] = 12.
@@ -362,7 +362,7 @@ def plot_synaptic_attribute_distribution(cell, env, gid, syn_name, param_name, f
     :param gid: int
     :param syn_name: str
     :param param_name: str
-    :param filters: dict with enumerated type
+    :param filters: dict (ex. syn_indexes, layers, syn_types) with str values
     :param from_mech_attrs: bool
     :param from_target_attrs: bool
     :param export: str (name of hdf5 file for export)
@@ -405,9 +405,11 @@ def plot_synaptic_attribute_distribution(cell, env, gid, syn_name, param_name, f
     for sec_type in sec_types_list:
         if len(cell.nodes[sec_type]) > 0:
             for node in cell.nodes[sec_type]:
-                syn_ids = syn_attrs.sec_index_map[gid][node.index]
+                syn_idxs = syn_attrs.sec_index_map[gid][node.index]
+                syn_ids = syn_attrs.syn_id_attr_dict[gid]['syn_ids'][syn_idxs]
                 if filters is not None:
-                    filtered_idxs = syn_attrs.get_filtered_syn_indexes(gid, syn_ids, **filters)
+                    converted_filters = get_syn_filter_dict(env, filters, convert=True)
+                    filtered_idxs = syn_attrs.get_filtered_syn_indexes(gid, syn_ids, **converted_filters)
                     syn_ids = syn_attrs.syn_id_attr_dict[gid]['syn_ids'][filtered_idxs]
                 for syn_id in syn_ids:
                     # TODO: figure out what to do with spine synapses that are not inserted into a branch node
@@ -458,6 +460,7 @@ def plot_synaptic_attribute_distribution(cell, env, gid, syn_name, param_name, f
                     minval = min(minval, min(attr_vals[attr_type][sec_type]))
                 xmax0 = max(xmax0, max(distances[attr_type][sec_type]))
                 xmin0 = min(xmin0, min(distances[attr_type][sec_type]))
+        axes.legend(loc='best', scatterpoints=1, frameon=False, framealpha=0.5, fontsize=mpl.rcParams['font.size'])
     xmin = xmin0 - 0.01 * (xmax0 - xmin0)
     xmax = xmax0 + 0.01 * (xmax0 - xmin0)
     for i, attr_type in enumerate(attr_types):
@@ -475,7 +478,6 @@ def plot_synaptic_attribute_distribution(cell, env, gid, syn_name, param_name, f
             axes.set_title(param_label + ' from ' + attr_type, fontsize=mpl.rcParams['font.size'])
         else:
             axes.set_title('Plot from ' + attr_type, fontsize=mpl.rcParams['font.size'])
-        axes.legend(loc='best', scatterpoints=1, frameon=False, framealpha=0.5, fontsize=mpl.rcParams['font.size'])
         clean_axes(axes)
     plt.show()
     if not svg_title is None:
@@ -540,12 +542,12 @@ def plot_synaptic_attribute_distribution(cell, env, gid, syn_name, param_name, f
         f.close()
 
 
-def plot_syn_attr_from_file(mech_name, param_name, filename, descriptions=None, param_label=None,
+def plot_syn_attr_from_file(syn_name, param_name, filename, descriptions=None, param_label=None,
                             ylabel='Conductance density', yunits='pS/um2', svg_title=None, data_dir='data'):
     """
     Takes in a list of files, and superimposes plots of distance vs. the provided mechanism parameter for all sec_types
     found in each file.
-    :param mech_name: str
+    :param syn_name: str
     :param param_name: str
     :param filename: str
     :param descriptions: list of str (descriptions of each session). If None, then plot all session_ids
@@ -568,41 +570,41 @@ def plot_syn_attr_from_file(mech_name, param_name, filename, descriptions=None, 
     file_path = data_dir + '/' + filename
     if os.path.isfile(file_path):
         with h5py.File(file_path, 'r') as f:
-            if mech_name not in f:
+            if syn_name not in f:
                 raise Exception('Specified mechanism name is not found in the file {}'.format(file))
-            elif param_name is not None and param_name not in f[mech_name]:
+            elif param_name is not None and param_name not in f[syn_name]:
                 raise Exception('Specified parameter name is not found in the file {}'.format(file))
             attr_types = []
-            if f[mech_name][param_name].attrs['mech_attrs'] == True:
+            if f[syn_name][param_name].attrs['mech_attrs'] == True:
                 attr_types.append('mech_attrs')
-            if f[mech_name][param_name].attrs['target_attrs'] == True:
+            if f[syn_name][param_name].attrs['target_attrs'] == True:
                 attr_types.append('target_attrs')
+            if param_label is None and f[syn_name][param_name].attrs.__contains('param_label'):
+                param_label = f[syn_name][param_name].attrs['param_label']
             fig, axarr = plt.subplots(ncols=len(attr_types), sharey=True)
             for i, attr_type in enumerate(attr_types):
                 if len(attr_types) == 1:
                     axes = axarr
                 else:
                     axes = axarr[i]
-                if descriptions is None:
-                    session_ids = f[mech_name][param_name].keys()
-                for session_id in session_ids:
-                    if f[mech_name][param_name][session_id].attrs.__contains__('description'):
-                        description = f[mech_name][param_name][session_id].attrs['description']
+                for session_id in f[syn_name][param_name].keys():
+                    if f[syn_name][param_name][session_id].attrs.__contains__('description'):
+                        description = f[syn_name][param_name][session_id].attrs['description']
                         if descriptions is not None and description not in descriptions:
                             continue
                     else:
                         description = None
-                    if attr_type not in f[mech_name][param_name][session_id]:
+                    if attr_type not in f[syn_name][param_name][session_id]:
                         continue
-                    for j, sec_type in enumerate(f[mech_name][param_name][session_id][attr_type].keys()):
+                    for j, sec_type in enumerate(f[syn_name][param_name][session_id][attr_type].keys()):
                         if sec_type not in marker_dict:
                             m = len(marker_dict)
                             marker_dict[sec_type] = markers[m]
                         marker = marker_dict[sec_type]
-                        distances = f[mech_name][param_name][session_id][attr_type][sec_type]['distances'][:]
-                        param_vals = f[mech_name][param_name][session_id][attr_type][sec_type]['values'][:]
+                        distances = f[syn_name][param_name][session_id][attr_type][sec_type]['distances'][:]
+                        param_vals = f[syn_name][param_name][session_id][attr_type][sec_type]['values'][:]
                         if description is None:
-                            label = sec_type
+                            label = sec_type + ' session' + session_id
                         else:
                             label = sec_type + ' ' + description
                         axes.scatter(distances, param_vals, color=colors[j], label=label, alpha=0.5,
@@ -623,6 +625,8 @@ def plot_syn_attr_from_file(mech_name, param_name, filename, descriptions=None, 
                             min_dist = min(distances)
                         else:
                             min_dist = min(min_dist, min(distances))
+                axes.legend(loc='best', scatterpoints=1, frameon=False, framealpha=0.5,
+                            fontsize=mpl.rcParams['font.size'])
             min_dist = min(0., min_dist)
             xmin = min_dist - 0.01 * (max_dist - min_dist)
             xmax = max_dist + 0.01 * (max_dist - min_dist)
@@ -639,16 +643,15 @@ def plot_syn_attr_from_file(mech_name, param_name, filename, descriptions=None, 
                     axes.set_ylim(min_param_val - buffer, max_param_val + buffer)
                 if param_label is not None:
                     axes.set_title(param_label + 'from' + attr_types[i], fontsize=mpl.rcParams['font.size'])
-                axes.legend(loc='best', scatterpoints=1, frameon=False, framealpha=0.5, fontsize=mpl.rcParams['font.size'])
                 clean_axes(axes)
                 axes.tick_params(direction='out')
             if not svg_title is None:
                 if param_label is not None:
                     svg_title = svg_title + ' - ' + param_label + '.svg'
                 elif param_name is None:
-                    svg_title = svg_title + ' - ' + mech_name + '_' + ' distribution.svg'
+                    svg_title = svg_title + ' - ' + syn_name + '_' + ' distribution.svg'
                 else:
-                    svg_title = svg_title + ' - ' + mech_name + '_' + param_name + ' distribution.svg'
+                    svg_title = svg_title + ' - ' + syn_name + '_' + param_name + ' distribution.svg'
                 fig.set_size_inches(5.27, 4.37)
                 fig.savefig(data_dir + svg_title, format='svg', transparent=True)
             plt.show()
@@ -658,8 +661,8 @@ def plot_syn_attr_from_file(mech_name, param_name, filename, descriptions=None, 
 
 
 def plot_mech_param_distribution(cell, mech_name, param_name, export=None, overwrite=False, scale_factor=10000.,
-                                 param_label=None, ylabel='Conductance density', yunits='pS/um2', svg_title=None,
-                                 show=True, sec_types=None, data_dir='data'):
+                                 param_label=None, description=None, ylabel='Conductance density', yunits='pS/um2',
+                                 svg_title=None, show=True, sec_types=None, data_dir='data', gid=None):
     """
     Takes a cell as input rather than a file. No simulation is required, this method just takes a fully specified cell
     and plots the relationship between distance and the specified mechanism parameter for all segments in sections of
@@ -672,12 +675,14 @@ def plot_mech_param_distribution(cell, mech_name, param_name, export=None, overw
     :param overwrite: bool (whether to overwrite or append to potentially existing hdf5 file)
     :param scale_factor: float
     :param param_label: str
+    :param description: str
     :param ylabel: str
     :param yunits: str
     :param svg_title: str
     :param show: bool
     :param sec_types: list or str
     :param data_dir: str (path)
+    :param gid: int
     """
     if svg_title is not None:
         remember_font_size = mpl.rcParams['font.size']
@@ -760,7 +765,6 @@ def plot_mech_param_distribution(cell, mech_name, param_name, export=None, overw
                                 (f.attrs['mech_file_path'], cell.pop_name, cell.gid, cell.mech_file_path))
         elif cell.mech_file_path is not None:
             f.attrs['mech_file_path'] = cell.mech_file_path
-        # TODO: Use enumerated groups to store multiple versions of the same mech param in one file.
         if mech_name in f:
             if param_name in f[mech_name]:
                 return
@@ -769,19 +773,28 @@ def plot_mech_param_distribution(cell, mech_name, param_name, export=None, overw
         else:
             f.create_group(mech_name)
             f[mech_name].create_group(param_name)
+        if len(f[mech_name][param_name].keys()) == 0:
+            session_id = '0'
+        else:
+            prev_session = int(f[mech_name][param_name].keys()[-1])
+            session_id = str(prev_session + 1)
+        f[mech_name][param_name].create_group(session_id)
+        if gid is not None:
+            f[mech_name][param_name][session_id].attrs['gid'] = gid
+        if svg_title is not None:
+            f[mech_name][param_name][session_id].attrs['svg_title'] = svg_title
+        if description is not None:
+            f[mech_name][param_name][session_id].attrs['description'] = description
         for sec_type in param_vals:
-            f[mech_name][param_name].create_group(sec_type)
-            f[mech_name][param_name][sec_type].create_dataset('values', data=param_vals[sec_type])
-            if not 'distances' in f:
-                f.create_group('distances')
-            f['distances'].create_group(sec_type)
-            f['distances'][sec_type].create_dataset('values', data=distances[sec_type])
+            f[mech_name][param_name][session_id].create_group(sec_type)
+            f[mech_name][param_name][session_id][sec_type].create_dataset('values', data=param_vals[sec_type])
+            f[mech_name][param_name][session_id][sec_type].create_dataset('distances', data=param_vals[sec_type])
         f.close()
 
 
 def plot_cable_param_distribution(cell, mech_name, export=None, overwrite=False, scale_factor=1., param_label=None,
-                                  ylabel='Specific capacitance', yunits='uF/cm2', svg_title=None, show=True,
-                                  data_dir='data'):
+                                  description=None, ylabel='Specific capacitance', yunits='uF/cm2', svg_title=None,
+                                  show=True, data_dir='data', gid=None):
     """
     Takes a cell as input rather than a file. No simulation is required, this method just takes a fully specified cell
     and plots the relationship between distance and the specified mechanism parameter for all dendritic segments. Used
@@ -879,18 +892,26 @@ def plot_cable_param_distribution(cell, mech_name, export=None, overwrite=False,
             return
         else:
             f.create_group(mech_name)
+        if len(f[mech_name].keys()) == 0:
+            session_id = '0'
+        else:
+            prev_session = int(f[mech_name].keys()[-1])
+            session_id = str(prev_session + 1)
+        f[mech_name].create_group(session_id)
+        if gid is not None:
+            f[mech_name][session_id].attrs['gid'] = gid
+        if svg_title is not None:
+            f[mech_name][session_id].attrs['svg_title'] = svg_title
+        if description is not None:
+            f[mech_name][session_id].attrs['description'] = description
         for sec_type in param_vals:
-            f[mech_name].create_group(sec_type)
-            f[mech_name][sec_type].create_dataset('values', data=param_vals[sec_type])
-        if not 'distances' in f:
-            f.create_group('distances')
-            for sec_type in distances:
-                f['distances'].create_group(sec_type)
-                f['distances'][sec_type].create_dataset('values', data=distances[sec_type])
+            f[mech_name][session_id].create_group(sec_type)
+            f[mech_name][session_id][sec_type].create_dataset('values', data=param_vals[sec_type])
+            f[mech_name][session_id][sec_type].create_dataset('distances', data=param_vals[sec_type])
         f.close()
 
 
-def plot_mech_param_from_file(mech_name, param_name, filenames, file_labels=None, param_label=None,
+def plot_mech_param_from_file(mech_name, param_name, filenames, file_labels=None, descriptions=None, param_label=None,
                               ylabel='Conductance density', yunits='pS/um2', svg_title=None, data_dir='data'):
     """
     Takes in a list of files, and superimposes plots of distance vs. the provided mechanism parameter for all sec_types
@@ -899,6 +920,7 @@ def plot_mech_param_from_file(mech_name, param_name, filenames, file_labels=None
     :param param_name: str
     :param filenames: list of hdf filenames
     :param filename_labels: list of filename labels
+    :param descriptions: list of str (descriptions of each session). If None, then plot all session_ids
     :param param_label: str
     :param ylabel: str
     :param yunits: str
@@ -909,14 +931,15 @@ def plot_mech_param_from_file(mech_name, param_name, filenames, file_labels=None
         remember_font_size = mpl.rcParams['font.size']
         mpl.rcParams['font.size'] = 20
     fig, axes = plt.subplots(1)
-    max_param_val, min_param_val = 0.1, 0.
+    max_param_val, min_param_val = 0., 0.
     max_dist, min_dist = None, 0.
     num_colors = 10
     markers = mlines.Line2D.filled_markers
     color_x = np.linspace(0., 1., num_colors)
     colors = [cm.Set1(x) for x in color_x]
-    distances = defaultdict(lambda: defaultdict(list))
-    param_vals = defaultdict(lambda: defaultdict(list))
+    distances = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    param_vals = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    all_descriptions = defaultdict(lambda: defaultdict(lambda: defaultdict()))
     marker_dict = {}
     if file_labels is None:
         file_labels = filenames
@@ -929,36 +952,63 @@ def plot_mech_param_from_file(mech_name, param_name, filenames, file_labels=None
                 elif param_name is not None and param_name not in f[mech_name]:
                     raise Exception('Specified parameter name is not found in the file {}'.format(file))
                 if param_name is None:
-                    for sec_type in f[mech_name]:
-                        param_vals[file_labels[i]][sec_type].extend(f[mech_name][sec_type]['values'][:])
-                        distances[file_labels[i]][sec_type].extend(f['distances'][sec_type]['values'][:])
+                    for session_id in f[mech_name]:
+                        if f[mech_name][session_id].attrs.__contains__('description'):
+                            description = f[mech_name][session_id].attrs['description']
+                            if descriptions is not None and description not in descriptions:
+                                continue
+                        else:
+                            description = None
+                        for j, sec_type in enumerate(f[mech_name][session_id]):
+                            param_vals[file_labels[i]][session_id][sec_type].\
+                                extend(f[mech_name][session_id][sec_type]['values'][:])
+                            distances[file_labels[i]][session_id][sec_type].\
+                                extend(f[mech_name][session_id][sec_type]['distances'][:])
+                            all_descriptions[file_labels[i]][session_id][sec_type] = description
                 else:
-                    for sec_type in f[mech_name][param_name].keys():
-                        param_vals[file_labels[i]][sec_type].extend(f[mech_name][param_name][sec_type]['values'][:])
-                        distances[file_labels[i]][sec_type].extend(f['distances'][sec_type]['values'][:])
-            for sec_type in param_vals[file_labels[i]]:
-                if sec_type not in marker_dict:
-                    j = len(marker_dict)
-                    marker_dict[sec_type] = markers[j]
-                marker = marker_dict[sec_type]
-                axes.scatter(distances[file_labels[i]][sec_type], param_vals[file_labels[i]][sec_type], color=colors[i],
-                             label=sec_type+'_'+file_labels[i], alpha=0.5, marker=marker)
+                    for session_id in f[mech_name][param_name]:
+                        if f[mech_name][param_name][session_id].attrs.__contains__('description'):
+                            description = f[mech_name][param_name][session_id].attrs['description']
+                            if descriptions is not None and description not in descriptions:
+                                continue
+                        else:
+                            description = None
+                        for j, sec_type in enumerate(f[mech_name][param_name][session_id]):
+                            param_vals[file_labels[i]][session_id][sec_type].\
+                                extend(f[mech_name][param_name][session_id][sec_type]['values'][:])
+                            distances[file_labels[i]][session_id][sec_type].\
+                                extend(f[mech_name][param_name][session_id][sec_type]['distances'][:])
+                            all_descriptions[file_labels[i]][session_id][sec_type] = description
+            for session_id in param_vals[file_labels[i]]:
+                for sec_type in param_vals[file_labels[i]][session_id]:
+                    if sec_type not in marker_dict:
+                        j = len(marker_dict)
+                        marker_dict[sec_type] = markers[j]
+                    marker = marker_dict[sec_type]
+                    description = all_descriptions[file_labels[i]][session_id][sec_type]
+                    if description is not None:
+                        label = sec_type+'_'+file_labels[i]+'_'+description
+                    else:
+                        label = sec_type+'_'+file_labels[i]+'_session'+session_id
+                    axes.scatter(distances[file_labels[i]][session_id][sec_type],
+                                 param_vals[file_labels[i]][session_id][sec_type], color=colors[i*(int(session_id)+1)],
+                                 label=label, alpha=0.5, marker=marker)
                 if max_param_val is None:
-                    max_param_val = max(param_vals[file_labels[i]][sec_type])
+                    max_param_val = max(param_vals[file_labels[i]][session_id][sec_type])
                 else:
-                    max_param_val = max(max_param_val, max(param_vals[file_labels[i]][sec_type]))
+                    max_param_val = max(max_param_val, max(param_vals[file_labels[i]][session_id][sec_type]))
                 if min_param_val is None:
-                    min_param_val = min(param_vals[file_labels[i]][sec_type])
+                    min_param_val = min(param_vals[file_labels[i]][session_id][sec_type])
                 else:
-                    min_param_val = min(min_param_val, min(param_vals[file_labels[i]][sec_type]))
+                    min_param_val = min(min_param_val, min(param_vals[file_labels[i]][session_id][sec_type]))
                 if max_dist is None:
-                    max_dist = max(distances[file_labels[i]][sec_type])
+                    max_dist = max(distances[file_labels[i]][session_id][sec_type])
                 else:
-                    max_dist = max(max_dist, max(distances[file_labels[i]][sec_type]))
+                    max_dist = max(max_dist, max(distances[file_labels[i]][session_id][sec_type]))
                 if min_dist is None:
-                    min_dist = min(distances[file_labels[i]][sec_type])
+                    min_dist = min(distances[file_labels[i]][session_id][sec_type])
                 else:
-                    min_dist = min(min_dist, min(distances[file_labels[i]][sec_type]))
+                    min_dist = min(min_dist, min(distances[file_labels[i]][session_id][sec_type]))
     axes.set_xlabel('Distance to soma (um)')
     min_dist = min(0., min_dist)
     xmin = min_dist - 0.01 * (max_dist - min_dist)
