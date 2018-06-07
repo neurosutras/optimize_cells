@@ -492,6 +492,7 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
                     correct_g_pas=True, env=env)
     # TODO init_syn_mech_attrs
     config_syns_from_mech_attrs(gid, env, pop_name, insert=True)
+    init_syn_mech_attrs(cell, env)
 
 
 if __name__ == '__main__':

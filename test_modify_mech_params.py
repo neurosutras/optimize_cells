@@ -245,6 +245,9 @@ def standard_modify_syn_mech_param_tests(cell, env):
                           filters={'syn_types': ['excitatory'], 'layers': ['OML']}, origin='apical',
                           origin_filters={'syn_types': ['excitatory'], 'layers': ['MML']}, update_targets=True,
                           append=True)
+    plot_synaptic_attribute_distribution(cell, env, gid, syn_name, param_name, filters=None, from_mech_attrs=True,
+                                         from_target_attrs=True, param_label='AMPA.g_unit')
+    """
     attr_vals = []
     target_vals = []
     attr_distances = []
@@ -273,6 +276,7 @@ def standard_modify_syn_mech_param_tests(cell, env):
     clean_axes(axes)
     fig.show()
     pprint.pprint(cell.mech_dict)
+    """
 
 
 
@@ -285,7 +289,7 @@ def standard_modify_syn_mech_param_tests(cell, env):
 @click.option("--hoc-lib-path", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
               default='../dentate')
 @click.option("--dataset-prefix", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
-              default='../dentate/datasets')  # '/mnt/s')  # '../dentate/datasets'
+              default='/mnt/s')  # '/mnt/s')  # '../dentate/datasets'
 @click.option("--mech-file-path", required=True, type=click.Path(exists=True, file_okay=True, dir_okay=False),
               default='mechanisms/20180529_DG_GC_mech.yaml')
 @click.option('--verbose', '-v', is_flag=True)

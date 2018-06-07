@@ -1,0 +1,222 @@
+ais:
+  cable:
+    Ra:
+      origin: soma
+    cm:
+      origin: soma
+  ions:
+    ek:
+      origin: soma
+  kap:
+    gkabar:
+      value: 0.08187356343249676
+  kdr:
+    gkdrbar:
+      origin: soma
+  km3:
+    gkmbar:
+      value: 0.005914034134283052
+  nax:
+    gbar:
+      value: 0.19020210790973677
+    sh:
+      origin: hillock
+    sha:
+      value: -1.5769625923956534
+  pas:
+    e:
+      origin: soma
+    g:
+      origin: soma
+apical:
+  cable:
+    Ra:
+      origin: soma
+    cm:
+      origin: soma
+  ions:
+    ek:
+      origin: soma
+  kad:
+    gkabar:
+    - max_loc: 75.0
+      origin: soma
+      value: 0.0
+    - max_loc: 300.0
+      min_loc: 75.0
+      origin: soma
+      slope: 0.0002156049160410387
+      value: 0.04934190487020748
+    - min_loc: 300.0
+      origin: soma
+      value: 0.09785301097944119
+  kap:
+    gkabar:
+    - min_loc: 75.0
+      origin: soma
+      value: 0.0
+    - max_loc: 75.0
+      origin: soma
+      slope: 0.0002156049160410387
+  kdr:
+    gkdrbar:
+      origin: soma
+  nas:
+    gbar:
+    - value: 0.03068362380290623
+    - custom:
+        branch_order: 5.0
+        func: custom_filter_by_branch_order
+      min: 0.0
+      origin: parent
+      slope: -0.00022791073975362896
+    - custom:
+        func: custom_filter_by_terminal
+      min: 0.0
+      origin: parent
+      slope: -0.00022791073975362896
+    sh:
+      origin: soma
+    sha:
+      value: 0.0
+  pas:
+    e:
+      origin: soma
+    g:
+      origin: soma
+      slope: 1.0917050870185562e-05
+      tau: 150.17368652246716
+  synapses:
+    AMPA:
+      g_unit:
+        filters:
+          syn_types:
+            - excitatory
+        origin: soma
+        slope: 6.6515892499999994e-05
+        tau: 79.079346599999994
+        value: 0.0017105237899999999
+        custom:
+          func: custom_filter_by_branch_order
+          branch_order: 5
+          custom_origin: parent
+    NMDA:
+      Kd:
+        value: 7.5099999999999998
+      gamma:
+        value: 0.10000000000000001
+      g_unit:
+        value: 0.0036129999999999999
+axon:
+  cable:
+    Ra:
+      origin: soma
+    cm:
+      origin: soma
+  ions:
+    ek:
+      origin: soma
+  kap:
+    gkabar:
+      origin: ais
+  kdr:
+    gkdrbar:
+      origin: ais
+  km3:
+    gkmbar:
+      origin: ais
+  nax:
+    gbar:
+      value: 0.05953294853651854
+    sh:
+      origin: hillock
+  pas:
+    e:
+      origin: soma
+    g:
+      origin: soma
+hillock:
+  cable:
+    Ra:
+      origin: soma
+    cm:
+      origin: soma
+  ions:
+    ek:
+      origin: soma
+  kap:
+    gkabar:
+      origin: soma
+  kdr:
+    gkdrbar:
+      origin: soma
+  km3:
+    gkmbar:
+      origin: soma
+  nax:
+    gbar:
+      value: 0.030821815154669967
+    sh:
+      value: 5.514521615045231
+  pas:
+    e:
+      origin: soma
+    g:
+      origin: soma
+soma:
+  Ca:
+    gcamult:
+      value: 0.23722009250630477
+  Cacum: null
+  CadepK:
+    gcakmult:
+      value: 1.7600175160421752
+  cable:
+    Ra:
+      value: 150.0
+    cm:
+      value: 1.0
+  ions:
+    ek:
+      value: -77.0
+  kap:
+    gkabar:
+      value: 0.033171536167129576
+  kdr:
+    gkdrbar:
+      value: 0.010791277639581993
+  km3:
+    gkmbar:
+      value: 0.004177429836385095
+  nas:
+    gbar:
+      value: 0.030821815154669967
+    sh:
+      value: 5.514521615045231
+  pas:
+    e:
+      value: -77.0
+    g:
+      value: 1.196445984658226e-07
+spine_head:
+  cable:
+    Ra:
+      origin: soma
+    cm:
+      origin: soma
+  pas:
+    e:
+      origin: soma
+    g:
+      origin: soma
+spine_neck:
+  cable:
+    Ra:
+      origin: soma
+    cm:
+      origin: soma
+  pas:
+    e:
+      origin: soma
+    g:
+      origin: soma
