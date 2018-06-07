@@ -17,7 +17,7 @@ UNITS {
 
 PARAMETER {
 	tau = 100		(ms)
-	depth = 50 		(nm)
+	depth = 0.05 	(um)
 	cai0 = 7e-5 	(mM)
  	cao0 = 1.3 		(mM)
 }

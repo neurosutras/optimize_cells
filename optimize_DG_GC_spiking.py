@@ -23,7 +23,8 @@ context = Context()
 @click.option("--label", type=str, default=None)
 @click.option("--verbose", type=int, default=2)
 @click.option("--plot", is_flag=True)
-def main(config_file_path, output_dir, export, export_file_path, label, verbose, plot):
+@click.option("--debug", is_flag=True)
+def main(config_file_path, output_dir, export, export_file_path, label, verbose, plot, debug):
     """
 
     :param config_file_path: str (path)
@@ -33,12 +34,17 @@ def main(config_file_path, output_dir, export, export_file_path, label, verbose,
     :param label: str
     :param verbose: bool
     :param plot: bool
+    :param debug: bool
     """
     # requires a global variable context: :class:'Context'
     context.update(locals())
     disp = verbose > 0
     config_interactive(context, __file__, config_file_path=config_file_path, output_dir=output_dir, export=export,
                        export_file_path=export_file_path, label=label, disp=disp)
+
+    if debug:
+        add_diagnostic_recordings(context)
+
     # Stage 0:
     args = []
     group_size = 1
@@ -131,7 +137,7 @@ def init_context():
     dend_spike_duration = equilibrate + dend_spike_stim_dur + 10.
     dt = 0.025
     th_dvdt = 10.
-    dend_th_dvdt = 60.
+    dend_th_dvdt = 30.
     v_init = -77.
     v_active = -77.
     i_th_max = 0.4
@@ -429,15 +435,20 @@ def compute_features_fI(x, amp, extend_dur=False, export=False, plot=False):
     result = dict()
     result['spike_times'] = spike_times
     result['i_amp'] = amp
+    vm = np.array(soma_rec)
     if extend_dur:
-        vm = np.array(soma_rec)
-        v_min_late = np.min(vm[int((equilibrate + stim_dur - 20.) / dt):int((equilibrate + stim_dur - 1.) / dt)])
-        result['v_min_late'] = v_min_late
         vm_rest = np.mean(vm[int((equilibrate - 3.) / dt):int((equilibrate - 1.) / dt)])
         v_after = np.max(vm[-int(50. / dt):-1])
         vm_stability = abs(v_after - vm_rest)
         result['vm_stability'] = vm_stability
         result['rebound_firing'] = len(np.where(spike_times > stim_dur)[0])
+    if not np.any(spike_times > stim_dur - 20.):
+        start = int((equilibrate + stim_dur - 20.) / dt)
+        dvdt = np.gradient(vm, dt)
+        th_x_indexes = np.where(dvdt[start:] > context.th_dvdt)[0]
+        if not th_x_indexes.any():
+            vm_step_late = np.mean(vm[int((equilibrate + stim_dur - 3.) / dt):int((equilibrate + stim_dur - 1.) / dt)])
+            result['vm_step_late'] = vm_step_late
     if context.verbose > 0:
         print 'compute_features_fI: pid: %i; %s: %s took %.1f s; num_spikes: %i' % \
               (os.getpid(), title, description, time.time() - start_time, len(spike_times))
@@ -465,23 +476,36 @@ def filter_features_fI(primitives, current_features, export=False):
     new_features = dict()
     i_amp = []
     rate = []
-    adi_done = False
+    adi = []
+    mean_adi = []
+    slow_depo = []
     for i, this_dict in enumerate(primitives):
         i_amp.append(this_dict['i_amp'])
         if 'vm_stability' in this_dict:
             new_features['vm_stability'] = this_dict['vm_stability']
         if 'rebound_firing' in this_dict:
             new_features['rebound_firing'] = this_dict['rebound_firing']
-        if 'v_min_late' in this_dict:
-            new_features['slow_depo'] = this_dict['v_min_late'] - current_features['vm_th']
+        if 'vm_step_late' in this_dict:
+            this_slow_depo = this_dict['vm_step_late'] - current_features['vm_th']
+            slow_depo.append(this_slow_depo)
         spike_times = this_dict['spike_times']
-        if not adi_done and (len(spike_times) >= len(exp_spikes) or i == len(primitives)):
-            new_features['adi'] = get_spike_adaptation_indexes(spike_times[:len(exp_spikes)])
-            adi_done = True
+        if (len(exp_spikes) - 2 < len(spike_times) < len(exp_spikes) + 2) or \
+                (len(adi) == 0 and (len(spike_times) > len(exp_spikes) or i == len(primitives))):
+            this_adi_array = get_spike_adaptation_indexes(spike_times[:len(exp_spikes)])
+            adi.append(this_adi_array)
         this_rate = len(spike_times) / stim_dur * 1000.
         rate.append(this_rate)
-    if not adi_done:
+    if len(adi) == 0 or len(slow_depo) == 0:
         return None
+    for i in xrange(len(exp_adi)):
+        this_adi_val_list = []
+        for this_adi_array in (this_adi_array for this_adi_array in adi if len(this_adi_array) >= i + 1):
+            this_adi_val_list.append(this_adi_array[i])
+        if len(this_adi_val_list) > 0:
+            this_adi_mean_val = np.mean(this_adi_val_list)
+            mean_adi.append(this_adi_mean_val)
+    new_features['adi'] = np.array(mean_adi)
+    new_features['slow_depo'] = np.mean(slow_depo)
     indexes = range(len(i_amp))
     indexes.sort(key=i_amp.__getitem__)
     new_features['f_I'] = map(rate.__getitem__, indexes)
@@ -563,7 +587,7 @@ def compute_features_dend_spike(x, amp, export=False, plot=False):
     peak_vm = np.max(vm[start:end])
     indexes = np.where((dvdt[start:end] >= context.dend_th_dvdt) & (dvdt2[start:end] > 0.))[0]
     if np.any(indexes):
-        th_index = start + max(0, indexes[0] - int(0.4/dt))
+        th_index = start + max(0, indexes[0] - int(0.1/dt))
         th_vm = vm[th_index]
         dend_spike_amp = peak_vm - th_vm
     else:
@@ -612,7 +636,8 @@ def get_objectives_spiking(features):
     :return: tuple of dict
     """
     # No rheobase value found, or adi could not be calculated
-    if features is None or 'adi' not in features or features['adi'] is None:
+    if features is None or 'adi' not in features or features['adi'] is None or 'slow_depo' not in features or \
+            features['slow_depo'] is None:
         return None, None
 
     objectives = dict()
@@ -620,18 +645,29 @@ def get_objectives_spiking(features):
                    'th_count']:
         objectives[target] = ((context.target_val[target] - features[target]) / context.target_range[target]) ** 2.
 
-    # don't penalize AHP or slow_depo less than target
-    for target in ['AHP', 'slow_depo']:
-        if features[target] > context.target_val[target]:
-            objectives[target] = ((context.target_val[target] - features[target]) / context.target_range[target]) ** 2.
-        else:
-            objectives[target] = 0.
+    # don't penalize AHP less than target
+    target = 'AHP'
+    if features[target] > context.target_val[target]:
+        objectives[target] = ((context.target_val[target] - features[target]) / context.target_range[target]) ** 2.
+    else:
+        objectives[target] = 0.
+
+    # don't penalize slow_depo outside target range:
+    target = 'slow_depo'
+    target_min = context.target_val['slow_depo_min']
+    target_max = context.target_val['slow_depo_max']
+    if features[target] < target_min:
+        objectives[target] = ((features[target] - target_min) / (0.01 * target_min)) ** 2.
+    elif features[target] > target_max:
+        objectives[target] = ((features[target] - target_max) / (0.01 * target_max)) ** 2.
+    else:
+        objectives[target] = 0.
 
     exp_adi = context.experimental_adi_array
     adi_residuals = 0.
     for i, this_adi in enumerate(features['adi']):
         adi_residuals += ((this_adi - exp_adi[i]) / (0.01 * exp_adi[i])) ** 2.
-    objectives['adi_residuals'] = adi_residuals
+    objectives['adi_residuals'] = adi_residuals / len(features['adi'])
 
     rheobase = features['rheobase']
     num_increments = context.num_increments
@@ -676,7 +712,9 @@ def update_mechanisms_spiking(x, context=None):
         modify_mech_param(cell, sec_type, 'kad', 'gkabar', origin='soma', min_loc=300.,
                           value=(x_dict['soma.gkabar'] + slope * 300.), append=True)
         modify_mech_param(cell, sec_type, 'kdr', 'gkdrbar', origin='soma')
-        modify_mech_param(cell, sec_type, 'nas', 'sha', 0.)  # 5.)
+        # modify_mech_param(cell, sec_type, 'nas', 'sha', x_dict['dend.sha_nas'])
+        modify_mech_param(cell, sec_type, 'nas', 'sha', 0.)
+        modify_mech_param(cell, sec_type, 'nas', 'sh', origin='soma')
         modify_mech_param(cell, sec_type, 'nas', 'gbar', x_dict['dend.gbar_nas'])
         modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=x_dict['dend.gbar_nas slope'],
                           min=x_dict['dend.gbar_nas min'],
@@ -698,12 +736,41 @@ def update_mechanisms_spiking(x, context=None):
         modify_mech_param(cell, sec_type, 'nax', 'sh', origin='hillock')
     modify_mech_param(cell, 'soma', 'Ca', 'gcamult', x_dict['soma.gCa factor'])
     modify_mech_param(cell, 'soma', 'CadepK', 'gcakmult', x_dict['soma.gCadepK factor'])
+    modify_mech_param(cell, 'soma', 'Cacum', 'tau', x_dict['soma.tau_Cacum'])
     modify_mech_param(cell, 'soma', 'km3', 'gkmbar', x_dict['soma.gkmbar'])
     modify_mech_param(cell, 'ais', 'km3', 'gkmbar', x_dict['ais.gkmbar'])
     modify_mech_param(cell, 'hillock', 'km3', 'gkmbar', origin='soma')
     modify_mech_param(cell, 'axon', 'km3', 'gkmbar', origin='ais')
     modify_mech_param(cell, 'ais', 'nax', 'sha', x_dict['ais.sha_nax'])
     modify_mech_param(cell, 'ais', 'nax', 'gbar', x_dict['ais.gbar_nax'])
+
+
+def add_diagnostic_recordings(context):
+    """
+
+    :param context: :class:'Context'
+    """
+    cell = context.cell
+    sim = context.sim
+    if not sim.has_rec('ica'):
+        sim.append_rec(cell, cell.tree.root, name='ica', param='_ref_ica', loc=0.5)
+    if not sim.has_rec('isk'):
+        sim.append_rec(cell, cell.tree.root, name='isk', param='_ref_isk_CadepK', loc=0.5)
+    if not sim.has_rec('ibk'):
+        sim.append_rec(cell, cell.tree.root, name='ibk', param='_ref_ibk_CadepK', loc=0.5)
+    if not sim.has_rec('ika'):
+        sim.append_rec(cell, cell.tree.root, name='ika', param='_ref_ik_kap', loc=0.5)
+    if not sim.has_rec('ikdr'):
+        sim.append_rec(cell, cell.tree.root, name='ikdr', param='_ref_ik_kdr', loc=0.5)
+    if not sim.has_rec('ikm'):
+        sim.append_rec(cell, cell.tree.root, name='ikm', param='_ref_ik_km3', loc=0.5)
+    if not sim.has_rec('cai'):
+        sim.append_rec(cell, cell.tree.root, name='cai', param='_ref_cai', loc=0.5)
+    if not sim.has_rec('ina'):
+        sim.append_rec(cell, cell.tree.root, name='ina', param='_ref_ina', loc=0.5)
+    if not sim.has_rec('axon_end'):
+        axon_seg_locs = [seg.x for seg in cell.axon[0].sec]
+        sim.append_rec(cell, cell.axon[0], name='axon_end', loc=axon_seg_locs[-1])
 
 
 if __name__ == '__main__':

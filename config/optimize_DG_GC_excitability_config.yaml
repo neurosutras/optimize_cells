@@ -59,6 +59,9 @@ bounds:
   soma.sh_nas/x: !!python/tuple
   - 0.1
   - 6.0
+  soma.tau_Cacum: !!python/tuple
+  - 9.
+  - 100.
 default_params:
 #  dend.gbar_nas bo: 5
 rel_bounds:
@@ -136,14 +139,14 @@ get_objectives:
   optimize_DG_GC_spiking: get_objectives_spiking
   optimize_DG_GC_iEPSP_propagation: get_objectives_iEPSP_propagation
 kwargs:
-  mech_file_path: mechanisms/20180529_DG_GC_mech.yaml
+  mech_file_path: mechanisms/20180605_DG_GC_excitability_mech.yaml
   gid: 0
   cell_type: GC
   correct_for_spines: True
   verbose: 2
   daspk: True
   configFile: ../dentate/config/Small_Scale_Control_log_normal_weights.yaml
-  templatePaths: ../dgc/Mateos-Aparicio2014:../dentate/templates
+  templatePaths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoclibPath: ../dentate
   # datasetPrefix: /mnt/s
   datasetPrefix: ../dentate/datasets
@@ -190,15 +193,15 @@ param_names:
 - soma.gCadepK factor
 - soma.gkmbar
 - ais.gkmbar
+- soma.tau_Cacum
 target_range:
   dend R_inp: 1.
   soma R_inp: 0.5
   ADP: 0.01
-  AHP: 0.005
+  AHP: 0.07
   ais_delay: 0.0005
   dend_bAP_ratio: 0.0002
   rebound_firing: 0.002
-  slow_depo: 0.1
   soma_spike_amp: 2.0
   th_count: 0.002
   vm_th: 0.01
@@ -208,11 +211,12 @@ target_val:
   dend R_inp: 375.
   soma R_inp: 295.
   ADP: 0.0
-  AHP: 4.0
+  AHP: 7.0
   ais_delay: 0.0
   dend_bAP_ratio: 0.3
   rebound_firing: 0
-  slow_depo: 10.0
+  slow_depo_max: 10.0
+  slow_depo_min: -1.
   soma_spike_amp: 90.0
   th_count: 1
   vm_th: -48.0
@@ -223,23 +227,24 @@ target_val:
   iEPSP_attenuation_short: 0.17
   iEPSP_attenuation_long: 0.23
 x0:
-  dend.g_pas slope: 1.058E-08
-  dend.g_pas tau: 3.886E+01
-  soma.g_pas: 1.050E-10
-  ais.gbar_nax: 0.1681
-  ais.gkmbar: 0.01286
-  ais.sha_nax: -2.659
-  axon.gbar_nax: 0.06
-  axon.gkabar: 0.05266
-  dend.gbar_nas: 0.03
-  dend.gbar_nas bo: 4
-  dend.gbar_nas min: 0.0
-  dend.gbar_nas slope: -0.0001
-  dend.gkabar: 0.04
-  soma.gCa factor: 0.3364
-  soma.gCadepK factor: 2.
-  soma.gbar_nas: 0.03
-  soma.gkabar: 0.02108
-  soma.gkdrbar: 0.04299
-  soma.gkmbar: 0.004286
-  soma.sh_nas/x: 1.219
+  soma.gCa factor: 9.9382E-01
+  dend.gbar_nas min: 6.4698E-03
+  soma.gkdrbar: 1.0216E-02
+  soma.g_pas: 1.3739E-08
+  axon.gkabar: 6.8027E-02
+  soma.gkmbar: 4.1868E-03
+  dend.gbar_nas: 2.3417E-02
+  dend.gbar_nas slope: -5.0172E-05
+  ais.sha_nax: -4.4434E+00
+  soma.gCadepK factor: 1.1547E+00
+  soma.sh_nas/x: 4.8323E+00
+  dend.gkabar: 1.4855E-01
+  ais.gbar_nax: 1.0270E-01
+  dend.gbar_nas bo: 5.0376E+00
+  dend.g_pas slope: 5.3010E-06
+  dend.g_pas tau: 7.8494E+01
+  axon.gbar_nax: 4.9753E-02
+  soma.gbar_nas: 4.2435E-02
+  ais.gkmbar: 4.9012E-03
+  soma.gkabar: 3.9303E-02
+  soma.tau_Cacum: 50.
