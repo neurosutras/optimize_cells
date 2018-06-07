@@ -418,11 +418,15 @@ def get_spike_shape(vm, spike_times, context=None):
     start = int((equilibrate + 1.) / dt)
     vm = vm[start:]
     dvdt = np.gradient(vm, dt)
-    th_x = np.where(dvdt > th_dvdt)[0]
-    if th_x.any():
-        th_x = th_x[0] - int(1.6 / dt)
+    th_x_indexes = np.where(dvdt > th_dvdt)[0]
+    if th_x_indexes.any():
+        th_x = th_x_indexes[0] - int(1.6 / dt)
     else:
-        th_x = np.where(vm > -30.)[0][0] - int(2. / dt)
+        th_x_indexes = np.where(vm > -30.)[0]
+        if th_x_indexes.any():
+            th_x = th_x_indexes[0] - int(2. / dt)
+        else:
+            return None, None, None, None
     th_v = vm[th_x]
     v_before = np.mean(vm[th_x - int(0.1 / dt):th_x])
     v_peak = np.max(vm[th_x:th_x + int(5. / dt)])

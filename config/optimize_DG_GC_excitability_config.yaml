@@ -59,6 +59,9 @@ bounds:
   soma.sh_nas/x: !!python/tuple
   - 0.1
   - 6.0
+  soma.tau_Cacum: !!python/tuple
+  - 9.
+  - 100.
 default_params:
 #  dend.gbar_nas bo: 5
 rel_bounds:
@@ -143,7 +146,7 @@ kwargs:
   verbose: 2
   daspk: True
   configFile: ../dentate/config/Small_Scale_Control_log_normal_weights.yaml
-  templatePaths: ../dgc/Mateos-Aparicio2014:../dentate/templates
+  templatePaths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoclibPath: ../dentate
   # datasetPrefix: /mnt/s
   datasetPrefix: ../dentate/datasets
@@ -190,15 +193,15 @@ param_names:
 - soma.gCadepK factor
 - soma.gkmbar
 - ais.gkmbar
+- soma.tau_Cacum
 target_range:
   dend R_inp: 1.
   soma R_inp: 0.5
   ADP: 0.01
-  AHP: 0.005
+  AHP: 0.07
   ais_delay: 0.0005
   dend_bAP_ratio: 0.0002
   rebound_firing: 0.002
-  slow_depo: 0.1
   soma_spike_amp: 2.0
   th_count: 0.002
   vm_th: 0.01
@@ -208,11 +211,12 @@ target_val:
   dend R_inp: 375.
   soma R_inp: 295.
   ADP: 0.0
-  AHP: 4.0
+  AHP: 7.0
   ais_delay: 0.0
   dend_bAP_ratio: 0.3
   rebound_firing: 0
-  slow_depo: 10.0
+  slow_depo_max: 10.0
+  slow_depo_min: -1.
   soma_spike_amp: 90.0
   th_count: 1
   vm_th: -48.0
@@ -243,3 +247,4 @@ x0:
   soma.gbar_nas: 4.2435E-02
   ais.gkmbar: 4.9012E-03
   soma.gkabar: 3.9303E-02
+  soma.tau_Cacum: 50.

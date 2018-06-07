@@ -142,7 +142,9 @@ soma:
   Ca:
     gcamult:
       value: 0.9938218203657428
-  Cacum: null
+  Cacum:
+    tau:
+      value: 50.
   CadepK:
     gcakmult:
       value: 1.1546501972793597
