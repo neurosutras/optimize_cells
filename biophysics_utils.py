@@ -461,11 +461,11 @@ def get_biophys_cell(env, gid, pop_name):
 @click.option("--pop-name", required=True, type=str, default='GC')
 @click.option("--config-file", required=True, type=click.Path(exists=True, file_okay=True, dir_okay=False),
               default='../dentate/config/Small_Scale_Control_log_normal_weights.yaml')
-@click.option("--template-paths", type=str, default='../dgc/Mateos-Aparicio2014:../dentate/templates')
+@click.option("--template-paths", type=str, default='../DGC/Mateos-Aparicio2014:../dentate/templates')
 @click.option("--hoc-lib-path", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
               default='../dentate')
 @click.option("--dataset-prefix", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
-              default='/mnt/s')  # '/mnt/s')  # '../dentate/datasets'
+              default='../dentate/datasets')  # '/mnt/s')  # '../dentate/datasets'
 @click.option("--mech-file-path", required=True, type=click.Path(exists=True, file_okay=True, dir_okay=False),
               default='mechanisms/20180529_DG_GC_mech.yaml')
 @click.option('--verbose', '-v', is_flag=True)
@@ -490,8 +490,8 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
 
     init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=mech_file_path, correct_cm=True,
                     correct_g_pas=True, env=env)
+    init_syn_mech_attrs(cell, env)
     config_syns_from_mech_attrs(gid, env, pop_name, insert=True)
-    init_syn_mech_attrs(cell, env, update_targets=True)
 
 
 if __name__ == '__main__':
