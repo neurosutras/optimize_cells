@@ -589,12 +589,14 @@ def compute_features_dend_spike(x, amp, export=False, plot=False):
     end = int((equilibrate + stim_dur) /dt)
     peak_vm = np.max(vm[start:end])
     indexes = np.where((dvdt[start:end] >= context.dend_th_dvdt) & (dvdt2[start:end] > 0.))[0]
+    dend_spike_amp_by_vm_late = peak_vm - np.mean(vm[end - int(0.1 / dt):end])
     if np.any(indexes):
         th_index = start + max(0, indexes[0] - int(0.1/dt))
         th_vm = vm[th_index]
         dend_spike_amp_by_th = peak_vm - th_vm
-    dend_spike_amp_by_vm_late = peak_vm - np.mean(vm[end-int(0.1/dt):end])
-    dend_spike_amp = max(dend_spike_amp_by_th, dend_spike_amp_by_vm_late)
+        dend_spike_amp = max(dend_spike_amp_by_th, dend_spike_amp_by_vm_late)
+    else:
+        dend_spike_amp = dend_spike_amp_by_vm_late
     result['dend_spike_amp'] = dend_spike_amp
 
     if context.verbose > 0:
