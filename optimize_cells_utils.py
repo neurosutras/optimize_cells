@@ -355,7 +355,7 @@ def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.01, vm_tol=0.5):
         raise RuntimeError('offset_vm: pid: %i; no recording with name: %s' % (os.getpid(), rec_name))
     if not sim.has_stim('holding'):
         raise RuntimeError('offset_vm: pid: %i; missing required stimulus with name: \'holding\'' % os.getpid())
-    
+
     if vm_target is None:
         vm_target = context.v_init
     if sim.has_stim('step'):
@@ -383,11 +383,12 @@ def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.01, vm_tol=0.5):
         print 'offset_vm: pid: %i; %s; vm_rest: %.1f, vm_target: %.1f' % (os.getpid(), rec_name, vm_rest, vm_target)
 
     if vm_rest > vm_target + vm_tol:
-        i_inc *= -1
+        i_inc *= -1.
         delta_str = 'decreased'
     else:
         delta_str = 'increased'
     while not (vm_target - vm_tol < vm_rest < vm_target + vm_tol):
+        prev_vm_rest = vm_rest
         i_holding += i_inc
         sim.modify_stim('holding', amp=i_holding)
         sim.run(vm_target)
@@ -396,6 +397,10 @@ def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.01, vm_tol=0.5):
         if sim.verbose:
             print 'offset_vm: pid: %i; %s; %s i_holding to %.3f nA; vm_rest: %.1f' % \
                   (os.getpid(), rec_name, delta_str, i_holding, vm_rest)
+        if (i_inc < 0. and vm_rest < vm_target) or (i_inc > 0. and vm_rest > vm_target):
+            if abs(vm_rest - vm_target) > abs(prev_vm_rest - vm_target):
+                i_holding -= i_inc
+            break
     context.i_holding[rec_name][vm_target] = i_holding
     sim.restore_state()
     return vm_rest

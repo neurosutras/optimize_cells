@@ -155,7 +155,7 @@ soma:
       value: 1.0
   ions:
     ek:
-      value: -77.0
+      value: -90.0
   kap:
     gkabar:
       value: 0.03930311716863435

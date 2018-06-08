@@ -264,7 +264,7 @@ def compute_features_spike_shape(x, export=False, plot=False):
     if np.any(spike_times < equilibrate):
         if context.verbose > 0:
             print 'compute_features_spike_shape: pid: %i; aborting - spontaneous firing' % (os.getpid())
-        return None
+        return dict()
 
     result = dict()
     result['vm_rest'] = vm_rest
@@ -298,7 +298,7 @@ def compute_features_spike_shape(x, export=False, plot=False):
         if i_th > context.i_th_max:
             if context.verbose > 0:
                 print 'compute_features_spike_shape: pid: %i; aborting - rheobase outside target range' % (os.getpid())
-            return None
+            return dict()
         i_th += i_inc
         sim.modify_stim('step', amp=i_th)
         sim.run(v_active)
@@ -442,13 +442,15 @@ def compute_features_fI(x, amp, extend_dur=False, export=False, plot=False):
         vm_stability = abs(v_after - vm_rest)
         result['vm_stability'] = vm_stability
         result['rebound_firing'] = len(np.where(spike_times > stim_dur)[0])
-    if not np.any(spike_times > stim_dur - 20.):
-        start = int((equilibrate + stim_dur - 20.) / dt)
-        dvdt = np.gradient(vm, dt)
-        th_x_indexes = np.where(dvdt[start:] > context.th_dvdt)[0]
-        if not th_x_indexes.any():
-            vm_step_late = np.mean(vm[int((equilibrate + stim_dur - 3.) / dt):int((equilibrate + stim_dur - 1.) / dt)])
-            result['vm_step_late'] = vm_step_late
+    start = int((equilibrate + stim_dur - 20.) / dt)
+    end = int((equilibrate + stim_dur) / dt)
+    dvdt = np.gradient(vm, dt)
+    th_x_indexes = np.where(dvdt[start:end] > context.th_dvdt)[0]
+    if th_x_indexes.any():
+        end = start + th_x_indexes[0] - int(1.6 / dt)
+    vm_step_late = np.mean(vm[end - int(0.1 / dt):end])
+    result['vm_step_late'] = vm_step_late
+
     if context.verbose > 0:
         print 'compute_features_fI: pid: %i; %s: %s took %.1f s; num_spikes: %i' % \
               (os.getpid(), title, description, time.time() - start_time, len(spike_times))
@@ -492,11 +494,12 @@ def filter_features_fI(primitives, current_features, export=False):
         if (len(exp_spikes) - 2 < len(spike_times) < len(exp_spikes) + 2) or \
                 (len(adi) == 0 and (len(spike_times) > len(exp_spikes) or i == len(primitives))):
             this_adi_array = get_spike_adaptation_indexes(spike_times[:len(exp_spikes)])
-            adi.append(this_adi_array)
+            if this_adi_array is not None:
+                adi.append(this_adi_array)
         this_rate = len(spike_times) / stim_dur * 1000.
         rate.append(this_rate)
     if len(adi) == 0 or len(slow_depo) == 0:
-        return None
+        return dict()
     for i in xrange(len(exp_adi)):
         this_adi_val_list = []
         for this_adi_array in (this_adi_array for this_adi_array in adi if len(this_adi_array) >= i + 1):
@@ -589,9 +592,9 @@ def compute_features_dend_spike(x, amp, export=False, plot=False):
     if np.any(indexes):
         th_index = start + max(0, indexes[0] - int(0.1/dt))
         th_vm = vm[th_index]
-        dend_spike_amp = peak_vm - th_vm
-    else:
-        dend_spike_amp = 0.
+        dend_spike_amp_by_th = peak_vm - th_vm
+    dend_spike_amp_by_vm_late = peak_vm - np.mean(vm[end-int(0.1/dt):end])
+    dend_spike_amp = max(dend_spike_amp_by_th, dend_spike_amp_by_vm_late)
     result['dend_spike_amp'] = dend_spike_amp
 
     if context.verbose > 0:
@@ -636,9 +639,9 @@ def get_objectives_spiking(features):
     :return: tuple of dict
     """
     # No rheobase value found, or adi could not be calculated
-    if features is None or 'adi' not in features or features['adi'] is None or 'slow_depo' not in features or \
+    if not features or 'adi' not in features or features['adi'] is None or 'slow_depo' not in features or \
             features['slow_depo'] is None:
-        return None, None
+        return dict(), dict()
 
     objectives = dict()
     for target in ['vm_th', 'ADP', 'rebound_firing', 'vm_stability', 'ais_delay', 'dend_bAP_ratio', 'soma_spike_amp',
