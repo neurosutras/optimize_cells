@@ -279,48 +279,47 @@ def compute_features_spike_shape(x, export=False, plot=False):
     sim.set_state(dt=dt, tstop=duration, cvode=False)
     sim.run(v_active)
     spike_times = np.array(context.cell.spike_detector.get_recordvec())
-    if np.any((spike_times > equilibrate) & (spike_times < equilibrate + 50)):
-        spike = True
-        target = False
-        soma_vm = np.array(soma_rec)
-        ais_vm = np.array(sim.get_rec('ais')['vec'])
-        axon_vm = np.array(sim.get_rec('axon')['vec'])
-        dend_vm = np.array(sim.get_rec('dend')['vec'])
-        i_inc = -0.01
-        delta_str = 'decreased'
-    else:
-        delta_str = 'increased'
+
+    target_spike_times = np.where((spike_times > equilibrate) & (spike_times < equilibrate + 50.))[0]
+    if not np.any(target_spike_times):
         spike = False
         target = True
         i_inc = 0.01
+        delta_str = 'increased'
+    elif len(target_spike_times) == 1:
+        spike = True
+        target = True
+    else:
+        spike = True
+        target = False
+        i_inc = -0.01
+        delta_str = 'decreased'
+
     while not spike == target:
-        prev_spike_times = np.array(spike_times)
+        i_th += i_inc
         if i_th > context.i_th_max:
             if context.verbose > 0:
                 print 'compute_features_spike_shape: pid: %i; aborting - rheobase outside target range' % (os.getpid())
             return dict()
-        i_th += i_inc
         sim.modify_stim('step', amp=i_th)
         sim.run(v_active)
         spike_times = np.array(context.cell.spike_detector.get_recordvec())
         if sim.verbose:
             print 'compute_features_spike_shape: pid: %i; %s; %s i_th to %.3f nA; num_spikes: %i' % \
                   (os.getpid(), 'soma', delta_str, i_th, len(spike_times))
-        spike = np.any((spike_times > equilibrate) & (spike_times < equilibrate + 50))
-        # replace previous set of traces if still spiking while decreasing i
-        if spike and not target:
-            soma_vm = np.array(soma_rec)
-            ais_vm = np.array(sim.get_rec('ais')['vec'])
-            axon_vm = np.array(sim.get_rec('axon')['vec'])
-            dend_vm = np.array(sim.get_rec('dend')['vec'])
-    if target:
-        soma_vm = np.array(soma_rec)
-        ais_vm = np.array(sim.get_rec('ais')['vec'])
-        axon_vm = np.array(sim.get_rec('axon')['vec'])
-        dend_vm = np.array(sim.get_rec('dend')['vec'])
-    else:
+        spike = np.any((spike_times > equilibrate) & (spike_times < equilibrate + 50.))
+    if not target:
+        # Repeat this sim for export and analysis
         i_th -= i_inc
-        spike_times = np.array(prev_spike_times)
+        sim.modify_stim('step', amp=i_th)
+        sim.run(v_active)
+        spike_times = np.array(context.cell.spike_detector.get_recordvec())
+
+    soma_vm = np.array(soma_rec)
+    ais_vm = np.array(sim.get_rec('ais')['vec'])
+    axon_vm = np.array(sim.get_rec('axon')['vec'])
+    dend_vm = np.array(sim.get_rec('dend')['vec'])
+
     title = 'spike_shape'
     description = 'rheobase: %.3f' % i_th
     sim.parameters['amp'] = i_th

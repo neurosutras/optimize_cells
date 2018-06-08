@@ -400,6 +400,7 @@ def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.01, vm_tol=0.5):
         if (i_inc < 0. and vm_rest < vm_target) or (i_inc > 0. and vm_rest > vm_target):
             if abs(vm_rest - vm_target) > abs(prev_vm_rest - vm_target):
                 i_holding -= i_inc
+                sim.modify_stim('holding', amp=i_holding)
             break
     context.i_holding[rec_name][vm_target] = i_holding
     sim.restore_state()
