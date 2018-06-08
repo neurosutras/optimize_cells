@@ -42,7 +42,7 @@ bounds:
   - 0.01
   - 2.0
   soma.gCadepK factor: !!python/tuple
-  - 0.01
+  - 0.0005
   - 2.0
   soma.gbar_nas: !!python/tuple
   - 0.01
@@ -51,13 +51,16 @@ bounds:
   - 0.01
   - 0.05
   soma.gkdrbar: !!python/tuple
-  - 0.01
+  - 0.0005
   - 0.06
   soma.gkmbar: !!python/tuple
   - 0.0005
   - 0.005
   soma.sh_nas/x: !!python/tuple
   - 0.1
+  - 6.0
+  dend.sh_nas: !!python/tuple
+  - 0.
   - 6.0
   soma.tau_Cacum: !!python/tuple
   - 9.
@@ -188,6 +191,7 @@ param_names:
 - soma.gkdrbar
 - axon.gkabar
 - soma.sh_nas/x
+- dend.sh_nas
 - ais.sha_nax
 - soma.gCa factor
 - soma.gCadepK factor
@@ -207,6 +211,7 @@ target_range:
   vm_th: 0.01
   vm_stability: 0.1
   dend_spike_amp: 0.1
+  spike_rate: 0.1
 target_val:
   dend R_inp: 375.
   soma R_inp: 295.
@@ -238,6 +243,7 @@ x0:
   ais.sha_nax: -4.4434E+00
   soma.gCadepK factor: 1.1547E+00
   soma.sh_nas/x: 4.8323E+00
+  dend.sh_nas: 0.
   dend.gkabar: 1.4855E-01
   ais.gbar_nax: 1.0270E-01
   dend.gbar_nas bo: 5.0376E+00

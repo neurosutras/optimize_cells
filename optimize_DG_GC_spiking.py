@@ -683,7 +683,7 @@ def get_objectives_spiking(features):
     features['f_I_slope'] = slope
     f_I_residuals = 0.
     for i, this_rate in enumerate(features['f_I']):
-        f_I_residuals += ((this_rate - target_f_I[i]) / (0.01 * target_f_I[i])) ** 2.
+        f_I_residuals += ((this_rate - target_f_I[i]) / context.target_range['spike_rate']) ** 2.
     objectives['f_I_residuals'] = f_I_residuals
     del features['f_I']
 
@@ -718,7 +718,7 @@ def update_mechanisms_spiking(x, context=None):
         modify_mech_param(cell, sec_type, 'kdr', 'gkdrbar', origin='soma')
         # modify_mech_param(cell, sec_type, 'nas', 'sha', x_dict['dend.sha_nas'])
         modify_mech_param(cell, sec_type, 'nas', 'sha', 0.)
-        modify_mech_param(cell, sec_type, 'nas', 'sh', origin='soma')
+        modify_mech_param(cell, sec_type, 'nas', 'sh', x_dict['soma.sh_nas/x'] + x_dict['dend.sh_nas']) # origin='soma')
         modify_mech_param(cell, sec_type, 'nas', 'gbar', x_dict['dend.gbar_nas'])
         modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=x_dict['dend.gbar_nas slope'],
                           min=x_dict['dend.gbar_nas min'],
