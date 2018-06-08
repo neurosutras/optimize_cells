@@ -490,9 +490,8 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
 
     init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=mech_file_path, correct_cm=True,
                     correct_g_pas=True, env=env)
-    # TODO init_syn_mech_attrs
     config_syns_from_mech_attrs(gid, env, pop_name, insert=True)
-    init_syn_mech_attrs(cell, env)
+    init_syn_mech_attrs(cell, env, update_targets=True)
 
 
 if __name__ == '__main__':

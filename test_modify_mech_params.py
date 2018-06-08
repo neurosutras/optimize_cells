@@ -33,18 +33,18 @@ def standard_modify_mech_param_tests(cell):
     soma_seg = cell.tree.root.sec(0.5)
     compare_single_value('soma.g_pas', x, soma_seg, 'pas', 'g')
 
-    plot_mech_param_distribution(cell, 'pas', 'g', export='dend_gpas0.hdf5', show=False, sec_types='all',
-                                 overwrite=True)
+    plot_mech_param_distribution(cell, 'pas', 'g', export='dend_gpas0.hdf5', description='stage0', show=False,
+                                 sec_types='all', overwrite=True)
     modify_mech_param(cell, 'apical', 'pas', 'g', origin='soma', slope=x['dend.g_pas slope'], tau=x['dend.g_pas tau'])
-    plot_mech_param_distribution(cell, 'pas', 'g', export='dend_gpas1.hdf5', show=False, sec_types='all',
-                                 overwrite=True)
+    plot_mech_param_distribution(cell, 'pas', 'g', export='dend_gpas1.hdf5', description='stage1', show=False,
+                                 sec_types='all', overwrite=True)
     for sec_type in ['hillock', 'ais', 'axon', 'spine_neck', 'spine_head']:
         modify_mech_param(cell, sec_type, 'pas', 'g', origin='soma')
     modify_mech_param(cell, 'soma', 'pas', 'g', 2. * x['soma.g_pas'])
     for sec_type in ['hillock', 'ais', 'axon', 'apical','spine_neck', 'spine_head']:
         update_mechanism_by_sec_type(cell, sec_type, 'pas')
-    plot_mech_param_distribution(cell, 'pas', 'g', export='dend_gpas2.hdf5', show=False, sec_types='all',
-                                 overwrite=True)
+    plot_mech_param_distribution(cell, 'pas', 'g', export='dend_gpas2.hdf5', description='stage2', show=False,
+                                 sec_types='all', overwrite=True)
     plot_mech_param_from_file('pas', 'g', ['dend_gpas0.hdf5', 'dend_gpas1.hdf5', 'dend_gpas2.hdf5'], ['0', '1', '2'],
                               param_label='dend.gpas')
 
@@ -241,43 +241,17 @@ def standard_modify_syn_mech_param_tests(cell, env):
     modify_syn_mech_param(cell, env, sec_type, syn_name, param_name=param_name, value=0.0005,
                           filters={'syn_types': ['excitatory']}, origin='soma', slope=0.0001, tau=50., xhalf=200.,
                           update_targets=True)
+    plot_synaptic_attribute_distribution(cell, env, gid, syn_name, param_name, filters=None, from_mech_attrs=True,
+                                         from_target_attrs=True, param_label='AMPA.g_unit', export='syn_attrs.hdf5',
+                                         description='stage1', show=False)
     modify_syn_mech_param(cell, env, sec_type, syn_name, param_name=param_name,
                           filters={'syn_types': ['excitatory'], 'layers': ['OML']}, origin='apical',
                           origin_filters={'syn_types': ['excitatory'], 'layers': ['MML']}, update_targets=True,
                           append=True)
     plot_synaptic_attribute_distribution(cell, env, gid, syn_name, param_name, filters=None, from_mech_attrs=True,
-                                         from_target_attrs=True, param_label='AMPA.g_unit')
-    """
-    attr_vals = []
-    target_vals = []
-    attr_distances = []
-    target_distances = []
-    if sec_type in cell.nodes:
-        for node in cell.nodes[sec_type]:
-            syn_indexes = syn_attrs.get_filtered_syn_indexes(gid, sec_index_map[node.index],
-                                                             syn_types=[env.Synapse_Types['excitatory']])
-            syn_ids = syn_id_attr_dict['syn_ids'][syn_indexes]
-            syn_locs = syn_id_attr_dict['syn_locs'][syn_indexes]
-            for syn_id, syn_loc in zip(syn_ids, syn_locs):
-                if syn_attrs.has_mech_attrs(gid, syn_id, syn_name):
-                    attr_vals.append(syn_attrs.get_mech_attrs(gid, syn_id, syn_name)[param_name])
-                    attr_distances.append(get_distance_to_node(cell, cell.tree.root, node, syn_loc))
-                if syn_attrs.has_netcon(gid, syn_id, syn_name):
-                    this_nc = syn_attrs.get_netcon(gid, syn_id, syn_name)
-                    target_vals.append(get_syn_mech_param(syn_name, syn_attrs.syn_param_rules, param_name,
-                                       mech_names=syn_attrs.syn_mech_names, nc=this_nc))
-                    target_distances.append(get_distance_to_node(cell, cell.tree.root, node, syn_loc))
-    fig, axes = plt.subplots()
-    axes.scatter(attr_distances, np.multiply(attr_vals, 1000.), alpha=0.25, c='b', label='syn_attrs')
-    axes.scatter(target_distances, np.multiply(target_vals, 1000.), alpha=0.25, c='r', label='target_syn_vals')
-    axes.set_xlabel('Distance from soma (um)')
-    axes.set_ylabel('Unitary conductance (nS)')
-    axes.legend(loc='best', frameon=False, framealpha=0.5)
-    clean_axes(axes)
-    fig.show()
-    pprint.pprint(cell.mech_dict)
-    """
-
+                                         from_target_attrs=True, param_label='AMPA.g_unit', export='syn_attrs.hdf5',
+                                         description='stage2', show=False)
+    plot_syn_attr_from_file(syn_name, param_name, 'syn_attrs.hdf5', param_label='AMPA.g_unit')
 
 
 @click.command()
@@ -312,10 +286,10 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     cell = get_biophys_cell(env, gid, pop_name)
     context.update(locals())
 
-    standard_modify_mech_param_tests(cell)
-    standard_cable_tests(cell, mech_file_path)
-    cm_correction_test(cell, env, mech_file_path)
-    count_spines(cell, env)
+    #standard_modify_mech_param_tests(cell)
+    #standard_cable_tests(cell, mech_file_path)
+    #cm_correction_test(cell, env, mech_file_path)
+    #count_spines(cell, env)
     standard_modify_syn_mech_param_tests(cell, env)
 
 
