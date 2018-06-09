@@ -379,7 +379,10 @@ def get_args_dynamic_fI(x, features):
     :param features: dict
     :return: list of list
     """
-    rheobase = features['rheobase']
+    if 'rheobase' not in features:
+        rheobase = 0.
+    else:
+        rheobase = features['rheobase']
     # Calculate firing rates for a range of I_inj amplitudes using a stim duration of 500 ms
     num_incr = context.num_increments
     i_inj_increment = context.i_inj_increment
@@ -640,8 +643,8 @@ def get_objectives_spiking(features):
     :return: tuple of dict
     """
     # No rheobase value found, or adi could not be calculated
-    if not features or 'adi' not in features or features['adi'] is None or 'slow_depo' not in features or \
-            features['slow_depo'] is None:
+    if not features or 'rheobase' not in features or 'adi' not in features or features['adi'] is None or \
+            'slow_depo' not in features or features['slow_depo'] is None:
         return dict(), dict()
 
     objectives = dict()
