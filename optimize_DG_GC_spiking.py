@@ -399,6 +399,10 @@ def compute_features_fI(x, amp, extend_dur=False, export=False, plot=False):
     :param plot: bool
     :return: dict
     """
+    if amp == 0.:
+        if context.verbose > 0:
+            print 'compute_features_fI: pid: %i; aborting - failed in previous stage' % (os.getpid())
+        return {'failed': True}
     start_time = time.time()
     config_sim_env(context)
     update_source_contexts(x, context)
@@ -474,6 +478,8 @@ def filter_features_fI(primitives, current_features, export=False):
     :return: dict
     """
     if 'failed' in current_features:
+        if context.verbose > 0:
+            print 'filter_features_fI: pid: %i; aborting - failed in previous stage' % (os.getpid())
         return {'failed': True}
     exp_spikes = context.experimental_spike_times
     exp_adi = context.experimental_adi_array
@@ -503,6 +509,8 @@ def filter_features_fI(primitives, current_features, export=False):
         this_rate = len(spike_times) / stim_dur * 1000.
         rate.append(this_rate)
     if len(adi) == 0 or len(slow_depo) == 0:
+        if context.verbose > 0:
+            print 'filter_features_fI: pid: %i; aborting - failed to compute required features' % (os.getpid())
         return {'failed': True}
     for i in xrange(len(exp_adi)):
         this_adi_val_list = []
