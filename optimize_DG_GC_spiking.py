@@ -264,7 +264,7 @@ def compute_features_spike_shape(x, export=False, plot=False):
     if np.any(spike_times < equilibrate):
         if context.verbose > 0:
             print 'compute_features_spike_shape: pid: %i; aborting - spontaneous firing' % (os.getpid())
-        return dict()
+        return {'failed': True}
 
     result = dict()
     result['vm_rest'] = vm_rest
@@ -300,7 +300,7 @@ def compute_features_spike_shape(x, export=False, plot=False):
         if i_th > context.i_th_max:
             if context.verbose > 0:
                 print 'compute_features_spike_shape: pid: %i; aborting - rheobase outside target range' % (os.getpid())
-            return dict()
+            return {'failed': True}
         sim.modify_stim('step', amp=i_th)
         sim.run(v_active)
         spike_times = np.array(context.cell.spike_detector.get_recordvec())
@@ -379,14 +379,14 @@ def get_args_dynamic_fI(x, features):
     :param features: dict
     :return: list of list
     """
-    if 'rheobase' not in features:
-        rheobase = 0.
-    else:
-        rheobase = features['rheobase']
-    # Calculate firing rates for a range of I_inj amplitudes using a stim duration of 500 ms
     num_incr = context.num_increments
-    i_inj_increment = context.i_inj_increment
-    return [[rheobase + i_inj_increment * (i + 1) for i in xrange(num_incr)], [False] * (num_incr - 1) + [True]]
+    if 'rheobase' in features:
+        rheobase = features['rheobase']
+        # Calculate firing rates for a range of I_inj amplitudes using a stim duration of 500 ms
+        i_inj_increment = context.i_inj_increment
+        return [[rheobase + i_inj_increment * (i + 1) for i in xrange(num_incr)], [False] * (num_incr - 1) + [True]]
+    else:
+        return [[0.] * num_incr, [False] * num_incr]
 
 
 def compute_features_fI(x, amp, extend_dur=False, export=False, plot=False):
@@ -473,6 +473,8 @@ def filter_features_fI(primitives, current_features, export=False):
     :param export: bool
     :return: dict
     """
+    if 'failed' in current_features:
+        return {'failed': True}
     exp_spikes = context.experimental_spike_times
     exp_adi = context.experimental_adi_array
     stim_dur = context.stim_dur
@@ -501,7 +503,7 @@ def filter_features_fI(primitives, current_features, export=False):
         this_rate = len(spike_times) / stim_dur * 1000.
         rate.append(this_rate)
     if len(adi) == 0 or len(slow_depo) == 0:
-        return dict()
+        return {'failed': True}
     for i in xrange(len(exp_adi)):
         this_adi_val_list = []
         for this_adi_array in (this_adi_array for this_adi_array in adi if len(this_adi_array) >= i + 1):
@@ -642,9 +644,7 @@ def get_objectives_spiking(features):
     :param features: dict
     :return: tuple of dict
     """
-    # No rheobase value found, or adi could not be calculated
-    if not features or 'rheobase' not in features or 'adi' not in features or features['adi'] is None or \
-            'slow_depo' not in features or features['slow_depo'] is None:
+    if not features or 'failed' in features:
         return dict(), dict()
 
     objectives = dict()
