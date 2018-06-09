@@ -264,7 +264,7 @@ def compute_features_spike_shape(x, export=False, plot=False):
     if np.any(spike_times < equilibrate):
         if context.verbose > 0:
             print 'compute_features_spike_shape: pid: %i; aborting - spontaneous firing' % (os.getpid())
-        return {'failed': True}
+        return dict()
 
     result = dict()
     result['vm_rest'] = vm_rest
@@ -300,7 +300,7 @@ def compute_features_spike_shape(x, export=False, plot=False):
         if i_th > context.i_th_max:
             if context.verbose > 0:
                 print 'compute_features_spike_shape: pid: %i; aborting - rheobase outside target range' % (os.getpid())
-            return {'failed': True}
+            return dict()
         sim.modify_stim('step', amp=i_th)
         sim.run(v_active)
         spike_times = np.array(context.cell.spike_detector.get_recordvec())
@@ -379,14 +379,11 @@ def get_args_dynamic_fI(x, features):
     :param features: dict
     :return: list of list
     """
+    rheobase = features['rheobase']
+    # Calculate firing rates for a range of I_inj amplitudes using a stim duration of 500 ms
     num_incr = context.num_increments
-    if 'rheobase' in features:
-        rheobase = features['rheobase']
-        # Calculate firing rates for a range of I_inj amplitudes using a stim duration of 500 ms
-        i_inj_increment = context.i_inj_increment
-        return [[rheobase + i_inj_increment * (i + 1) for i in xrange(num_incr)], [False] * (num_incr - 1) + [True]]
-    else:
-        return [[0.] * num_incr, [False] * num_incr]
+    i_inj_increment = context.i_inj_increment
+    return [[rheobase + i_inj_increment * (i + 1) for i in xrange(num_incr)], [False] * (num_incr - 1) + [True]]
 
 
 def compute_features_fI(x, amp, extend_dur=False, export=False, plot=False):
@@ -399,10 +396,6 @@ def compute_features_fI(x, amp, extend_dur=False, export=False, plot=False):
     :param plot: bool
     :return: dict
     """
-    if amp == 0.:
-        if context.verbose > 0:
-            print 'compute_features_fI: pid: %i; aborting - failed in previous stage' % (os.getpid())
-        return {'failed': True}
     start_time = time.time()
     config_sim_env(context)
     update_source_contexts(x, context)
@@ -477,10 +470,6 @@ def filter_features_fI(primitives, current_features, export=False):
     :param export: bool
     :return: dict
     """
-    if 'failed' in current_features:
-        if context.verbose > 0:
-            print 'filter_features_fI: pid: %i; aborting - failed in previous stage' % (os.getpid())
-        return {'failed': True}
     exp_spikes = context.experimental_spike_times
     exp_adi = context.experimental_adi_array
     stim_dur = context.stim_dur
@@ -508,10 +497,18 @@ def filter_features_fI(primitives, current_features, export=False):
                 adi.append(this_adi_array)
         this_rate = len(spike_times) / stim_dur * 1000.
         rate.append(this_rate)
-    if len(adi) == 0 or len(slow_depo) == 0:
+    if len(adi) == 0:
+        feature_name = 'adi'
         if context.verbose > 0:
-            print 'filter_features_fI: pid: %i; aborting - failed to compute required features' % (os.getpid())
-        return {'failed': True}
+            print 'filter_features_fI: pid: %i; aborting - failed to compute required feature: %s' % \
+                  (os.getpid(), feature_name)
+        return dict()
+    if len(slow_depo) == 0:
+        feature_name = 'slow_depo'
+        if context.verbose > 0:
+            print 'filter_features_fI: pid: %i; aborting - failed to compute required feature: %s' % \
+                  (os.getpid(), feature_name)
+        return dict()
     for i in xrange(len(exp_adi)):
         this_adi_val_list = []
         for this_adi_array in (this_adi_array for this_adi_array in adi if len(this_adi_array) >= i + 1):
@@ -652,8 +649,9 @@ def get_objectives_spiking(features):
     :param features: dict
     :return: tuple of dict
     """
-    if not features or 'failed' in features:
-        return dict(), dict()
+
+    # if not features or 'failed' in features:
+    #     return dict(), dict()
 
     objectives = dict()
     for target in ['vm_th', 'ADP', 'rebound_firing', 'vm_stability', 'ais_delay', 'dend_bAP_ratio', 'soma_spike_amp',
