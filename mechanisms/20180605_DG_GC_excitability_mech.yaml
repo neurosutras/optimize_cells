@@ -61,16 +61,10 @@ apical:
     gbar:
     - value: 0.023417098948243772
     - custom:
-        branch_order: 5.037595046733852
-        func: custom_filter_by_branch_order
-      min: 0.006469766665974186
-      origin: parent
-      slope: -5.017168274109695e-05
-    - custom:
         func: custom_filter_by_terminal
       min: 0.006469766665974186
       origin: parent
-      slope: -5.017168274109695e-05
+      slope: 0.
     sh:
       origin: soma
     sha:

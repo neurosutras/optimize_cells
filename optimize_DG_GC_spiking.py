@@ -16,7 +16,7 @@ context = Context()
 
 @click.command()
 @click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='config/optimize_DG_GC_spiking_config.yaml')
+              default='config/optimize_DG_GC_excitability_config.yaml')
 @click.option("--output-dir", type=click.Path(exists=True, file_okay=False, dir_okay=True), default='data')
 @click.option("--export", is_flag=True)
 @click.option("--export-file-path", type=str, default=None)
@@ -149,7 +149,7 @@ def init_context():
     experimental_adi_array = get_spike_adaptation_indexes(experimental_spike_times)
 
     # GC experimental f-I data from Kowalski J...Pernia-Andrade AJ, Hippocampus, 2016
-    i_inj_increment = 0.05
+    i_inj_increment = 0.02
     num_increments = 10
     context.update(locals())
 
@@ -327,13 +327,25 @@ def compute_features_spike_shape(x, export=False, plot=False):
     sim.parameters['description'] = description
     sim.parameters['duration'] = duration
 
-    peak, threshold, ADP, AHP = get_spike_shape(soma_vm, spike_times, context)
+    spike_shape_dict = get_spike_shape(soma_vm, spike_times, context)
+    if spike_shape_dict is None:
+        if context.verbose > 0:
+            print 'compute_features_spike_shape: pid: %i; aborting - problem analyzing spike shape' % (os.getpid())
+        return dict()
+    peak = spike_shape_dict['v_peak']
+    threshold = spike_shape_dict['th_v']
+    fAHP = spike_shape_dict['fAHP']
+    mAHP = spike_shape_dict['mAHP']
+    ADP = spike_shape_dict['ADP']
+    # print spike_shape_dict
     result['soma_spike_amp'] = peak - threshold
     result['vm_th'] = threshold
+    result['fAHP'] = fAHP
+    result['mAHP'] = mAHP
     result['ADP'] = ADP
-    result['AHP'] = AHP
     result['rheobase'] = i_th
     result['th_count'] = len(np.where(spike_times > equilibrate)[0])
+
     start = int((equilibrate + 1.) / dt)
     th_x = np.where(soma_vm[start:] >= threshold)[0][0] + start
     if len(spike_times) > 1:
@@ -475,13 +487,18 @@ def filter_features_fI(primitives, current_features, export=False):
     stim_dur = context.stim_dur
 
     new_features = dict()
-    i_amp = []
+    i_amp = [this_dict['i_amp'] for this_dict in primitives]
     rate = []
     adi = []
     mean_adi = []
     slow_depo = []
-    for i, this_dict in enumerate(primitives):
-        i_amp.append(this_dict['i_amp'])
+
+    indexes = range(len(i_amp))
+    indexes.sort(key=i_amp.__getitem__)
+    print i_amp
+    print indexes
+    for i in indexes:
+        this_dict = primitives[i]
         if 'vm_stability' in this_dict:
             new_features['vm_stability'] = this_dict['vm_stability']
         if 'rebound_firing' in this_dict:
@@ -491,7 +508,7 @@ def filter_features_fI(primitives, current_features, export=False):
             slow_depo.append(this_slow_depo)
         spike_times = this_dict['spike_times']
         if (len(exp_spikes) - 2 < len(spike_times) < len(exp_spikes) + 2) or \
-                (len(adi) == 0 and (len(spike_times) > len(exp_spikes) or i == len(primitives))):
+                (len(adi) == 0 and (len(spike_times) > len(exp_spikes) or i == len(primitives) - 1)):
             this_adi_array = get_spike_adaptation_indexes(spike_times[:len(exp_spikes)])
             if this_adi_array is not None:
                 adi.append(this_adi_array)
@@ -518,8 +535,7 @@ def filter_features_fI(primitives, current_features, export=False):
             mean_adi.append(this_adi_mean_val)
     new_features['adi'] = np.array(mean_adi)
     new_features['slow_depo'] = np.mean(slow_depo)
-    indexes = range(len(i_amp))
-    indexes.sort(key=i_amp.__getitem__)
+
     new_features['f_I'] = map(rate.__getitem__, indexes)
     i_amp = map(i_amp.__getitem__, indexes)
     experimental_f_I_slope = context.target_val['f_I_slope']  # Hz/ln(pA); rate = slope * ln(current - rheobase)
@@ -654,16 +670,9 @@ def get_objectives_spiking(features):
     #     return dict(), dict()
 
     objectives = dict()
-    for target in ['vm_th', 'ADP', 'rebound_firing', 'vm_stability', 'ais_delay', 'dend_bAP_ratio', 'soma_spike_amp',
-                   'th_count']:
+    for target in ['vm_th', 'fAHP', 'mAHP', 'ADP', 'rebound_firing', 'vm_stability', 'ais_delay', 'dend_bAP_ratio',
+                   'soma_spike_amp', 'th_count']:
         objectives[target] = ((context.target_val[target] - features[target]) / context.target_range[target]) ** 2.
-
-    # don't penalize AHP less than target
-    target = 'AHP'
-    if features[target] > context.target_val[target]:
-        objectives[target] = ((context.target_val[target] - features[target]) / context.target_range[target]) ** 2.
-    else:
-        objectives[target] = 0.
 
     # don't penalize slow_depo outside target range:
     target = 'slow_depo'
@@ -725,20 +734,20 @@ def update_mechanisms_spiking(x, context=None):
         modify_mech_param(cell, sec_type, 'kad', 'gkabar', origin='soma', min_loc=300.,
                           value=(x_dict['soma.gkabar'] + slope * 300.), append=True)
         modify_mech_param(cell, sec_type, 'kdr', 'gkdrbar', origin='soma')
-        # modify_mech_param(cell, sec_type, 'nas', 'sha', x_dict['dend.sha_nas'])
         modify_mech_param(cell, sec_type, 'nas', 'sha', 0.)
-        modify_mech_param(cell, sec_type, 'nas', 'sh', x_dict['soma.sh_nas/x'] + x_dict['dend.sh_nas']) # origin='soma')
+        modify_mech_param(cell, sec_type, 'nas', 'sh', origin='soma')
         modify_mech_param(cell, sec_type, 'nas', 'gbar', x_dict['dend.gbar_nas'])
+        """
         modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=x_dict['dend.gbar_nas slope'],
                           min=x_dict['dend.gbar_nas min'],
                           custom={'func': 'custom_filter_by_branch_order',
                                   'branch_order': x_dict['dend.gbar_nas bo']}, append=True)
-        modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=x_dict['dend.gbar_nas slope'],
-                          min=x_dict['dend.gbar_nas min'],
+        """
+        modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=0., min=x_dict['dend.gbar_nas min'],
                           custom={'func': 'custom_filter_by_terminal'}, append=True)
-    update_mechanism_by_sec_type(cell, 'hillock', 'kap')
-    update_mechanism_by_sec_type(cell, 'hillock', 'kdr')
-    modify_mech_param(cell, 'ais', 'kdr', 'gkdrbar', origin='soma')
+    modify_mech_param(cell, 'hillock', 'kap', 'gkabar', origin='soma')
+    modify_mech_param(cell, 'hillock', 'kdr', 'gkdrbar', origin='soma')
+    modify_mech_param(cell, 'ais', 'kdr', 'gkdrbar', x_dict['axon.gkdrbar'])
     modify_mech_param(cell, 'ais', 'kap', 'gkabar', x_dict['axon.gkabar'])
     modify_mech_param(cell, 'axon', 'kdr', 'gkdrbar', origin='ais')
     modify_mech_param(cell, 'axon', 'kap', 'gkabar', origin='ais')

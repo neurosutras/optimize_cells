@@ -424,7 +424,7 @@ def get_spike_shape(vm, spike_times, context=None):
     start = int((equilibrate + 1.) / dt)
     vm = vm[start:]
     dvdt = np.gradient(vm, dt)
-    th_x_indexes = np.where(dvdt > th_dvdt)[0]
+    th_x_indexes = np.where(dvdt >= th_dvdt)[0]
     if th_x_indexes.any():
         th_x = th_x_indexes[0] - int(1.6 / dt)
     else:
@@ -432,30 +432,40 @@ def get_spike_shape(vm, spike_times, context=None):
         if th_x_indexes.any():
             th_x = th_x_indexes[0] - int(2. / dt)
         else:
-            return None, None, None, None
+            return None
     th_v = vm[th_x]
     v_before = np.mean(vm[th_x - int(0.1 / dt):th_x])
-    v_peak = np.max(vm[th_x:th_x + int(5. / dt)])
-    x_peak = np.where(vm[th_x:th_x + int(5. / dt)] == v_peak)[0][0]
-    if len(spike_times) > 1:
-        end = max(th_x + x_peak + int(2. / dt), int((spike_times[1] - 4.) / dt) - start)
-    else:
-        end = len(vm)
-    v_AHP = np.min(vm[th_x + x_peak:end])
-    x_AHP = np.where(vm[th_x + x_peak:end] == v_AHP)[0][0]
-    AHP = v_before - v_AHP
-    # if spike waveform includes an ADP before an AHP, return the value of the ADP in order to increase objective error
-    ADP = 0.
-    rising_x = np.where(dvdt[th_x + x_peak + 1:th_x + x_peak + x_AHP - 1] > 0.)[0]
+    x_peak = np.argmax(vm[th_x:th_x + int(5. / dt)]) + th_x
+    v_peak = vm[x_peak]
+    f_end = x_peak + int(10. / dt)
+    m_end = x_peak + int(50. / dt)
+    if len(spike_times) > 1 and int((spike_times[1] - 5.) / dt) - start < m_end:
+        return None
+    rising_x = np.where(dvdt[x_peak+1:f_end] > 0.)[0]
     if rising_x.any():
-        v_ADP = np.max(vm[th_x + x_peak + 1 + rising_x[0]:th_x + x_peak + x_AHP])
-        pre_ADP = np.mean(vm[th_x + x_peak + 1 + rising_x[0] - int(0.1 / dt):th_x + x_peak + 1 + rising_x[0]])
-        ADP += v_ADP - pre_ADP
-    falling_x = np.where(dvdt[th_x + x_peak + x_AHP + 1:end] < 0.)[0]
-    if falling_x.any():
-        v_ADP = np.max(vm[th_x + x_peak + x_AHP + 1: th_x + x_peak + x_AHP + 1 + falling_x[0]])
-        ADP += v_ADP - v_AHP
-    return v_peak, th_v, ADP, AHP
+        f_end = x_peak + 1 + rising_x[0]
+    x_fAHP = np.argmin(vm[x_peak:f_end]) + x_peak
+    v_fAHP = vm[x_fAHP]
+    fAHP = v_before - v_fAHP
+    
+    rising_x = np.where(dvdt[x_fAHP:m_end] > 0.)[0]
+    if not rising_x.any():
+        ADP = 0.
+        v_mAHP = np.min(vm[x_fAHP:m_end])
+        mAHP = v_before - v_mAHP
+    else:
+        falling_x = np.where(dvdt[x_fAHP + rising_x[0]:m_end] < 0.)[0]
+        if not falling_x.any():
+            ADP = 0.
+            mAHP = 0.
+        else:
+            x_ADP = np.argmax(vm[x_fAHP + rising_x[0]:x_fAHP + rising_x[0] + falling_x[0]]) + x_fAHP + rising_x[0]
+            v_ADP = vm[x_ADP]
+            ADP = v_ADP - v_fAHP
+            v_mAHP = np.min(vm[x_ADP:m_end])
+            mAHP = v_before - v_mAHP
+
+    return {'v_peak': v_peak, 'th_v': th_v, 'fAHP': fAHP, 'mAHP': mAHP, 'ADP': ADP}
 
 
 def get_DG_GC_thickest_dend_branch(cell, distance_target=None, distance_tolerance=50., terminal=False):
