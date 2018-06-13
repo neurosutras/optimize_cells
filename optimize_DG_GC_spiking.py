@@ -286,9 +286,6 @@ def compute_features_spike_shape(x, export=False, plot=False):
         target = True
         i_inc = 0.01
         delta_str = 'increased'
-    elif len(target_spike_times) == 1:
-        spike = True
-        target = True
     else:
         spike = True
         target = False
