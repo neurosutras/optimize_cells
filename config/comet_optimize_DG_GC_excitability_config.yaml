@@ -153,8 +153,10 @@ kwargs:
   templatePaths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoclibPath: ../dentate
   # datasetPrefix: /mnt/s
-  datasetPrefix: ../dentate/datasets
-  resultsPath: data
+  # datasetPrefix: ../dentate/datasets
+  datasetPrefix: /oasis/scratch/comet/aaronmil/temp_project/dentate  
+  # resultsPath: data
+  resultsPath: /oasis/scratch/comet/aaronmil/temp_project/optimize_cells
 objective_names:
 - dend R_inp
 - term_dend R_inp

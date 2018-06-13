@@ -26,9 +26,15 @@ bounds:
   dend.gbar_nas: !!python/tuple
   - 0.01
   - 0.05
+  dend.gbar_nas bo: !!python/tuple
+  - 3
+  - 6
   dend.gbar_nas min: !!python/tuple
   - 0.0
   - 0.05
+  dend.gbar_nas slope: !!python/tuple
+  - -0.0004
+  - 0.0
   dend.gkabar: !!python/tuple
   - 0.01
   - 0.25
@@ -47,9 +53,6 @@ bounds:
   soma.gkdrbar: !!python/tuple
   - 0.0005
   - 0.06
-  axon.gkdrbar: !!python/tuple
-  - 0.0005
-  - 0.06
   soma.gkmbar: !!python/tuple
   - 0.0005
   - 0.005
@@ -61,8 +64,9 @@ bounds:
   - 6.0
   soma.tau_Cacum: !!python/tuple
   - 9.
-  - 50.
+  - 100.
 default_params:
+#  dend.gbar_nas bo: 5
 rel_bounds:
 - - dend.gbar_nas
   - '<='
@@ -88,18 +92,13 @@ rel_bounds:
   - <
   - 3.0
   - soma.gkabar
-- - axon.gkdrbar
-  - <
-  - 3.0
-  - soma.gkdrbar
 feature_names:
 - dend R_inp
 - term_dend R_inp
 - soma R_inp
 - vm_th
 - ADP
-- fAHP
-- mAHP
+- AHP
 - rebound_firing
 - vm_stability
 - ais_delay
@@ -153,16 +152,15 @@ kwargs:
   templatePaths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoclibPath: ../dentate
   # datasetPrefix: /mnt/s
-  datasetPrefix: ../dentate/datasets
-  resultsPath: data
+  datasetPrefix: /global/cscratch1/sd/aaronmil/dentate
+  resultsPath: /global/cscratch1/sd/aaronmil/optimize_cells
 objective_names:
 - dend R_inp
 - term_dend R_inp
 - soma R_inp
 - vm_th
 - ADP
-- fAHP
-- mAHP
+- AHP
 - rebound_firing
 - vm_stability
 - ais_delay
@@ -183,15 +181,17 @@ param_names:
 - soma.g_pas
 - soma.gbar_nas
 - dend.gbar_nas
+- dend.gbar_nas bo
 - dend.gbar_nas min
+- dend.gbar_nas slope
 - axon.gbar_nax
 - ais.gbar_nax
 - soma.gkabar
 - dend.gkabar
 - soma.gkdrbar
 - axon.gkabar
-- axon.gkdrbar
 - soma.sh_nas/x
+- dend.sh_nas
 - ais.sha_nax
 - soma.gCa factor
 - soma.gCadepK factor
@@ -201,9 +201,8 @@ param_names:
 target_range:
   dend R_inp: 1.
   soma R_inp: 0.5
-  ADP: 0.05
-  fAHP: 0.07
-  mAHP: 0.05
+  ADP: 0.01
+  AHP: 0.07
   ais_delay: 0.0005
   dend_bAP_ratio: 0.0002
   rebound_firing: 0.002
@@ -216,41 +215,42 @@ target_range:
 target_val:
   dend R_inp: 375.
   soma R_inp: 295.
-  ADP: 5.0
-  fAHP: 7.5
-  mAHP: 5.
+  ADP: 0.0
+  AHP: 7.0
   ais_delay: 0.0
   dend_bAP_ratio: 0.3
   rebound_firing: 0
-  slow_depo_max: 5.0
-  slow_depo_min: -5.
+  slow_depo_max: 10.0
+  slow_depo_min: -1.
   soma_spike_amp: 90.0
   th_count: 1
   vm_th: -48.0
   vm_stability: 0.0
-  f_I_slope: 58.0
+  f_I_slope: 53.0
   dend_spike_amp: 15.
   iEPSP_unit_amp: 1.
   iEPSP_attenuation_short: 0.17
   iEPSP_attenuation_long: 0.23
 x0:
-  soma.gCa factor: 8.072385E-02
-  soma.tau_Cacum: 3.582782E+01
-  dend.g_pas tau: 6.717500E+01
-  dend.g_pas slope: 8.922957E-06
-  axon.gkabar: 5.253822E-02
-  soma.gkmbar: 4.555918E-03
-  dend.gbar_nas min: 3.675744E-03
-  ais.sha_nax: -2.792502E+00
-  soma.gkdrbar: 1.587365E-02
-  soma.sh_nas/x: 5.704921E+00
-  ais.gkmbar: 8.910924E-03
-  dend.gkabar: 1.469998E-01
-  ais.gbar_nax: 2.101566E-01
-  soma.g_pas: 4.058603E-09
-  dend.gbar_nas: 2.780691E-02
-  axon.gbar_nax: 6.029868E-02
-  soma.gbar_nas: 4.414296E-02
-  soma.gCadepK factor: 1.133785E+00
-  axon.gkdrbar: 2.081830E-02
-  soma.gkabar: 2.547421E-02
+  soma.gCa factor: 9.9382E-01
+  dend.gbar_nas min: 6.4698E-03
+  soma.gkdrbar: 1.0216E-02
+  soma.g_pas: 1.3739E-08
+  axon.gkabar: 6.8027E-02
+  soma.gkmbar: 4.1868E-03
+  dend.gbar_nas: 2.3417E-02
+  dend.gbar_nas slope: -5.0172E-05
+  ais.sha_nax: -4.4434E+00
+  soma.gCadepK factor: 1.1547E+00
+  soma.sh_nas/x: 4.8323E+00
+  dend.sh_nas: 0.
+  dend.gkabar: 1.4855E-01
+  ais.gbar_nax: 1.0270E-01
+  dend.gbar_nas bo: 5.0376E+00
+  dend.g_pas slope: 5.3010E-06
+  dend.g_pas tau: 7.8494E+01
+  axon.gbar_nax: 4.9753E-02
+  soma.gbar_nas: 4.2435E-02
+  ais.gkmbar: 4.9012E-03
+  soma.gkabar: 3.9303E-02
+  soma.tau_Cacum: 50.

@@ -16,7 +16,7 @@ context = Context()
 
 @click.command()
 @click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='config/optimize_DG_GC_spiking_config.yaml')
+              default='config/optimize_DG_GC_excitability_config.yaml')
 @click.option("--output-dir", type=click.Path(exists=True, file_okay=False, dir_okay=True), default='data')
 @click.option("--export", is_flag=True)
 @click.option("--export-file-path", type=str, default=None)
@@ -149,7 +149,7 @@ def init_context():
     experimental_adi_array = get_spike_adaptation_indexes(experimental_spike_times)
 
     # GC experimental f-I data from Kowalski J...Pernia-Andrade AJ, Hippocampus, 2016
-    i_inj_increment = 0.05
+    i_inj_increment = 0.02
     num_increments = 10
     context.update(locals())
 
@@ -264,7 +264,7 @@ def compute_features_spike_shape(x, export=False, plot=False):
     if np.any(spike_times < equilibrate):
         if context.verbose > 0:
             print 'compute_features_spike_shape: pid: %i; aborting - spontaneous firing' % (os.getpid())
-        return None
+        return dict()
 
     result = dict()
     result['vm_rest'] = vm_rest
@@ -279,48 +279,44 @@ def compute_features_spike_shape(x, export=False, plot=False):
     sim.set_state(dt=dt, tstop=duration, cvode=False)
     sim.run(v_active)
     spike_times = np.array(context.cell.spike_detector.get_recordvec())
-    if np.any((spike_times > equilibrate) & (spike_times < equilibrate + 50)):
-        spike = True
-        target = False
-        soma_vm = np.array(soma_rec)
-        ais_vm = np.array(sim.get_rec('ais')['vec'])
-        axon_vm = np.array(sim.get_rec('axon')['vec'])
-        dend_vm = np.array(sim.get_rec('dend')['vec'])
-        i_inc = -0.01
-        delta_str = 'decreased'
-    else:
-        delta_str = 'increased'
+
+    target_spike_times = np.where((spike_times > equilibrate) & (spike_times < equilibrate + 50.))[0]
+    if not np.any(target_spike_times):
         spike = False
         target = True
         i_inc = 0.01
+        delta_str = 'increased'
+    else:
+        spike = True
+        target = False
+        i_inc = -0.01
+        delta_str = 'decreased'
+
     while not spike == target:
-        prev_spike_times = np.array(spike_times)
+        i_th += i_inc
         if i_th > context.i_th_max:
             if context.verbose > 0:
                 print 'compute_features_spike_shape: pid: %i; aborting - rheobase outside target range' % (os.getpid())
-            return None
-        i_th += i_inc
+            return dict()
         sim.modify_stim('step', amp=i_th)
         sim.run(v_active)
         spike_times = np.array(context.cell.spike_detector.get_recordvec())
         if sim.verbose:
             print 'compute_features_spike_shape: pid: %i; %s; %s i_th to %.3f nA; num_spikes: %i' % \
                   (os.getpid(), 'soma', delta_str, i_th, len(spike_times))
-        spike = np.any((spike_times > equilibrate) & (spike_times < equilibrate + 50))
-        # replace previous set of traces if still spiking while decreasing i
-        if spike and not target:
-            soma_vm = np.array(soma_rec)
-            ais_vm = np.array(sim.get_rec('ais')['vec'])
-            axon_vm = np.array(sim.get_rec('axon')['vec'])
-            dend_vm = np.array(sim.get_rec('dend')['vec'])
-    if target:
-        soma_vm = np.array(soma_rec)
-        ais_vm = np.array(sim.get_rec('ais')['vec'])
-        axon_vm = np.array(sim.get_rec('axon')['vec'])
-        dend_vm = np.array(sim.get_rec('dend')['vec'])
-    else:
+        spike = np.any((spike_times > equilibrate) & (spike_times < equilibrate + 50.))
+    if not target:
+        # Repeat this sim for export and analysis
         i_th -= i_inc
-        spike_times = np.array(prev_spike_times)
+        sim.modify_stim('step', amp=i_th)
+        sim.run(v_active)
+        spike_times = np.array(context.cell.spike_detector.get_recordvec())
+
+    soma_vm = np.array(soma_rec)
+    ais_vm = np.array(sim.get_rec('ais')['vec'])
+    axon_vm = np.array(sim.get_rec('axon')['vec'])
+    dend_vm = np.array(sim.get_rec('dend')['vec'])
+
     title = 'spike_shape'
     description = 'rheobase: %.3f' % i_th
     sim.parameters['amp'] = i_th
@@ -328,13 +324,25 @@ def compute_features_spike_shape(x, export=False, plot=False):
     sim.parameters['description'] = description
     sim.parameters['duration'] = duration
 
-    peak, threshold, ADP, AHP = get_spike_shape(soma_vm, spike_times, context)
+    spike_shape_dict = get_spike_shape(soma_vm, spike_times, context)
+    if spike_shape_dict is None:
+        if context.verbose > 0:
+            print 'compute_features_spike_shape: pid: %i; aborting - problem analyzing spike shape' % (os.getpid())
+        return dict()
+    peak = spike_shape_dict['v_peak']
+    threshold = spike_shape_dict['th_v']
+    fAHP = spike_shape_dict['fAHP']
+    mAHP = spike_shape_dict['mAHP']
+    ADP = spike_shape_dict['ADP']
+    # print spike_shape_dict
     result['soma_spike_amp'] = peak - threshold
     result['vm_th'] = threshold
+    result['fAHP'] = fAHP
+    result['mAHP'] = mAHP
     result['ADP'] = ADP
-    result['AHP'] = AHP
     result['rheobase'] = i_th
     result['th_count'] = len(np.where(spike_times > equilibrate)[0])
+
     start = int((equilibrate + 1.) / dt)
     th_x = np.where(soma_vm[start:] >= threshold)[0][0] + start
     if len(spike_times) > 1:
@@ -442,13 +450,15 @@ def compute_features_fI(x, amp, extend_dur=False, export=False, plot=False):
         vm_stability = abs(v_after - vm_rest)
         result['vm_stability'] = vm_stability
         result['rebound_firing'] = len(np.where(spike_times > stim_dur)[0])
-    if not np.any(spike_times > stim_dur - 20.):
-        start = int((equilibrate + stim_dur - 20.) / dt)
-        dvdt = np.gradient(vm, dt)
-        th_x_indexes = np.where(dvdt[start:] > context.th_dvdt)[0]
-        if not th_x_indexes.any():
-            vm_step_late = np.mean(vm[int((equilibrate + stim_dur - 3.) / dt):int((equilibrate + stim_dur - 1.) / dt)])
-            result['vm_step_late'] = vm_step_late
+    start = int((equilibrate + stim_dur - 20.) / dt)
+    end = int((equilibrate + stim_dur) / dt)
+    dvdt = np.gradient(vm, dt)
+    th_x_indexes = np.where(dvdt[start:end] > context.th_dvdt)[0]
+    if th_x_indexes.any():
+        end = start + th_x_indexes[0] - int(1.6 / dt)
+    vm_step_late = np.mean(vm[end - int(0.1 / dt):end])
+    result['vm_step_late'] = vm_step_late
+
     if context.verbose > 0:
         print 'compute_features_fI: pid: %i; %s: %s took %.1f s; num_spikes: %i' % \
               (os.getpid(), title, description, time.time() - start_time, len(spike_times))
@@ -474,13 +484,18 @@ def filter_features_fI(primitives, current_features, export=False):
     stim_dur = context.stim_dur
 
     new_features = dict()
-    i_amp = []
+    i_amp = [this_dict['i_amp'] for this_dict in primitives]
     rate = []
     adi = []
     mean_adi = []
     slow_depo = []
-    for i, this_dict in enumerate(primitives):
-        i_amp.append(this_dict['i_amp'])
+
+    indexes = range(len(i_amp))
+    indexes.sort(key=i_amp.__getitem__)
+    print i_amp
+    print indexes
+    for i in indexes:
+        this_dict = primitives[i]
         if 'vm_stability' in this_dict:
             new_features['vm_stability'] = this_dict['vm_stability']
         if 'rebound_firing' in this_dict:
@@ -490,13 +505,24 @@ def filter_features_fI(primitives, current_features, export=False):
             slow_depo.append(this_slow_depo)
         spike_times = this_dict['spike_times']
         if (len(exp_spikes) - 2 < len(spike_times) < len(exp_spikes) + 2) or \
-                (len(adi) == 0 and (len(spike_times) > len(exp_spikes) or i == len(primitives))):
+                (len(adi) == 0 and (len(spike_times) > len(exp_spikes) or i == len(primitives) - 1)):
             this_adi_array = get_spike_adaptation_indexes(spike_times[:len(exp_spikes)])
-            adi.append(this_adi_array)
+            if this_adi_array is not None:
+                adi.append(this_adi_array)
         this_rate = len(spike_times) / stim_dur * 1000.
         rate.append(this_rate)
-    if len(adi) == 0 or len(slow_depo) == 0:
-        return None
+    if len(adi) == 0:
+        feature_name = 'adi'
+        if context.verbose > 0:
+            print 'filter_features_fI: pid: %i; aborting - failed to compute required feature: %s' % \
+                  (os.getpid(), feature_name)
+        return dict()
+    if len(slow_depo) == 0:
+        feature_name = 'slow_depo'
+        if context.verbose > 0:
+            print 'filter_features_fI: pid: %i; aborting - failed to compute required feature: %s' % \
+                  (os.getpid(), feature_name)
+        return dict()
     for i in xrange(len(exp_adi)):
         this_adi_val_list = []
         for this_adi_array in (this_adi_array for this_adi_array in adi if len(this_adi_array) >= i + 1):
@@ -506,8 +532,7 @@ def filter_features_fI(primitives, current_features, export=False):
             mean_adi.append(this_adi_mean_val)
     new_features['adi'] = np.array(mean_adi)
     new_features['slow_depo'] = np.mean(slow_depo)
-    indexes = range(len(i_amp))
-    indexes.sort(key=i_amp.__getitem__)
+
     new_features['f_I'] = map(rate.__getitem__, indexes)
     i_amp = map(i_amp.__getitem__, indexes)
     experimental_f_I_slope = context.target_val['f_I_slope']  # Hz/ln(pA); rate = slope * ln(current - rheobase)
@@ -586,12 +611,14 @@ def compute_features_dend_spike(x, amp, export=False, plot=False):
     end = int((equilibrate + stim_dur) /dt)
     peak_vm = np.max(vm[start:end])
     indexes = np.where((dvdt[start:end] >= context.dend_th_dvdt) & (dvdt2[start:end] > 0.))[0]
+    dend_spike_amp_by_vm_late = peak_vm - np.mean(vm[end - int(0.1 / dt):end])
     if np.any(indexes):
         th_index = start + max(0, indexes[0] - int(0.1/dt))
         th_vm = vm[th_index]
-        dend_spike_amp = peak_vm - th_vm
+        dend_spike_amp_by_th = peak_vm - th_vm
+        dend_spike_amp = max(dend_spike_amp_by_th, dend_spike_amp_by_vm_late)
     else:
-        dend_spike_amp = 0.
+        dend_spike_amp = dend_spike_amp_by_vm_late
     result['dend_spike_amp'] = dend_spike_amp
 
     if context.verbose > 0:
@@ -635,22 +662,14 @@ def get_objectives_spiking(features):
     :param features: dict
     :return: tuple of dict
     """
-    # No rheobase value found, or adi could not be calculated
-    if features is None or 'adi' not in features or features['adi'] is None or 'slow_depo' not in features or \
-            features['slow_depo'] is None:
-        return None, None
+
+    # if not features or 'failed' in features:
+    #     return dict(), dict()
 
     objectives = dict()
-    for target in ['vm_th', 'ADP', 'rebound_firing', 'vm_stability', 'ais_delay', 'dend_bAP_ratio', 'soma_spike_amp',
-                   'th_count']:
+    for target in ['vm_th', 'fAHP', 'mAHP', 'ADP', 'rebound_firing', 'vm_stability', 'ais_delay', 'dend_bAP_ratio',
+                   'soma_spike_amp', 'th_count']:
         objectives[target] = ((context.target_val[target] - features[target]) / context.target_range[target]) ** 2.
-
-    # don't penalize AHP less than target
-    target = 'AHP'
-    if features[target] > context.target_val[target]:
-        objectives[target] = ((context.target_val[target] - features[target]) / context.target_range[target]) ** 2.
-    else:
-        objectives[target] = 0.
 
     # don't penalize slow_depo outside target range:
     target = 'slow_depo'
@@ -679,7 +698,7 @@ def get_objectives_spiking(features):
     features['f_I_slope'] = slope
     f_I_residuals = 0.
     for i, this_rate in enumerate(features['f_I']):
-        f_I_residuals += ((this_rate - target_f_I[i]) / (0.01 * target_f_I[i])) ** 2.
+        f_I_residuals += ((this_rate - target_f_I[i]) / context.target_range['spike_rate']) ** 2.
     objectives['f_I_residuals'] = f_I_residuals
     del features['f_I']
 
@@ -712,20 +731,20 @@ def update_mechanisms_spiking(x, context=None):
         modify_mech_param(cell, sec_type, 'kad', 'gkabar', origin='soma', min_loc=300.,
                           value=(x_dict['soma.gkabar'] + slope * 300.), append=True)
         modify_mech_param(cell, sec_type, 'kdr', 'gkdrbar', origin='soma')
-        # modify_mech_param(cell, sec_type, 'nas', 'sha', x_dict['dend.sha_nas'])
         modify_mech_param(cell, sec_type, 'nas', 'sha', 0.)
         modify_mech_param(cell, sec_type, 'nas', 'sh', origin='soma')
         modify_mech_param(cell, sec_type, 'nas', 'gbar', x_dict['dend.gbar_nas'])
+        """
         modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=x_dict['dend.gbar_nas slope'],
                           min=x_dict['dend.gbar_nas min'],
                           custom={'func': 'custom_filter_by_branch_order',
                                   'branch_order': x_dict['dend.gbar_nas bo']}, append=True)
-        modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=x_dict['dend.gbar_nas slope'],
-                          min=x_dict['dend.gbar_nas min'],
+        """
+        modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=0., min=x_dict['dend.gbar_nas min'],
                           custom={'func': 'custom_filter_by_terminal'}, append=True)
-    update_mechanism_by_sec_type(cell, 'hillock', 'kap')
-    update_mechanism_by_sec_type(cell, 'hillock', 'kdr')
-    modify_mech_param(cell, 'ais', 'kdr', 'gkdrbar', origin='soma')
+    modify_mech_param(cell, 'hillock', 'kap', 'gkabar', origin='soma')
+    modify_mech_param(cell, 'hillock', 'kdr', 'gkdrbar', origin='soma')
+    modify_mech_param(cell, 'ais', 'kdr', 'gkdrbar', x_dict['axon.gkdrbar'])
     modify_mech_param(cell, 'ais', 'kap', 'gkabar', x_dict['axon.gkabar'])
     modify_mech_param(cell, 'axon', 'kdr', 'gkdrbar', origin='ais')
     modify_mech_param(cell, 'axon', 'kap', 'gkabar', origin='ais')
