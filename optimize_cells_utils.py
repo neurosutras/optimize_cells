@@ -339,7 +339,7 @@ def flush_engine_buffer(result):
     sys.stdout.flush()
 
 
-def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.01, vm_tol=0.5):
+def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.005, vm_tol=0.5):
     """
 
     :param rec_name: str
