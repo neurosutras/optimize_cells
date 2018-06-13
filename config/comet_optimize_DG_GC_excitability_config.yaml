@@ -194,7 +194,6 @@ param_names:
 - axon.gkabar
 - axon.gkdrbar
 - soma.sh_nas/x
-- dend.sh_nas
 - ais.sha_nax
 - soma.gCa factor
 - soma.gCadepK factor
