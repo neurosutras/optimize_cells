@@ -33,24 +33,23 @@ def standard_modify_mech_param_tests(cell):
     soma_seg = cell.tree.root.sec(0.5)
     compare_single_value('soma.g_pas', x, soma_seg, 'pas', 'g')
 
-    plot_mech_param_distribution(cell, 'pas', 'g', export='dend_gpas0.hdf5', description='stage0', show=False,
+    plot_mech_param_distribution(cell, 'pas', 'g', export='dend_gpas.hdf5', description='stage0', show=False,
                                  sec_types='all', overwrite=True)
     modify_mech_param(cell, 'apical', 'pas', 'g', origin='soma', slope=x['dend.g_pas slope'], tau=x['dend.g_pas tau'])
-    plot_mech_param_distribution(cell, 'pas', 'g', export='dend_gpas1.hdf5', description='stage1', show=False,
+    plot_mech_param_distribution(cell, 'pas', 'g', export='dend_gpas.hdf5', description='stage1', show=False,
                                  sec_types='all', overwrite=True)
     for sec_type in ['hillock', 'ais', 'axon', 'spine_neck', 'spine_head']:
         modify_mech_param(cell, sec_type, 'pas', 'g', origin='soma')
     modify_mech_param(cell, 'soma', 'pas', 'g', 2. * x['soma.g_pas'])
     for sec_type in ['hillock', 'ais', 'axon', 'apical','spine_neck', 'spine_head']:
         update_mechanism_by_sec_type(cell, sec_type, 'pas')
-    plot_mech_param_distribution(cell, 'pas', 'g', export='dend_gpas2.hdf5', description='stage2', show=False,
+    plot_mech_param_distribution(cell, 'pas', 'g', export='dend_gpas.hdf5', description='stage2', show=False,
                                  sec_types='all', overwrite=True)
-    plot_mech_param_from_file('pas', 'g', ['dend_gpas0.hdf5', 'dend_gpas1.hdf5', 'dend_gpas2.hdf5'], ['0', '1', '2'],
-                              param_label='dend.gpas')
+    plot_mech_param_from_file('pas', 'g', 'dend_gpas.hdf5', param_label='dend.gpas')
 
     modify_mech_param(cell, 'soma', 'kap', 'gkabar', x['soma.gkabar'])
-    plot_mech_param_distribution(cell, 'kap', 'gkabar', export='old_dend_kap.hdf5', param_label='dend.kap', show=False,
-                                 sec_types='all', overwrite=True)
+    plot_mech_param_distribution(cell, 'kap', 'gkabar', export='dend_kap.hdf5', description='stage0',
+                                 param_label='dend.kap', show=False, sec_types='all', overwrite=True)
 
     slope = (x['dend.gkabar'] - x['soma.gkabar']) / 300.
     for sec_type in ['apical']:
@@ -64,15 +63,13 @@ def standard_modify_mech_param_tests(cell):
     update_mechanism_by_sec_type(cell, 'axon_hill', 'kap')
     modify_mech_param(cell, 'ais', 'kap', 'gkabar', x['axon.gkabar'])
     modify_mech_param(cell, 'axon', 'kap', 'gkabar', origin='ais')
-    plot_mech_param_distribution(cell, 'kap', 'gkabar', export='new_dend_kap.hdf5', param_label='dend.kap', show=False,
-                                 sec_types='all', overwrite=True)
-    plot_mech_param_from_file('kap', 'gkabar', ['old_dend_kap.hdf5', 'new_dend_kap.hdf5'], ['old', 'new'],
-                              param_label='dend.kap')
+    plot_mech_param_distribution(cell, 'kap', 'gkabar', export='dend_kap.hdf5', description='stage1',
+                                 param_label='dend.kap', show=False, sec_types='all', overwrite=True)
+    plot_mech_param_from_file('kap', 'gkabar', 'dend_kap.hdf5', param_label='dend.kap')
     plot_mech_param_distribution(cell, 'kad', 'gkabar', param_label='dend.kad', show=True, sec_types='all')
-
     modify_mech_param(cell, 'soma', 'nas', 'gbar', x['soma.gbar_nas'])
-    plot_mech_param_distribution(cell, 'nas', 'gbar', export='old_dend_nas.hdf5', show=False, sec_types='all',
-                                 overwrite=True)
+    plot_mech_param_distribution(cell, 'nas', 'gbar', export='dend_nas.hdf5', description='stage0',
+                                 show=False, sec_types='all', overwrite=True)
     for sec_type in ['apical']:
         modify_mech_param(cell, sec_type, 'nas', 'gbar', x['dend.gbar_nas'])
         modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=x['dend.gbar_nas slope'],
@@ -81,10 +78,9 @@ def standard_modify_mech_param_tests(cell):
                                   'branch_order': x['dend.gbar_nas bo']}, append=True)
         modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=x['dend.gbar_nas slope'],
                           min=x['dend.gbar_nas min'], custom={'func': 'custom_filter_by_terminal'}, append=True)
-    plot_mech_param_distribution(cell, 'nas', 'gbar', export='new_dend_nas.hdf5', show=False, sec_types='all',
-                                 overwrite=True)
-    plot_mech_param_from_file('nas', 'gbar', ['old_dend_nas.hdf5', 'new_dend_nas.hdf5'], ['old', 'new'],
-                              param_label='dend.nas')
+    plot_mech_param_distribution(cell, 'nas', 'gbar', export='dend_nas.hdf5', description='stage1', show=False,
+                                 sec_types='all', overwrite=True)
+    plot_mech_param_from_file('nas', 'gbar', 'dend_nas.hdf5', ['stage0', 'stage1'])
 
 
 def count_nseg(cell):
@@ -243,14 +239,14 @@ def standard_modify_syn_mech_param_tests(cell, env):
                           update_targets=True)
     plot_synaptic_attribute_distribution(cell, env, gid, syn_name, param_name, filters=None, from_mech_attrs=True,
                                          from_target_attrs=True, param_label='AMPA.g_unit', export='syn_attrs.hdf5',
-                                         description='stage1', show=False)
+                                         description='stage1', show=True)
     modify_syn_mech_param(cell, env, sec_type, syn_name, param_name=param_name,
                           filters={'syn_types': ['excitatory'], 'layers': ['OML']}, origin='apical',
                           origin_filters={'syn_types': ['excitatory'], 'layers': ['MML']}, update_targets=True,
                           append=True)
     plot_synaptic_attribute_distribution(cell, env, gid, syn_name, param_name, filters=None, from_mech_attrs=True,
                                          from_target_attrs=True, param_label='AMPA.g_unit', export='syn_attrs.hdf5',
-                                         description='stage2', show=False)
+                                         description='stage2', show=True)
     plot_syn_attr_from_file(syn_name, param_name, 'syn_attrs.hdf5', param_label='AMPA.g_unit')
 
 
@@ -286,11 +282,11 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     cell = get_biophys_cell(env, gid, pop_name)
     context.update(locals())
 
-    #standard_modify_mech_param_tests(cell)
+    standard_modify_mech_param_tests(cell)
     #standard_cable_tests(cell, mech_file_path)
     #cm_correction_test(cell, env, mech_file_path)
     #count_spines(cell, env)
-    standard_modify_syn_mech_param_tests(cell, env)
+    #standard_modify_syn_mech_param_tests(cell, env)
 
 
 if __name__ == '__main__':
