@@ -459,6 +459,8 @@ def get_spike_shape(vm, spike_times, context=None):
     v_peak = vm[x_peak]
     f_end = x_peak + int(10. / dt)
     m_end = x_peak + int(50. / dt)
+    if f_end >= len(vm) or m_end >= len(vm):
+        return None
     if len(spike_times) > 1 and int((spike_times[1] - 7.) / dt) - start < m_end:
         return None
     rising_x = np.where(dvdt[x_peak+1:f_end] > 0.)[0]

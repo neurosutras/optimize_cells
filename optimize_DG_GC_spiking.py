@@ -335,7 +335,7 @@ def compute_features_spike_shape(x, export=False, plot=False):
     fAHP = spike_shape_dict['fAHP']
     mAHP = spike_shape_dict['mAHP']
     ADP = spike_shape_dict['ADP']
-    # print spike_shape_dict
+
     result['soma_spike_amp'] = peak - threshold
     result['vm_th'] = threshold
     result['fAHP'] = fAHP
@@ -520,8 +520,7 @@ def filter_features_fI(primitives, current_features, export=False):
             print 'filter_features_fI: pid: %i; aborting - failed to compute required feature: %s' % \
                   (os.getpid(), feature_name)
         return dict()
-    print 'adi:'
-    pprint.pprint(adi)
+
     for i in xrange(len(exp_adi)):
         this_adi_val_list = []
         for this_adi_array in (this_adi_array for this_adi_array in adi if len(this_adi_array) >= i + 1):
@@ -529,9 +528,6 @@ def filter_features_fI(primitives, current_features, export=False):
         if len(this_adi_val_list) > 0:
             this_adi_mean_val = np.mean(this_adi_val_list)
             mean_adi.append(this_adi_mean_val)
-    print 'mean_adi:'
-    pprint.pprint(mean_adi)
-    new_features['adi'] = np.array(mean_adi)
 
     rate = map(rate.__getitem__, indexes)
     new_features['f_I'] = rate
@@ -542,12 +538,7 @@ def filter_features_fI(primitives, current_features, export=False):
     rheobase = current_features['rheobase']
     exp_f_I = [experimental_f_I_slope * np.log((rheobase + i_inj_increment * i) / (rheobase - i_inj_increment))
                for i in xrange(num_increments)]
-    print 'i_amp:'
-    pprint.pprint(i_amp)
-    print 'exp_f_I:'
-    pprint.pprint(exp_f_I)
-    print 'model f_I:'
-    pprint.pprint(rate)
+
     if export:
         description = 'f_I'
         with h5py.File(context.export_file_path, 'a') as f:
