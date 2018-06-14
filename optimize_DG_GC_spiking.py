@@ -529,6 +529,7 @@ def filter_features_fI(primitives, current_features, export=False):
             this_adi_mean_val = np.mean(this_adi_val_list)
             mean_adi.append(this_adi_mean_val)
 
+    new_features['adi'] = np.array(mean_adi)
     rate = map(rate.__getitem__, indexes)
     new_features['f_I'] = rate
     i_amp = map(i_amp.__getitem__, indexes)
