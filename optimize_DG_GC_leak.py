@@ -213,7 +213,7 @@ def compute_features_leak(x, section, export=False, plot=False):
     sim.parameters['duration'] = duration
     amp = -0.05
     context.sim.parameters['amp'] = amp
-    offset_vm(section, context, v_init)
+    offset_vm(section, context, v_init, i_history=context.i_holding)
     rec_dict = sim.get_rec(section)
     loc = rec_dict['loc']
     node = rec_dict['node']

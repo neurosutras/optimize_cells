@@ -339,14 +339,15 @@ def flush_engine_buffer(result):
     sys.stdout.flush()
 
 
-def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.005, vm_tol=0.5):
+def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.005, vm_tol=0.5, i_history=None):
     """
 
     :param rec_name: str
-    :param local_context: :class:'Context'
+    :param context: :class:'Context'
     :param vm_target: float
     :param i_inc: float (nA)
     :param vm_tol: float (mV)
+    :param i_history: defaultdict of dict
     """
     if context is None:
         raise RuntimeError('offset_vm: pid: %i; missing required Context object' % os.getpid())
@@ -369,10 +370,16 @@ def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.005, vm_tol=0.5):
     dt = context.dt
     duration = equilibrate
 
-    if vm_target not in context.i_holding[rec_name]:
-        context.i_holding[rec_name][vm_target] = 0.
-    i_holding = context.i_holding[rec_name][vm_target]
-    sim.modify_stim('holding', node=node, loc=loc, amp=i_holding)
+    if i_history is not None:
+        if vm_target not in i_history[rec_name]:
+            i_amp = 0.
+            i_history[rec_name][vm_target] = i_amp
+        else:
+            i_amp = i_history[rec_name][vm_target]
+    else:
+        i_amp = 0.
+
+    sim.modify_stim('holding', node=node, loc=loc, amp=i_amp)
     sim.backup_state()
     sim.set_state(dt=dt, tstop=duration, cvode=True)
     sim.run(vm_target)
@@ -382,27 +389,40 @@ def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.005, vm_tol=0.5):
     if sim.verbose:
         print 'offset_vm: pid: %i; %s; vm_rest: %.1f, vm_target: %.1f' % (os.getpid(), rec_name, vm_rest, vm_target)
 
-    if vm_rest > vm_target + vm_tol:
+    if vm_rest > vm_target:
         i_inc *= -1.
         delta_str = 'decreased'
-    else:
-        delta_str = 'increased'
-    while not (vm_target - vm_tol < vm_rest < vm_target + vm_tol):
+        while vm_rest > vm_target - vm_tol:
+            i_amp += i_inc
+            sim.modify_stim('holding', amp=i_amp)
+            sim.run(vm_target)
+            vm = np.interp(t, sim.tvec, rec)
+            vm_rest = np.mean(vm[int((duration - 3.) / dt):int((duration - 1.) / dt)])
+            if sim.verbose:
+                print 'offset_vm: pid: %i; %s; %s i_holding to %.3f nA; vm_rest: %.1f' % \
+                      (os.getpid(), rec_name, delta_str, i_amp, vm_rest)
+    if i_inc < 0.:
+        i_inc *= -1.
+    delta_str = 'increased'
+    while vm_rest < vm_target:
         prev_vm_rest = vm_rest
-        i_holding += i_inc
-        sim.modify_stim('holding', amp=i_holding)
+        i_amp += i_inc
+        sim.modify_stim('holding', amp=i_amp)
         sim.run(vm_target)
         vm = np.interp(t, sim.tvec, rec)
         vm_rest = np.mean(vm[int((duration - 3.) / dt):int((duration - 1.) / dt)])
         if sim.verbose:
             print 'offset_vm: pid: %i; %s; %s i_holding to %.3f nA; vm_rest: %.1f' % \
-                  (os.getpid(), rec_name, delta_str, i_holding, vm_rest)
-        if (i_inc < 0. and vm_rest < vm_target) or (i_inc > 0. and vm_rest > vm_target):
-            if abs(vm_rest - vm_target) > abs(prev_vm_rest - vm_target):
-                i_holding -= i_inc
-                sim.modify_stim('holding', amp=i_holding)
-            break
-    context.i_holding[rec_name][vm_target] = i_holding
+                  (os.getpid(), rec_name, delta_str, i_amp, vm_rest)
+    if abs(vm_rest - vm_target) > abs(prev_vm_rest - vm_target):
+        i_amp -= i_inc
+        vm_rest = prev_vm_rest
+    sim.modify_stim('holding', amp=i_amp)
+    if sim.verbose:
+        print 'offset_vm: pid: %i; %s; vm_rest: %.1f, vm_target: %.1f' % (os.getpid(), rec_name, vm_rest, vm_target)
+
+    if i_history is not None:
+        i_history[rec_name][vm_target] = i_amp
     sim.restore_state()
     return vm_rest
 
@@ -439,7 +459,7 @@ def get_spike_shape(vm, spike_times, context=None):
     v_peak = vm[x_peak]
     f_end = x_peak + int(10. / dt)
     m_end = x_peak + int(50. / dt)
-    if len(spike_times) > 1 and int((spike_times[1] - 5.) / dt) - start < m_end:
+    if len(spike_times) > 1 and int((spike_times[1] - 7.) / dt) - start < m_end:
         return None
     rising_x = np.where(dvdt[x_peak+1:f_end] > 0.)[0]
     if rising_x.any():
