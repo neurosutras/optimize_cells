@@ -604,7 +604,7 @@ def compute_features_dend_spike(x, amp, export=False, plot=False):
     result = dict()
     result['i_amp'] = amp
     vm = np.array(dend_rec)
-    dvdt = np.gradient(vm, dt)
+    # dvdt = np.gradient(vm, dt)
     # dvdt2 = np.gradient(dvdt, dt)
     start = int((equilibrate + 0.2) / dt)
     end = int((equilibrate + stim_dur) / dt)
