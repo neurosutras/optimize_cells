@@ -5,7 +5,7 @@ Requires a YAML file to specify required configuration parameters.
 Requires use of a nested.parallel interface.
 """
 __author__ = 'Aaron D. Milstein and Grace Ng'
-from biophysics_utils import *
+from dentate.biophysics_utils import *
 from nested.optimize_utils import *
 from optimize_cells_utils import *
 import click

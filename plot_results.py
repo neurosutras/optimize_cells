@@ -789,9 +789,7 @@ def plot_mech_param_distribution(cell, mech_name, param_name, export=None, overw
         for sec_type in param_vals:
             f[filetype][session_id][mech_name][param_name].create_group(sec_type)
             f[filetype][session_id][mech_name][param_name][sec_type].create_dataset('values', data=param_vals[sec_type])
-            print 'param_vals', sec_type, len(param_vals[sec_type])
             f[filetype][session_id][mech_name][param_name][sec_type].create_dataset('distances', data=distances[sec_type])
-            print 'distances', sec_type, len(distances[sec_type])
         f.close()
 
 
@@ -891,7 +889,7 @@ def plot_cable_param_distribution(cell, mech_name, export=None, overwrite=False,
                                 'of the cell {}'.format(f.attrs['mech_file_path'], cell.mech_file_path))
         else:
             f.attrs['mech_file_path'] = '{}'.format(cell.mech_file_path)
-        filetype = 'plot_syn_param'
+        filetype = 'plot_mech_param'
         if filetype not in f:
             f.create_group(filetype)
         if len(f[filetype].keys()) == 0:
@@ -941,9 +939,6 @@ def plot_mech_param_from_file(mech_name, param_name, filename, descriptions=None
     markers = mlines.Line2D.filled_markers
     color_x = np.linspace(0., 1., num_colors)
     colors = [cm.Set1(x) for x in color_x]
-    distances = defaultdict(lambda: defaultdict(list))
-    param_vals = defaultdict(lambda: defaultdict(list))
-    all_descriptions = defaultdict(dict)
     marker_dict = {}
     file_path = data_dir + '/' + filename
     if os.path.isfile(file_path):
@@ -966,48 +961,64 @@ def plot_mech_param_from_file(mech_name, param_name, filename, descriptions=None
                     if param_label is None and f[filetype][session_id][mech_name].attrs.__contains__('param_label'):
                         param_label = f[filetype][session_id][mech_name].attrs['param_label']
                     for j, sec_type in enumerate(f[filetype][session_id][mech_name]):
-                        param_vals[session_id][sec_type].extend(f[filetype][session_id][mech_name][sec_type]['values'][:])
-                        distances[session_id][sec_type].extend(f[filetype][session_id][mech_name][sec_type]['distances'][:])
-                        all_descriptions[session_id][sec_type] = description
+                        if sec_type not in marker_dict:
+                            m = len(marker_dict)
+                            marker_dict[sec_type] = markers[m]
+                        marker = marker_dict[sec_type]
+                        param_vals = f[filetype][session_id][mech_name][sec_type]['values'][:]
+                        distances = f[filetype][session_id][mech_name][sec_type]['distances'][:]
+                        if description is None:
+                            label = sec_type + ' session ' + session_id
+                        else:
+                            label = sec_type + ' ' + description
+                        axes.scatter(distances, param_vals, color=colors[s], label=label, alpha=0.5, marker=marker)
+                        if max_param_val is None:
+                            max_param_val = max(param_vals)
+                        else:
+                            max_param_val = max(max_param_val, max(param_vals))
+                        if min_param_val is None:
+                            min_param_val = min(param_vals)
+                        else:
+                            min_param_val = min(min_param_val, min(param_vals))
+                        if max_dist is None:
+                            max_dist = max(distances)
+                        else:
+                            max_dist = max(max_dist, max(distances))
+                        if min_dist is None:
+                            min_dist = min(distances)
+                        else:
+                            min_dist = min(min_dist, min(distances))
                 else:
                     if param_label is None and f[filetype][session_id][mech_name][param_name].attrs.__contains__('param_label'):
                         param_label = f[filetype][session_id][mech_name][param_name].attrs['param_label']
-                        for j, sec_type in enumerate(f[filetype][session_id][mech_name][param_name]):
-                            param_vals[session_id][sec_type].\
-                                extend(f[filetype][session_id][mech_name][param_name][sec_type]['values'][:])
-                            print
-                            distances[session_id][sec_type].\
-                                extend(f[filetype][session_id][mech_name][param_name][sec_type]['distances'][:])
-                            all_descriptions[session_id][sec_type] = description
-        for i, session_id in enumerate(param_vals):
-            for sec_type in param_vals[session_id]:
-                if sec_type not in marker_dict:
-                    j = len(marker_dict)
-                    marker_dict[sec_type] = markers[j]
-                marker = marker_dict[sec_type]
-                description = all_descriptions[session_id][sec_type]
-                if description is not None:
-                    label = sec_type+'_'+description
-                else:
-                    label = sec_type+'_'+'_session'+session_id
-                axes.scatter(distances[session_id][sec_type], param_vals[session_id][sec_type], color=colors[i],
-                             label=label, alpha=0.5, marker=marker)
-            if max_param_val is None:
-                max_param_val = max(param_vals[session_id][sec_type])
-            else:
-                max_param_val = max(max_param_val, max(param_vals[session_id][sec_type]))
-            if min_param_val is None:
-                min_param_val = min(param_vals[session_id][sec_type])
-            else:
-                min_param_val = min(min_param_val, min(param_vals[session_id][sec_type]))
-            if max_dist is None:
-                max_dist = max(distances[session_id][sec_type])
-            else:
-                max_dist = max(max_dist, max(distances[session_id][sec_type]))
-            if min_dist is None:
-                min_dist = min(distances[session_id][sec_type])
-            else:
-                min_dist = min(min_dist, min(distances[session_id][sec_type]))
+                    for j, sec_type in enumerate(f[filetype][session_id][mech_name][param_name]):
+                        if sec_type not in marker_dict:
+                            m = len(marker_dict)
+                            marker_dict[sec_type] = markers[m]
+                        marker = marker_dict[sec_type]
+                        param_vals = f[filetype][session_id][mech_name][param_name][sec_type]['values'][:]
+                        distances = f[filetype][session_id][mech_name][param_name][sec_type]['distances'][:]
+                        if description is None:
+                            label = sec_type + ' session ' + session_id
+                        else:
+                            label = sec_type + ' ' + description
+                        axes.scatter(distances, param_vals, color=colors[s], label=label, alpha=0.5, marker=marker)
+                        if max_param_val is None:
+                            max_param_val = max(param_vals)
+                        else:
+                            max_param_val = max(max_param_val, max(param_vals))
+                        if min_param_val is None:
+                            min_param_val = min(param_vals)
+                        else:
+                            min_param_val = min(min_param_val, min(param_vals))
+                        if max_dist is None:
+                            max_dist = max(distances)
+                        else:
+                            max_dist = max(max_dist, max(distances))
+                        if min_dist is None:
+                            min_dist = min(distances)
+                        else:
+                            min_dist = min(min_dist, min(distances))
     axes.set_xlabel('Distance to soma (um)')
     min_dist = min(0., min_dist)
     xmin = min_dist - 0.01 * (max_dist - min_dist)

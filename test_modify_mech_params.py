@@ -33,18 +33,18 @@ def standard_modify_mech_param_tests(cell):
     soma_seg = cell.tree.root.sec(0.5)
     compare_single_value('soma.g_pas', x, soma_seg, 'pas', 'g')
 
-    plot_mech_param_distribution(cell, 'pas', 'g', export='dend_gpas.hdf5', description='stage0', show=False,
-                                 sec_types='all', overwrite=True)
+    plot_mech_param_distribution(cell, 'pas', 'g', export='dend_gpas.hdf5', description='stage0', show=True,
+                                 sec_types='all', overwrite=True, param_label='dend.gpas')
     modify_mech_param(cell, 'apical', 'pas', 'g', origin='soma', slope=x['dend.g_pas slope'], tau=x['dend.g_pas tau'])
-    plot_mech_param_distribution(cell, 'pas', 'g', export='dend_gpas.hdf5', description='stage1', show=False,
-                                 sec_types='all', overwrite=True)
+    plot_mech_param_distribution(cell, 'pas', 'g', export='dend_gpas.hdf5', description='stage1', show=True,
+                                 sec_types='all', param_label='dend.gpas')
     for sec_type in ['hillock', 'ais', 'axon', 'spine_neck', 'spine_head']:
         modify_mech_param(cell, sec_type, 'pas', 'g', origin='soma')
     modify_mech_param(cell, 'soma', 'pas', 'g', 2. * x['soma.g_pas'])
     for sec_type in ['hillock', 'ais', 'axon', 'apical','spine_neck', 'spine_head']:
         update_mechanism_by_sec_type(cell, sec_type, 'pas')
-    plot_mech_param_distribution(cell, 'pas', 'g', export='dend_gpas.hdf5', description='stage2', show=False,
-                                 sec_types='all', overwrite=True)
+    plot_mech_param_distribution(cell, 'pas', 'g', export='dend_gpas.hdf5', description='stage2', show=True,
+                                 sec_types='all', param_label='dend.gpas')
     plot_mech_param_from_file('pas', 'g', 'dend_gpas.hdf5', param_label='dend.gpas')
 
     modify_mech_param(cell, 'soma', 'kap', 'gkabar', x['soma.gkabar'])
@@ -64,9 +64,9 @@ def standard_modify_mech_param_tests(cell):
     modify_mech_param(cell, 'ais', 'kap', 'gkabar', x['axon.gkabar'])
     modify_mech_param(cell, 'axon', 'kap', 'gkabar', origin='ais')
     plot_mech_param_distribution(cell, 'kap', 'gkabar', export='dend_kap.hdf5', description='stage1',
-                                 param_label='dend.kap', show=False, sec_types='all', overwrite=True)
+                                 param_label='dend.kap', show=False, sec_types='all')
     plot_mech_param_from_file('kap', 'gkabar', 'dend_kap.hdf5', param_label='dend.kap')
-    plot_mech_param_distribution(cell, 'kad', 'gkabar', param_label='dend.kad', show=True, sec_types='all')
+    plot_mech_param_distribution(cell, 'kad', 'gkabar', param_label='dend.kad', show=False, sec_types='all')
     modify_mech_param(cell, 'soma', 'nas', 'gbar', x['soma.gbar_nas'])
     plot_mech_param_distribution(cell, 'nas', 'gbar', export='dend_nas.hdf5', description='stage0',
                                  show=False, sec_types='all', overwrite=True)
@@ -79,7 +79,7 @@ def standard_modify_mech_param_tests(cell):
         modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=x['dend.gbar_nas slope'],
                           min=x['dend.gbar_nas min'], custom={'func': 'custom_filter_by_terminal'}, append=True)
     plot_mech_param_distribution(cell, 'nas', 'gbar', export='dend_nas.hdf5', description='stage1', show=False,
-                                 sec_types='all', overwrite=True)
+                                 sec_types='all')
     plot_mech_param_from_file('nas', 'gbar', 'dend_nas.hdf5', ['stage0', 'stage1'])
 
 
@@ -128,19 +128,17 @@ def cm_correction_test(cell, env, mech_file_path):
     init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=mech_file_path, correct_cm=False,
                     correct_g_pas=False, env=context.env)
     old_nseg, old_distances = count_nseg(cell)
-    plot_mech_param_distribution(cell, 'pas', 'g', export='old_dend_gpas.hdf5', overwrite=True,
+    plot_mech_param_distribution(cell, 'pas', 'g', export='dend_gpas.hdf5', overwrite=True,
                                  param_label='dend.g_pas', show=False)
-    plot_cable_param_distribution(cell, 'cm', export='old_cm.hdf5', param_label='cm', show=False, overwrite=True)
+    plot_cable_param_distribution(cell, 'cm', export='cm.hdf5', param_label='cm', show=False, overwrite=True)
     init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=mech_file_path, correct_cm=True,
                     correct_g_pas=True, env=context.env)
     new_nseg, new_distances = count_nseg(cell)
     compare_nseg([old_nseg, new_nseg], [old_distances, new_distances], ['before', 'after'])
-    plot_mech_param_distribution(cell, 'pas', 'g', export='new_dend_gpas.hdf5', overwrite=True, param_label='dend.g_pas',
-                                 show=False)
-    plot_mech_param_from_file('pas', 'g', ['old_dend_gpas.hdf5', 'new_dend_gpas.hdf5'], ['old', 'new'],
-                              param_label='dend.gpas')
-    plot_cable_param_distribution(cell, 'cm', export='new_cm.hdf5', param_label='cm', show=False, overwrite=True)
-    plot_mech_param_from_file('cm', None, ['old_cm.hdf5', 'new_cm.hdf5'], ['old', 'new'], param_label='cm')
+    plot_mech_param_distribution(cell, 'pas', 'g', export='dend_gpas.hdf5', param_label='dend.g_pas', show=False)
+    plot_mech_param_from_file('pas', 'g', 'dend_gpas.hdf5', param_label='dend.gpas')
+    plot_cable_param_distribution(cell, 'cm', export='cm.hdf5', param_label='cm', show=False)
+    plot_mech_param_from_file('cm', None, 'cm.hdf5', param_label='cm')
 
 
 def standard_cable_tests(cell, mech_file_path):
@@ -150,20 +148,18 @@ def standard_cable_tests(cell, mech_file_path):
     :param mech_file_path: str
     """
     init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=mech_file_path)
-    plot_cable_param_distribution(cell, 'cm', export='old_cm.hdf5', show=False, overwrite=True)
+    plot_cable_param_distribution(cell, 'cm', export='cm.hdf5', show=False, overwrite=True)
     modify_mech_param(cell, 'soma', 'cable', 'cm', value=2.)
     init_biophysics(cell, reset_cable=True)
-    plot_cable_param_distribution(cell, 'cm', export='new_cm.hdf5', show=False, overwrite=True)
-    plot_mech_param_from_file('cm', None, ['old_cm.hdf5', 'new_cm.hdf5'], ['old', 'new'], param_label='cm',
-                              yunits='uF/cm2', ylabel='Specific capacitance')
+    plot_cable_param_distribution(cell, 'cm', export='cm.hdf5', show=False)
+    plot_mech_param_from_file('cm', None, 'cm.hdf5', param_label='cm', yunits='uF/cm2', ylabel='Specific capacitance')
 
     init_biophysics(cell, reset_cable=True, from_file=True)
-    plot_cable_param_distribution(cell, 'Ra', export='orig_Ra.hdf5', show=False, overwrite=True)
+    plot_cable_param_distribution(cell, 'Ra', export='Ra.hdf5', show=False, overwrite=True)
     modify_mech_param(cell, 'soma', 'cable', 'Ra', value=200.)
     init_biophysics(cell, reset_cable=True)
-    plot_cable_param_distribution(cell, 'Ra', export='modified_Ra.hdf5', show=False, overwrite=True)
-    plot_mech_param_from_file('Ra', None, ['orig_Ra.hdf5', 'modified_Ra.hdf5'],
-                              ['orig', 'modified'], param_label='Ra', yunits='Ohm*cm', ylabel='Axial resistivity')
+    plot_cable_param_distribution(cell, 'Ra', export='Ra.hdf5', show=False)
+    plot_mech_param_from_file('Ra', None, 'Ra.hdf5', param_label='Ra', yunits='Ohm*cm', ylabel='Axial resistivity')
 
     init_biophysics(cell, reset_cable=True, from_file=True)
     old_nseg, old_distances = count_nseg(cell)
@@ -173,16 +169,15 @@ def standard_cable_tests(cell, mech_file_path):
     compare_nseg([old_nseg, new_nseg], [old_distances, new_distances], ['before', 'after'])
 
     init_biophysics(cell, reset_cable=True, from_file=True)
-    plot_cable_param_distribution(cell, 'cm', export='cm1.hdf5', show=False, overwrite=True)
+    plot_cable_param_distribution(cell, 'cm', export='cm.hdf5', show=False, overwrite=True)
     modify_mech_param(cell, 'apical', 'cable', 'cm', value=2.)
     init_biophysics(cell, reset_cable=True)
-    plot_cable_param_distribution(cell, 'cm', export='cm2.hdf5', show=False, overwrite=True)
+    plot_cable_param_distribution(cell, 'cm', export='cm.hdf5', show=False)
     nseg2, distances2 = count_nseg(cell)
     modify_mech_param(cell, 'apical', 'cable', 'spatial_res', value=2.)
-    plot_cable_param_distribution(cell, 'cm', export='cm3.hdf5', show=False, overwrite=True)
+    plot_cable_param_distribution(cell, 'cm', export='cm.hdf5', show=False)
     nseg3, distances3 = count_nseg(cell)
-    plot_mech_param_from_file('cm', None, ['cm1.hdf5', 'cm2.hdf5', 'cm3.hdf5'], ['orig', 'post step 1', 'post step 2'],
-                              param_label='cm', yunits='uF/cm2', ylabel='Specific capacitance')
+    plot_mech_param_from_file('cm', None, 'cm.hdf5', param_label='cm', yunits='uF/cm2', ylabel='Specific capacitance')
     compare_nseg([nseg2, nseg3], [distances2, distances3], ['post step 2', 'post step 3'])
 
 
@@ -282,9 +277,9 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     cell = get_biophys_cell(env, gid, pop_name)
     context.update(locals())
 
-    standard_modify_mech_param_tests(cell)
-    #standard_cable_tests(cell, mech_file_path)
-    #cm_correction_test(cell, env, mech_file_path)
+    #standard_modify_mech_param_tests(cell)
+    standard_cable_tests(cell, mech_file_path)
+    cm_correction_test(cell, env, mech_file_path)
     #count_spines(cell, env)
     #standard_modify_syn_mech_param_tests(cell, env)
 
