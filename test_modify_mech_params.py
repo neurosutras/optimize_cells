@@ -1,5 +1,5 @@
 import click
-from biophysics_utils import *
+from dentate.biophysics_utils import *
 from optimize_cells.plot_results import *
 
 

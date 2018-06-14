@@ -1,4 +1,4 @@
-from biophysics_utils import *
+from dentate.biophysics_utils import *
 
 context = Context()
 
