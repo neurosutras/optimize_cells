@@ -173,8 +173,6 @@ def config_sim_env(context):
     if not sim.has_rec('dend'):
         dend, dend_loc = get_DG_GC_thickest_dend_branch(context.cell, 200., terminal=False)
         sim.append_rec(cell, dend, name='dend', loc=dend_loc)
-    if context.v_active not in context.i_holding['dend']:
-        context.i_holding['dend'][context.v_active] = 0.1
     if 'dend' not in context.i_EPSC:
         context.i_EPSC['dend'] = -0.15
 
@@ -242,7 +240,7 @@ def compute_features_iEPSP_i_unit(x, export=False, plot=False):
     duration = context.sim_duration['unit']
 
     v_active = context.v_active
-    offset_vm('soma', context, v_active)
+    offset_vm('soma', context, v_active, i_history=context.i_holding)
 
     sim = context.sim
     sim.backup_state()
@@ -313,7 +311,7 @@ def compute_features_iEPSP_attenuation(x, ISI_key, i_EPSC, export=False, plot=Fa
     context.i_EPSC['dend'] = i_EPSC
 
     v_active = context.v_active
-    offset_vm('soma', context, v_active)
+    offset_vm('soma', context, v_active, i_history=context.i_holding)
 
     sim = context.sim
     sim.backup_state()

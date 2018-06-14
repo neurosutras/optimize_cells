@@ -224,12 +224,11 @@ target_val:
   ais_delay: 0.0
   dend_bAP_ratio: 0.3
   rebound_firing: 0
-  slow_depo_max: 5.0
-  slow_depo_min: -5.
+  slow_depo: 5.0
   soma_spike_amp: 90.0
   th_count: 1
   vm_th: -48.0
-  vm_stability: 0.0
+  vm_stability: 5.0
   f_I_slope: 58.0
   dend_spike_amp: 15.
   iEPSP_unit_amp: 1.

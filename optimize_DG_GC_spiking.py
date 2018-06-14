@@ -16,7 +16,7 @@ context = Context()
 
 @click.command()
 @click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='config/optimize_DG_GC_excitability_config.yaml')
+              default='config/optimize_DG_GC_spiking_config.yaml')
 @click.option("--output-dir", type=click.Path(exists=True, file_okay=False, dir_okay=True), default='data')
 @click.option("--export", is_flag=True)
 @click.option("--export-file-path", type=str, default=None)
@@ -140,6 +140,7 @@ def init_context():
     dend_th_dvdt = 30.
     v_init = -77.
     v_active = -77.
+    i_th_start = 0.1
     i_th_max = 0.4
 
     # GC experimental spike adaptation data from Brenner...Aldrich, Nat. Neurosci., 2005
@@ -200,32 +201,24 @@ def config_sim_env(context):
     init_context()
     if 'i_holding' not in context():
         context.i_holding = defaultdict(dict)
-    if 'i_th' not in context():
-        context.i_th = defaultdict(dict)
+    if 'i_th_history' not in context():
+        context.i_th_history = defaultdict(dict)
     cell = context.cell
     sim = context.sim
     if not sim.has_rec('soma'):
         sim.append_rec(cell, cell.tree.root, name='soma', loc=0.5)
     if context.v_active not in context.i_holding['soma']:
         context.i_holding['soma'][context.v_active] = 0.
-    if context.v_active not in context.i_th['soma']:
-        context.i_th['soma'][context.v_active] = 0.1
+    if context.v_active not in context.i_th_history['soma']:
+        context.i_th_history['soma'][context.v_active] = context.i_th_start
     if not sim.has_rec('dend'):
         dend, dend_loc = get_DG_GC_thickest_dend_branch(context.cell, 200., terminal=False)
         sim.append_rec(cell, dend, name='dend', loc=dend_loc)
-    if context.v_active not in context.i_holding['dend']:
-        context.i_holding['dend'][context.v_active] = 0.1
-    if context.v_active not in context.i_th['dend']:
-        context.i_th['dend'][context.v_active] = 0.1
     if not sim.has_rec('ais'):
         sim.append_rec(cell, cell.ais[0], name='ais', loc=1.)
-    if context.v_active not in context.i_holding['ais']:
-        context.i_holding['ais'][context.v_active] = 0.1
     if not sim.has_rec('axon'):
         axon_seg_locs = [seg.x for seg in cell.axon[0].sec]
         sim.append_rec(cell, cell.axon[0], name='axon', loc=axon_seg_locs[0])
-    if context.v_active not in context.i_holding['axon']:
-        context.i_holding['axon'][context.v_active] = 0.1
 
     equilibrate = context.equilibrate
     stim_dur = context.stim_dur
@@ -259,7 +252,7 @@ def compute_features_spike_shape(x, export=False, plot=False):
     duration = equilibrate + stim_dur
     v_active = context.v_active
     sim = context.sim
-    vm_rest = offset_vm('soma', context, v_active)
+    vm_rest = offset_vm('soma', context, v_active, i_history=context.i_holding)
     spike_times = np.array(context.cell.spike_detector.get_recordvec())
     if np.any(spike_times < equilibrate):
         if context.verbose > 0:
@@ -267,12 +260,16 @@ def compute_features_spike_shape(x, export=False, plot=False):
         return dict()
 
     result = dict()
-    result['vm_rest'] = vm_rest
     rec_dict = sim.get_rec('soma')
     loc = rec_dict['loc']
     node = rec_dict['node']
     soma_rec = rec_dict['vec']
-    i_th = context.i_th['soma'][v_active]
+
+    if v_active not in context.i_th_history['soma']:
+        i_th = context.i_th_start
+        context.i_th_history['soma'][v_active] = i_th
+    else:
+        i_th = context.i_th_history['soma'][v_active]
 
     sim.modify_stim('step', node=node, loc=loc, dur=stim_dur, amp=i_th)
     sim.backup_state()
@@ -280,19 +277,27 @@ def compute_features_spike_shape(x, export=False, plot=False):
     sim.run(v_active)
     spike_times = np.array(context.cell.spike_detector.get_recordvec())
 
-    target_spike_times = np.where((spike_times > equilibrate) & (spike_times < equilibrate + 50.))[0]
-    if not np.any(target_spike_times):
-        spike = False
-        target = True
-        i_inc = 0.01
-        delta_str = 'increased'
-    else:
-        spike = True
-        target = False
+    spike = np.any(spike_times > equilibrate)
+    if spike:
         i_inc = -0.01
         delta_str = 'decreased'
+        while spike and i_th > 0.:
+            i_th += i_inc
+            sim.modify_stim('step', amp=i_th)
+            sim.run(v_active)
+            spike_times = np.array(context.cell.spike_detector.get_recordvec())
+            if sim.verbose:
+                print 'compute_features_spike_shape: pid: %i; %s; %s i_th to %.3f nA; num_spikes: %i' % \
+                      (os.getpid(), 'soma', delta_str, i_th, len(spike_times))
+            spike = np.any(spike_times > equilibrate)
+    if i_th <= 0.:
+        if context.verbose > 0:
+            print 'compute_features_spike_shape: pid: %i; aborting - spontaneous firing' % (os.getpid())
+        return dict()
 
-    while not spike == target:
+    i_inc = 0.01
+    delta_str = 'increased'
+    while not spike:
         i_th += i_inc
         if i_th > context.i_th_max:
             if context.verbose > 0:
@@ -304,13 +309,9 @@ def compute_features_spike_shape(x, export=False, plot=False):
         if sim.verbose:
             print 'compute_features_spike_shape: pid: %i; %s; %s i_th to %.3f nA; num_spikes: %i' % \
                   (os.getpid(), 'soma', delta_str, i_th, len(spike_times))
-        spike = np.any((spike_times > equilibrate) & (spike_times < equilibrate + 50.))
-    if not target:
-        # Repeat this sim for export and analysis
-        i_th -= i_inc
-        sim.modify_stim('step', amp=i_th)
-        sim.run(v_active)
-        spike_times = np.array(context.cell.spike_detector.get_recordvec())
+        spike = np.any(spike_times > equilibrate)
+
+    context.i_th_history['soma'][v_active] = i_th
 
     soma_vm = np.array(soma_rec)
     ais_vm = np.array(sim.get_rec('ais')['vec'])
@@ -367,7 +368,6 @@ def compute_features_spike_shape(x, export=False, plot=False):
     axon_peak_t = np.where(axon_dvdt[left:right] == axon_peak)[0][0] * dt
     result['ais_delay'] = max(0., ais_peak_t + dt - soma_peak_t) + max(0., ais_peak_t + dt - axon_peak_t)
 
-    context.i_th['soma'][v_active] = i_th
     if context.verbose > 0:
         print 'compute_features_spike_shape: pid: %i; %s: %s took %.1f s; vm_th: %.1f' % \
               (os.getpid(), title, description, time.time() - start_time, threshold)
@@ -392,7 +392,7 @@ def get_args_dynamic_fI(x, features):
     # Calculate firing rates for a range of I_inj amplitudes using a stim duration of 500 ms
     num_incr = context.num_increments
     i_inj_increment = context.i_inj_increment
-    return [[rheobase + i_inj_increment * (i + 1) for i in xrange(num_incr)], [False] * (num_incr - 1) + [True]]
+    return [[rheobase + i_inj_increment * i for i in xrange(num_incr)], [False] * (num_incr - 1) + [True]]
 
 
 def compute_features_fI(x, amp, extend_dur=False, export=False, plot=False):
@@ -410,7 +410,7 @@ def compute_features_fI(x, amp, extend_dur=False, export=False, plot=False):
     update_source_contexts(x, context)
 
     v_active = context.v_active
-    offset_vm('soma', context, v_active)
+    offset_vm('soma', context, v_active, i_history=context.i_holding)
     sim = context.sim
     dt = context.dt
     stim_dur = context.stim_dur
@@ -449,15 +449,16 @@ def compute_features_fI(x, amp, extend_dur=False, export=False, plot=False):
         v_after = np.max(vm[-int(50. / dt):-1])
         vm_stability = abs(v_after - vm_rest)
         result['vm_stability'] = vm_stability
-        result['rebound_firing'] = len(np.where(spike_times > stim_dur)[0])
-    start = int((equilibrate + stim_dur - 20.) / dt)
-    end = int((equilibrate + stim_dur) / dt)
-    dvdt = np.gradient(vm, dt)
-    th_x_indexes = np.where(dvdt[start:end] > context.th_dvdt)[0]
-    if th_x_indexes.any():
-        end = start + th_x_indexes[0] - int(1.6 / dt)
-    vm_step_late = np.mean(vm[end - int(0.1 / dt):end])
-    result['vm_step_late'] = vm_step_late
+        result['rebound_firing'] = len(np.where(spike_times > stim_dur + 5.)[0])
+        last_spike_time = spike_times[np.where(spike_times < stim_dur + 7.)[0][-1]]
+        last_spike_index = int((last_spike_time + equilibrate) / dt)
+        start = last_spike_index - int(7. / dt)
+        dvdt = np.gradient(vm, dt)
+        th_x_indexes = np.where(dvdt[start:] > context.th_dvdt)[0]
+        if th_x_indexes.any():
+            end = start + th_x_indexes[0] - int(1.6 / dt)
+            vm_th_late = np.mean(vm[end - int(0.1 / dt):end])
+            result['vm_th_late'] = vm_th_late
 
     if context.verbose > 0:
         print 'compute_features_fI: pid: %i; %s: %s took %.1f s; num_spikes: %i' % \
@@ -488,21 +489,17 @@ def filter_features_fI(primitives, current_features, export=False):
     rate = []
     adi = []
     mean_adi = []
-    slow_depo = []
 
     indexes = range(len(i_amp))
     indexes.sort(key=i_amp.__getitem__)
-    print i_amp
-    print indexes
     for i in indexes:
         this_dict = primitives[i]
         if 'vm_stability' in this_dict:
             new_features['vm_stability'] = this_dict['vm_stability']
         if 'rebound_firing' in this_dict:
             new_features['rebound_firing'] = this_dict['rebound_firing']
-        if 'vm_step_late' in this_dict:
-            this_slow_depo = this_dict['vm_step_late'] - current_features['vm_th']
-            slow_depo.append(this_slow_depo)
+        if 'vm_th_late' in this_dict:
+            new_features['slow_depo'] = abs(this_dict['vm_th_late'] - current_features['vm_th'])
         spike_times = this_dict['spike_times']
         if (len(exp_spikes) - 2 < len(spike_times) < len(exp_spikes) + 2) or \
                 (len(adi) == 0 and (len(spike_times) > len(exp_spikes) or i == len(primitives) - 1)):
@@ -517,12 +514,14 @@ def filter_features_fI(primitives, current_features, export=False):
             print 'filter_features_fI: pid: %i; aborting - failed to compute required feature: %s' % \
                   (os.getpid(), feature_name)
         return dict()
-    if len(slow_depo) == 0:
+    if 'slow_depo' not in new_features:
         feature_name = 'slow_depo'
         if context.verbose > 0:
             print 'filter_features_fI: pid: %i; aborting - failed to compute required feature: %s' % \
                   (os.getpid(), feature_name)
         return dict()
+    print 'adi:'
+    pprint.pprint(adi)
     for i in xrange(len(exp_adi)):
         this_adi_val_list = []
         for this_adi_array in (this_adi_array for this_adi_array in adi if len(this_adi_array) >= i + 1):
@@ -530,12 +529,25 @@ def filter_features_fI(primitives, current_features, export=False):
         if len(this_adi_val_list) > 0:
             this_adi_mean_val = np.mean(this_adi_val_list)
             mean_adi.append(this_adi_mean_val)
+    print 'mean_adi:'
+    pprint.pprint(mean_adi)
     new_features['adi'] = np.array(mean_adi)
-    new_features['slow_depo'] = np.mean(slow_depo)
 
-    new_features['f_I'] = map(rate.__getitem__, indexes)
+    rate = map(rate.__getitem__, indexes)
+    new_features['f_I'] = rate
     i_amp = map(i_amp.__getitem__, indexes)
     experimental_f_I_slope = context.target_val['f_I_slope']  # Hz/ln(pA); rate = slope * ln(current - rheobase)
+    num_increments = context.num_increments
+    i_inj_increment = context.i_inj_increment
+    rheobase = current_features['rheobase']
+    exp_f_I = [experimental_f_I_slope * np.log((rheobase + i_inj_increment * i) / (rheobase - i_inj_increment))
+               for i in xrange(num_increments)]
+    print 'i_amp:'
+    pprint.pprint(i_amp)
+    print 'exp_f_I:'
+    pprint.pprint(exp_f_I)
+    print 'model f_I:'
+    pprint.pprint(rate)
     if export:
         description = 'f_I'
         with h5py.File(context.export_file_path, 'a') as f:
@@ -544,14 +556,9 @@ def filter_features_fI(primitives, current_features, export=False):
                 f[description].attrs['enumerated'] = False
             group = f[description]
             group.create_dataset('i_amp', compression='gzip', data=i_amp)
-            group.create_dataset('adi', compression='gzip', data=new_features['adi'])
+            group.create_dataset('adi', compression='gzip', data=mean_adi)
             group.create_dataset('exp_adi', compression='gzip', data=exp_adi)
-            group.create_dataset('rate', compression='gzip', data=new_features['f_I'])
-            num_increments = context.num_increments
-            i_inj_increment = context.i_inj_increment
-            rheobase = current_features['rheobase']
-            exp_f_I = [experimental_f_I_slope * np.log((rheobase + i_inj_increment * (i + 1)) / rheobase)
-                       for i in xrange(num_increments)]
+            group.create_dataset('rate', compression='gzip', data=rate)
             group.create_dataset('exp_rate', compression='gzip', data=exp_f_I)
     return new_features
 
@@ -579,7 +586,7 @@ def compute_features_dend_spike(x, amp, export=False, plot=False):
     update_source_contexts(x, context)
 
     v_active = context.v_active
-    offset_vm('soma', context, v_active)
+    offset_vm('soma', context, v_active, i_history=context.i_holding)
     sim = context.sim
     dt = context.dt
     stim_dur = context.dend_spike_stim_dur
@@ -609,14 +616,16 @@ def compute_features_dend_spike(x, amp, export=False, plot=False):
     dvdt2 = np.gradient(dvdt, dt)
     start = int((equilibrate + 0.2) /dt)
     end = int((equilibrate + stim_dur) /dt)
-    peak_vm = np.max(vm[start:end])
+    peak_index = np.argmax(vm[start:end]) + start
+    peak_vm = vm[peak_index]
     indexes = np.where((dvdt[start:end] >= context.dend_th_dvdt) & (dvdt2[start:end] > 0.))[0]
     dend_spike_amp_by_vm_late = peak_vm - np.mean(vm[end - int(0.1 / dt):end])
     if np.any(indexes):
         th_index = start + max(0, indexes[0] - int(0.1/dt))
         th_vm = vm[th_index]
-        dend_spike_amp_by_th = peak_vm - th_vm
-        dend_spike_amp = max(dend_spike_amp_by_th, dend_spike_amp_by_vm_late)
+        min_vm = np.min(vm[th_index:end])
+        dend_spike_amp_from_min = peak_vm - min_vm
+        dend_spike_amp = max(dend_spike_amp_from_min, dend_spike_amp_by_vm_late)
     else:
         dend_spike_amp = dend_spike_amp_by_vm_late
     result['dend_spike_amp'] = dend_spike_amp
@@ -673,12 +682,9 @@ def get_objectives_spiking(features):
 
     # don't penalize slow_depo outside target range:
     target = 'slow_depo'
-    target_min = context.target_val['slow_depo_min']
-    target_max = context.target_val['slow_depo_max']
-    if features[target] < target_min:
-        objectives[target] = ((features[target] - target_min) / (0.01 * target_min)) ** 2.
-    elif features[target] > target_max:
-        objectives[target] = ((features[target] - target_max) / (0.01 * target_max)) ** 2.
+    if features[target] > context.target_val[target]:
+        objectives[target] = ((features[target] - context.target_val[target]) /
+                              (0.01 * context.target_val[target])) ** 2.
     else:
         objectives[target] = 0.
 
@@ -691,9 +697,11 @@ def get_objectives_spiking(features):
     rheobase = features['rheobase']
     num_increments = context.num_increments
     i_inj_increment = context.i_inj_increment
-    target_f_I = [context.target_val['f_I_slope'] * np.log((rheobase + i_inj_increment * (i + 1)) / rheobase)
+    target_f_I = [context.target_val['f_I_slope'] * np.log((rheobase + i_inj_increment * i) /
+                                                           (rheobase - i_inj_increment))
                   for i in xrange(num_increments)]
-    log_i_amp = [np.log((rheobase + i_inj_increment * (i + 1)) / rheobase) for i in xrange(num_increments)]
+    log_i_amp = [np.log((rheobase + i_inj_increment * i) / (rheobase - i_inj_increment))
+                 for i in xrange(num_increments)]
     slope, intercept, r_value, p_value, std_err = stats.linregress(log_i_amp, features['f_I'])
     features['f_I_slope'] = slope
     f_I_residuals = 0.
@@ -709,10 +717,7 @@ def get_objectives_spiking(features):
 
 def update_mechanisms_spiking(x, context=None):
     """
-    :param x: array ['soma.gbar_nas', 'dend.gbar_nas', 'dend.gbar_nas slope', 'dend.gbar_nas min', 'dend.gbar_nas bo',
-                    'axon.gbar_nax', 'ais.gbar_nax', 'soma.gkabar', 'dend.gkabar', 'soma.gkdrbar', 'axon.gkabar',
-                    'soma.sh_nas/x', 'ais.sha_nax', 'soma.gCa factor', 'soma.gCadepK factor', 'soma.gkmbar',
-                    'ais.gkmbar']
+    :param x: array
     :param context: :class:'Context'
     """
     if context is None:
