@@ -1,13 +1,16 @@
 bounds:
   dend.g_pas slope: !!python/tuple
-  - 1.0E-10
-  - 1.0E-5
+  - 1.0E-9
+  - 1.0E-4
   dend.g_pas tau: !!python/tuple
   - 25.
   - 400.
   soma.g_pas: !!python/tuple
   - 1.0E-12
   - 1.0E-7
+  e_pas: !!python/tuple
+  - -77.0
+  - -65.0
   ais.gbar_nax: !!python/tuple
   - 0.02
   - 0.5
@@ -26,15 +29,9 @@ bounds:
   dend.gbar_nas: !!python/tuple
   - 0.01
   - 0.05
-  dend.gbar_nas bo: !!python/tuple
-  - 3
-  - 6
   dend.gbar_nas min: !!python/tuple
   - 0.0
   - 0.05
-  dend.gbar_nas slope: !!python/tuple
-  - -0.0004
-  - 0.0
   dend.gkabar: !!python/tuple
   - 0.01
   - 0.25
@@ -53,6 +50,9 @@ bounds:
   soma.gkdrbar: !!python/tuple
   - 0.0005
   - 0.06
+  axon.gkdrbar: !!python/tuple
+  - 0.0005
+  - 0.06
   soma.gkmbar: !!python/tuple
   - 0.0005
   - 0.005
@@ -64,9 +64,8 @@ bounds:
   - 6.0
   soma.tau_Cacum: !!python/tuple
   - 9.
-  - 100.
+  - 50.
 default_params:
-#  dend.gbar_nas bo: 5
 rel_bounds:
 - - dend.gbar_nas
   - '<='
@@ -92,13 +91,19 @@ rel_bounds:
   - <
   - 3.0
   - soma.gkabar
+- - axon.gkdrbar
+  - <
+  - 3.0
+  - soma.gkdrbar
 feature_names:
 - dend R_inp
 - term_dend R_inp
 - soma R_inp
+- soma vm_rest
 - vm_th
 - ADP
-- AHP
+- fAHP
+- mAHP
 - rebound_firing
 - vm_stability
 - ais_delay
@@ -158,16 +163,18 @@ objective_names:
 - dend R_inp
 - term_dend R_inp
 - soma R_inp
+- soma vm_rest
 - vm_th
 - ADP
-- AHP
+- fAHP
+- mAHP
 - rebound_firing
 - vm_stability
 - ais_delay
 - slow_depo
 - dend_bAP_ratio
 - soma_spike_amp
-- th_count
+# - th_count
 - adi_residuals
 - f_I_residuals
 - dend_spike_score
@@ -179,19 +186,18 @@ param_names:
 - dend.g_pas slope
 - dend.g_pas tau
 - soma.g_pas
+- e_pas
 - soma.gbar_nas
 - dend.gbar_nas
-- dend.gbar_nas bo
 - dend.gbar_nas min
-- dend.gbar_nas slope
 - axon.gbar_nax
 - ais.gbar_nax
 - soma.gkabar
 - dend.gkabar
 - soma.gkdrbar
 - axon.gkabar
+- axon.gkdrbar
 - soma.sh_nas/x
-- dend.sh_nas
 - ais.sha_nax
 - soma.gCa factor
 - soma.gCadepK factor
@@ -201,8 +207,10 @@ param_names:
 target_range:
   dend R_inp: 1.
   soma R_inp: 0.5
-  ADP: 0.01
-  AHP: 0.07
+  soma vm_rest: 0.1
+  ADP: 0.05
+  fAHP: 0.07
+  mAHP: 0.05
   ais_delay: 0.0005
   dend_bAP_ratio: 0.0002
   rebound_firing: 0.002
@@ -215,42 +223,42 @@ target_range:
 target_val:
   dend R_inp: 375.
   soma R_inp: 295.
-  ADP: 0.0
-  AHP: 7.0
+  soma vm_rest: -77.0
+  ADP: 5.0
+  fAHP: 7.5
+  mAHP: 5.
   ais_delay: 0.0
   dend_bAP_ratio: 0.3
   rebound_firing: 0
-  slow_depo_max: 10.0
-  slow_depo_min: -1.
+  slow_depo: 5.0
   soma_spike_amp: 90.0
   th_count: 1
   vm_th: -48.0
-  vm_stability: 0.0
-  f_I_slope: 53.0
+  vm_stability: 5.0
+  f_I_slope: 58.0
   dend_spike_amp: 15.
   iEPSP_unit_amp: 1.
   iEPSP_attenuation_short: 0.17
   iEPSP_attenuation_long: 0.23
 x0:
-  soma.gCa factor: 9.9382E-01
-  dend.gbar_nas min: 6.4698E-03
-  soma.gkdrbar: 1.0216E-02
-  soma.g_pas: 1.3739E-08
-  axon.gkabar: 6.8027E-02
-  soma.gkmbar: 4.1868E-03
-  dend.gbar_nas: 2.3417E-02
-  dend.gbar_nas slope: -5.0172E-05
-  ais.sha_nax: -4.4434E+00
-  soma.gCadepK factor: 1.1547E+00
-  soma.sh_nas/x: 4.8323E+00
-  dend.sh_nas: 0.
-  dend.gkabar: 1.4855E-01
-  ais.gbar_nax: 1.0270E-01
-  dend.gbar_nas bo: 5.0376E+00
-  dend.g_pas slope: 5.3010E-06
-  dend.g_pas tau: 7.8494E+01
-  axon.gbar_nax: 4.9753E-02
-  soma.gbar_nas: 4.2435E-02
-  ais.gkmbar: 4.9012E-03
-  soma.gkabar: 3.9303E-02
-  soma.tau_Cacum: 50.
+  soma.gCa factor: 4.282660E-02
+  soma.tau_Cacum: 3.724583E+01
+  dend.g_pas tau: 1.281929E+02
+  dend.g_pas slope: 4.279732E-06
+  axon.gkabar: 9.384117E-02
+  soma.gkmbar: 4.544747E-03
+  dend.gbar_nas min: 7.825364E-03
+  ais.sha_nax: -3.647254E+00
+  soma.gkdrbar: 1.550624E-03
+  soma.sh_nas/x: 5.824188E+00
+  ais.gkmbar: 9.328804E-03
+  dend.gkabar: 2.417519E-01
+  ais.gbar_nax: 1.987367E-01
+  soma.g_pas: 2.315358E-08
+  dend.gbar_nas: 4.067298E-02
+  axon.gbar_nax: 5.955782E-02
+  soma.gbar_nas: 4.231149E-02
+  soma.gCadepK factor: 5.294669E-01
+  axon.gkdrbar: 1.641549E-03
+  soma.gkabar: 4.574317E-02
+  e_pas: -77.0

@@ -108,7 +108,6 @@ def init_context():
     stim_dur = 500.
     duration = equilibrate + stim_dur
     dt = 0.025
-    th_dvdt = 10.
     v_init = -77.
     v_active = -77.
     context.update(locals())
@@ -211,9 +210,9 @@ def compute_features_leak(x, section, export=False, plot=False):
     sim.parameters['title'] = title
     sim.parameters['description'] = description
     sim.parameters['duration'] = duration
-    amp = -0.05
+    amp = -0.025
     context.sim.parameters['amp'] = amp
-    offset_vm(section, context, v_init, i_history=context.i_holding)
+    vm_rest, vm_offset = offset_vm(section, context, v_init, i_history=context.i_holding)
     rec_dict = sim.get_rec(section)
     loc = rec_dict['loc']
     node = rec_dict['node']
@@ -227,6 +226,8 @@ def compute_features_leak(x, section, export=False, plot=False):
     R_inp = get_R_inp(np.array(sim.tvec), np.array(rec), equilibrate, duration, amp, dt)[2]
     result = dict()
     result['%s R_inp' % section] = R_inp
+    if section == 'soma':
+        result['soma vm_rest'] = vm_rest
     if context.verbose > 0:
         print 'compute_features_leak: pid: %i; %s: %s took %.1f s; R_inp: %.1f' % \
               (os.getpid(), title, description, time.time() - start_time, R_inp)
@@ -246,7 +247,7 @@ def get_objectives_leak(features):
     :return: tuple of dict
     """
     objectives = {}
-    for feature_name in ['soma R_inp', 'dend R_inp']:
+    for feature_name in ['soma R_inp', 'dend R_inp', 'soma vm_rest']:
         objective_name = feature_name
         objectives[objective_name] = ((context.target_val[objective_name] - features[feature_name]) /
                                                   context.target_range[objective_name]) ** 2.
@@ -270,6 +271,7 @@ def update_mechanisms_leak(x, context):
     cell = context.cell
     x_dict = param_array_to_dict(x, context.param_names)
     modify_mech_param(cell, 'soma', 'pas', 'g', x_dict['soma.g_pas'])
+    modify_mech_param(cell, 'soma', 'pas', 'e', x_dict['e_pas'])
     modify_mech_param(cell, 'apical', 'pas', 'g', origin='soma', slope=x_dict['dend.g_pas slope'],
                       tau=x_dict['dend.g_pas tau'])
     for sec_type in ['axon_hill', 'ais', 'axon', 'apical', 'spine_neck', 'spine_head']:

@@ -386,6 +386,7 @@ def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.005, vm_tol=0.5, i
     t = np.arange(0., duration, dt)
     vm = np.interp(t, sim.tvec, rec)
     vm_rest = np.mean(vm[int((duration - 3.) / dt):int((duration - 1.) / dt)])
+    vm_before = vm_rest
     if sim.verbose:
         print 'offset_vm: pid: %i; %s; vm_rest: %.1f, vm_target: %.1f' % (os.getpid(), rec_name, vm_rest, vm_target)
 
@@ -424,7 +425,8 @@ def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.005, vm_tol=0.5, i
     if i_history is not None:
         i_history[rec_name][vm_target] = i_amp
     sim.restore_state()
-    return vm_rest
+    vm_after = vm_rest
+    return vm_before, vm_after
 
 
 def get_spike_shape(vm, spike_times, context=None):

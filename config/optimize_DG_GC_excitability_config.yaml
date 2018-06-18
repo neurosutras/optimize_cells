@@ -1,13 +1,16 @@
 bounds:
   dend.g_pas slope: !!python/tuple
-  - 1.0E-10
-  - 1.0E-5
+  - 1.0E-9
+  - 1.0E-4
   dend.g_pas tau: !!python/tuple
   - 25.
   - 400.
   soma.g_pas: !!python/tuple
   - 1.0E-12
   - 1.0E-7
+  e_pas: !!python/tuple
+  - -77.0
+  - -65.0
   ais.gbar_nax: !!python/tuple
   - 0.02
   - 0.5
@@ -96,6 +99,7 @@ feature_names:
 - dend R_inp
 - term_dend R_inp
 - soma R_inp
+- soma vm_rest
 - vm_th
 - ADP
 - fAHP
@@ -159,6 +163,7 @@ objective_names:
 - dend R_inp
 - term_dend R_inp
 - soma R_inp
+- soma vm_rest
 - vm_th
 - ADP
 - fAHP
@@ -169,7 +174,7 @@ objective_names:
 - slow_depo
 - dend_bAP_ratio
 - soma_spike_amp
-- th_count
+# - th_count
 - adi_residuals
 - f_I_residuals
 - dend_spike_score
@@ -181,6 +186,7 @@ param_names:
 - dend.g_pas slope
 - dend.g_pas tau
 - soma.g_pas
+- e_pas
 - soma.gbar_nas
 - dend.gbar_nas
 - dend.gbar_nas min
@@ -201,6 +207,7 @@ param_names:
 target_range:
   dend R_inp: 1.
   soma R_inp: 0.5
+  soma vm_rest: 0.1
   ADP: 0.05
   fAHP: 0.07
   mAHP: 0.05
@@ -216,6 +223,7 @@ target_range:
 target_val:
   dend R_inp: 375.
   soma R_inp: 295.
+  soma vm_rest: -77.0
   ADP: 5.0
   fAHP: 7.5
   mAHP: 5.
@@ -233,23 +241,24 @@ target_val:
   iEPSP_attenuation_short: 0.17
   iEPSP_attenuation_long: 0.23
 x0:
-  soma.gCa factor: 8.072385E-02
-  soma.tau_Cacum: 3.582782E+01
-  dend.g_pas tau: 6.717500E+01
-  dend.g_pas slope: 8.922957E-06
-  axon.gkabar: 5.253822E-02
-  soma.gkmbar: 4.555918E-03
-  dend.gbar_nas min: 3.675744E-03
-  ais.sha_nax: -2.792502E+00
-  soma.gkdrbar: 1.587365E-02
-  soma.sh_nas/x: 5.704921E+00
-  ais.gkmbar: 8.910924E-03
-  dend.gkabar: 1.469998E-01
-  ais.gbar_nax: 2.101566E-01
-  soma.g_pas: 4.058603E-09
-  dend.gbar_nas: 2.780691E-02
-  axon.gbar_nax: 6.029868E-02
-  soma.gbar_nas: 4.414296E-02
-  soma.gCadepK factor: 1.133785E+00
-  axon.gkdrbar: 2.081830E-02
-  soma.gkabar: 2.547421E-02
+  soma.gCa factor: 4.282660E-02
+  soma.tau_Cacum: 3.724583E+01
+  dend.g_pas tau: 1.281929E+02
+  dend.g_pas slope: 4.279732E-06
+  axon.gkabar: 9.384117E-02
+  soma.gkmbar: 4.544747E-03
+  dend.gbar_nas min: 7.825364E-03
+  ais.sha_nax: -3.647254E+00
+  soma.gkdrbar: 1.550624E-03
+  soma.sh_nas/x: 5.824188E+00
+  ais.gkmbar: 9.328804E-03
+  dend.gkabar: 2.417519E-01
+  ais.gbar_nax: 1.987367E-01
+  soma.g_pas: 2.315358E-08
+  dend.gbar_nas: 4.067298E-02
+  axon.gbar_nax: 5.955782E-02
+  soma.gbar_nas: 4.231149E-02
+  soma.gCadepK factor: 5.294669E-01
+  axon.gkdrbar: 1.641549E-03
+  soma.gkabar: 4.574317E-02
+  e_pas: -77.0

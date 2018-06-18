@@ -24,7 +24,8 @@ context = Context()
 @click.option("--verbose", type=int, default=2)
 @click.option("--plot", is_flag=True)
 @click.option("--debug", is_flag=True)
-def main(config_file_path, output_dir, export, export_file_path, label, verbose, plot, debug):
+@click.option("--run-tests", is_flag=True)
+def main(config_file_path, output_dir, export, export_file_path, label, verbose, plot, debug, run_tests):
     """
 
     :param config_file_path: str (path)
@@ -35,6 +36,7 @@ def main(config_file_path, output_dir, export, export_file_path, label, verbose,
     :param verbose: bool
     :param plot: bool
     :param debug: bool
+    :param run_tests: bool
     """
     # requires a global variable context: :class:'Context'
     context.update(locals())
@@ -45,6 +47,17 @@ def main(config_file_path, output_dir, export, export_file_path, label, verbose,
     if debug:
         add_diagnostic_recordings(context)
 
+    config_sim_env(context)
+
+    if run_tests:
+        unit_tests_spiking(context)
+
+
+def unit_tests_spiking(context):
+    """
+
+    :param context: :class:'Context'
+    """
     # Stage 0:
     args = []
     group_size = 1
@@ -248,11 +261,11 @@ def compute_features_spike_shape(x, export=False, plot=False):
 
     equilibrate = context.equilibrate
     dt = context.dt
-    stim_dur = 150.
+    stim_dur = 250.
     duration = equilibrate + stim_dur
     v_active = context.v_active
     sim = context.sim
-    vm_rest = offset_vm('soma', context, v_active, i_history=context.i_holding)
+    offset_vm('soma', context, v_active, i_history=context.i_holding)
     spike_times = np.array(context.cell.spike_detector.get_recordvec())
     if np.any(spike_times < equilibrate):
         if context.verbose > 0:
@@ -342,7 +355,7 @@ def compute_features_spike_shape(x, export=False, plot=False):
     result['mAHP'] = mAHP
     result['ADP'] = ADP
     result['rheobase'] = i_th
-    result['th_count'] = len(np.where(spike_times > equilibrate)[0])
+    # result['th_count'] = len(np.where(spike_times > equilibrate)[0])
 
     start = int((equilibrate + 1.) / dt)
     th_x = np.where(soma_vm[start:] >= threshold)[0][0] + start
@@ -667,7 +680,7 @@ def get_objectives_spiking(features):
 
     objectives = dict()
     for target in ['vm_th', 'fAHP', 'mAHP', 'ADP', 'rebound_firing', 'vm_stability', 'ais_delay', 'dend_bAP_ratio',
-                   'soma_spike_amp', 'th_count']:
+                   'soma_spike_amp']:  # , 'th_count']:
         objectives[target] = ((context.target_val[target] - features[target]) / context.target_range[target]) ** 2.
 
     # don't penalize slow_depo outside target range:
