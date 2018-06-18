@@ -152,7 +152,7 @@ kwargs:
   cell_type: GC
   correct_for_spines: True
   verbose: 2
-  daspk: True
+  daspk: False
   configFile: ../dentate/config/Small_Scale_Control_log_normal_weights.yaml
   templatePaths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoclibPath: ../dentate
