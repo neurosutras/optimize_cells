@@ -47,8 +47,6 @@ def main(config_file_path, output_dir, export, export_file_path, label, verbose,
     if debug:
         add_diagnostic_recordings(context)
 
-    config_sim_env(context)
-
     if run_tests:
         unit_tests_spiking(context)
 
@@ -58,9 +56,10 @@ def unit_tests_spiking(context):
 
     :param context: :class:'Context'
     """
+    features = dict()
     # Stage 0:
-    args = []
-    group_size = 1
+    args = get_args_dynamic_i_holding(context.x0_array, features)
+    group_size = len(args[0])
     sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
                 [[context.plot] * group_size]
     primitives = map(compute_features_spike_shape, *sequences)
@@ -76,7 +75,7 @@ def unit_tests_spiking(context):
     features.update(this_features)
 
     # Stage 2:
-    args = get_args_static_dend_spike()
+    args = get_args_dynamic_dend_spike(context.x0_array, features)
     group_size = len(args[0])
     sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
                 [[context.plot] * group_size]
@@ -153,7 +152,7 @@ def init_context():
     dend_th_dvdt = 30.
     v_init = -77.
     v_active = -77.
-    i_th_start = 0.1
+    i_th_start = 0.2
     i_th_max = 0.4
 
     # GC experimental spike adaptation data from Brenner...Aldrich, Nat. Neurosci., 2005
@@ -186,6 +185,7 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
     context.spike_output_vec = h.Vector()
     cell.spike_detector.record(context.spike_output_vec)
     context.cell = cell
+    config_sim_env(context)
 
 
 def get_spike_adaptation_indexes(spike_times):
@@ -214,16 +214,16 @@ def config_sim_env(context):
     init_context()
     if 'i_holding' not in context():
         context.i_holding = defaultdict(dict)
-    if 'i_th_history' not in context():
-        context.i_th_history = defaultdict(dict)
+    # if 'i_th_history' not in context():
+    #    context.i_th_history = defaultdict(dict)
     cell = context.cell
     sim = context.sim
     if not sim.has_rec('soma'):
         sim.append_rec(cell, cell.tree.root, name='soma', loc=0.5)
     if context.v_active not in context.i_holding['soma']:
         context.i_holding['soma'][context.v_active] = 0.
-    if context.v_active not in context.i_th_history['soma']:
-        context.i_th_history['soma'][context.v_active] = context.i_th_start
+    # if context.v_active not in context.i_th_history['soma']:
+    #    context.i_th_history['soma'][context.v_active] = context.i_th_start
     if not sim.has_rec('dend'):
         dend, dend_loc = get_DG_GC_thickest_dend_branch(context.cell, 200., terminal=False)
         sim.append_rec(cell, dend, name='dend', loc=dend_loc)
@@ -247,10 +247,26 @@ def config_sim_env(context):
     context.previous_module = __file__
 
 
-def compute_features_spike_shape(x, export=False, plot=False):
+def get_args_dynamic_i_holding(x, features):
+    """
+    A nested map operation is required to compute spike_shape features. The arguments to be mapped depend on prior
+    features (dynamic).
+    :param x: array
+    :param features: dict
+    :return: list of list
+    """
+    if 'i_holding' not in features:
+        i_holding = context.i_holding
+    else:
+        i_holding = features['i_holding']
+    return [[i_holding]]
+
+
+def compute_features_spike_shape(x, i_holding, export=False, plot=False):
     """
     
     :param x: array
+    :param i_holding: defaultdict(dict: float)
     :param export: bool
     :param plot: bool
     :return: dict
@@ -261,10 +277,11 @@ def compute_features_spike_shape(x, export=False, plot=False):
 
     equilibrate = context.equilibrate
     dt = context.dt
-    stim_dur = 250.
+    stim_dur = 200.
     duration = equilibrate + stim_dur
     v_active = context.v_active
     sim = context.sim
+    context.i_holding = i_holding
     offset_vm('soma', context, v_active, i_history=context.i_holding)
     spike_times = np.array(context.cell.spike_detector.get_recordvec())
     if np.any(spike_times < equilibrate):
@@ -278,11 +295,14 @@ def compute_features_spike_shape(x, export=False, plot=False):
     node = rec_dict['node']
     soma_rec = rec_dict['vec']
 
+    """
     if v_active not in context.i_th_history['soma']:
         i_th = context.i_th_start
         context.i_th_history['soma'][v_active] = i_th
     else:
         i_th = context.i_th_history['soma'][v_active]
+    """
+    i_th = context.i_th_start
 
     sim.modify_stim('step', node=node, loc=loc, dur=stim_dur, amp=i_th)
     sim.backup_state()
@@ -324,7 +344,7 @@ def compute_features_spike_shape(x, export=False, plot=False):
                   (os.getpid(), 'soma', delta_str, i_th, len(spike_times))
         spike = np.any(spike_times > equilibrate)
 
-    context.i_th_history['soma'][v_active] = i_th
+    # context.i_th_history['soma'][v_active] = i_th
 
     soma_vm = np.array(soma_rec)
     ais_vm = np.array(sim.get_rec('ais')['vec'])
@@ -355,6 +375,7 @@ def compute_features_spike_shape(x, export=False, plot=False):
     result['mAHP'] = mAHP
     result['ADP'] = ADP
     result['rheobase'] = i_th
+    result['i_holding'] = context.i_holding
     # result['th_count'] = len(np.where(spike_times > equilibrate)[0])
 
     start = int((equilibrate + 1.) / dt)
@@ -395,23 +416,30 @@ def compute_features_spike_shape(x, export=False, plot=False):
 
 def get_args_dynamic_fI(x, features):
     """
-    A nested map operation is required to compute fI features. The arguments to be mapped depend on each set of
-    parameters and prior features (dynamic).
+    A nested map operation is required to compute fI features. The arguments to be mapped depend on prior features
+    (dynamic).
     :param x: array
     :param features: dict
     :return: list of list
     """
+    if 'i_holding' not in features:
+        i_holding = context.i_holding
+    else:
+        i_holding = features['i_holding']
     rheobase = features['rheobase']
+
     # Calculate firing rates for a range of I_inj amplitudes using a stim duration of 500 ms
     num_incr = context.num_increments
     i_inj_increment = context.i_inj_increment
-    return [[rheobase + i_inj_increment * i for i in xrange(num_incr)], [False] * (num_incr - 1) + [True]]
+    return [[i_holding] * num_incr, [rheobase + i_inj_increment * i for i in xrange(num_incr)],
+            [False] * (num_incr - 1) + [True]]
 
 
-def compute_features_fI(x, amp, extend_dur=False, export=False, plot=False):
+def compute_features_fI(x, i_holding, amp, extend_dur=False, export=False, plot=False):
     """
 
     :param x: array
+    :param i_holding: defaultdict(dict: float)
     :param amp: float
     :param extend_dur: bool
     :param export: bool
@@ -423,6 +451,7 @@ def compute_features_fI(x, amp, extend_dur=False, export=False, plot=False):
     update_source_contexts(x, context)
 
     v_active = context.v_active
+    context.i_holding = i_holding
     offset_vm('soma', context, v_active, i_history=context.i_holding)
     sim = context.sim
     dt = context.dt
@@ -568,19 +597,26 @@ def filter_features_fI(primitives, current_features, export=False):
     return new_features
 
 
-def get_args_static_dend_spike():
+def get_args_dynamic_dend_spike(x, features):
     """
-    A nested map operation is required to compute dendritic spike features. The arguments to be mapped are the same
-    (static) for each set of parameters.
+    A nested map operation is required to compute dend_spike features. The arguments to be mapped depend on prior
+    features (dynamic).
+    :param x: array
+    :param features: dict
     :return: list of list
     """
-    return [[0.4, 0.7]]
+    if 'i_holding' not in features:
+        i_holding = context.i_holding
+    else:
+        i_holding = features['i_holding']
+    return [[i_holding] * 2, [0.4, 0.7]]
 
 
-def compute_features_dend_spike(x, amp, export=False, plot=False):
+def compute_features_dend_spike(x, i_holding, amp, export=False, plot=False):
     """
 
     :param x: array
+    :param i_holding: defaultdict(dict: float)
     :param amp: float
     :param export: bool
     :param plot: bool
@@ -591,6 +627,7 @@ def compute_features_dend_spike(x, amp, export=False, plot=False):
     update_source_contexts(x, context)
 
     v_active = context.v_active
+    context.i_holding = i_holding
     offset_vm('soma', context, v_active, i_history=context.i_holding)
     sim = context.sim
     dt = context.dt

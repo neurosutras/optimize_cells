@@ -11,10 +11,11 @@ update_context:
   - reset_biophysics
 get_features_stages:
 - source: optimize_DG_GC_iEPSP_propagation
+  get_args_dynamic: get_args_dynamic_i_holding
   compute_features: compute_features_iEPSP_i_unit
 - source: optimize_DG_GC_iEPSP_propagation
-  compute_features: compute_features_iEPSP_attenuation
   get_args_dynamic: get_args_dynamic_iEPSP_attenuation
+  compute_features: compute_features_iEPSP_attenuation
 get_objectives:
   optimize_DG_GC_iEPSP_propagation: get_objectives_iEPSP_propagation
 kwargs:
@@ -23,7 +24,7 @@ kwargs:
   cell_type: GC
   correct_for_spines: True
   verbose: 2
-  daspk: True
+  daspk: False
   configFile: ../dentate/config/Small_Scale_Control_log_normal_weights.yaml
   templatePaths: ../dgc/Mateos-Aparicio2014:../dentate/templates
   hoclibPath: ../dentate

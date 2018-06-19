@@ -426,7 +426,7 @@ def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.005, vm_tol=0.5, i
         i_history[rec_name][vm_target] = i_amp
     sim.restore_state()
     vm_after = vm_rest
-    return vm_before, vm_after
+    return vm_before, vm_after, i_amp
 
 
 def get_spike_shape(vm, spike_times, context=None):

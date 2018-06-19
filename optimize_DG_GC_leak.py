@@ -23,7 +23,8 @@ context = Context()
 @click.option("--label", type=str, default=None)
 @click.option("--verbose", type=int, default=2)
 @click.option("--plot", is_flag=True)
-def main(config_file_path, output_dir, export, export_file_path, label, verbose, plot):
+@click.option("--run-tests", is_flag=True)
+def main(config_file_path, output_dir, export, export_file_path, label, verbose, plot, run_tests):
     """
 
     :param config_file_path: str (path)
@@ -33,12 +34,21 @@ def main(config_file_path, output_dir, export, export_file_path, label, verbose,
     :param label: str
     :param verbose: bool
     :param plot: bool
+    :param run_tests: bool
     """
     # requires a global variable context: :class:'Context'
     context.update(locals())
     disp = verbose > 0
     config_interactive(context, __file__, config_file_path=config_file_path, output_dir=output_dir, export=export,
                        export_file_path=export_file_path, label=label, disp=disp)
+    if run_tests:
+        unit_tests_leak()
+
+
+def unit_tests_leak():
+    """
+
+    """
     args = get_args_static_leak()
     group_size = len(args[0])
     sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
@@ -131,6 +141,7 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
     context.spike_output_vec = h.Vector()
     cell.spike_detector.record(context.spike_output_vec)
     context.cell = cell
+    config_sim_env(context)
 
 
 def config_sim_env(context):
@@ -212,7 +223,7 @@ def compute_features_leak(x, section, export=False, plot=False):
     sim.parameters['duration'] = duration
     amp = -0.025
     context.sim.parameters['amp'] = amp
-    vm_rest, vm_offset = offset_vm(section, context, v_init, i_history=context.i_holding)
+    vm_rest, vm_offset, context.i_holding[section][v_init] = offset_vm(section, context, v_init)  # , i_history=context.i_holding)
     rec_dict = sim.get_rec(section)
     loc = rec_dict['loc']
     node = rec_dict['node']
@@ -228,6 +239,7 @@ def compute_features_leak(x, section, export=False, plot=False):
     result['%s R_inp' % section] = R_inp
     if section == 'soma':
         result['soma vm_rest'] = vm_rest
+        result['i_holding'] = context.i_holding
     if context.verbose > 0:
         print 'compute_features_leak: pid: %i; %s: %s took %.1f s; R_inp: %.1f' % \
               (os.getpid(), title, description, time.time() - start_time, R_inp)

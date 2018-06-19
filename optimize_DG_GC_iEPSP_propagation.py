@@ -23,7 +23,8 @@ context = Context()
 @click.option("--label", type=str, default=None)
 @click.option("--verbose", type=int, default=2)
 @click.option("--plot", is_flag=True)
-def main(config_file_path, output_dir, export, export_file_path, label, verbose, plot):
+@click.option("--run-tests", is_flag=True)
+def main(config_file_path, output_dir, export, export_file_path, label, verbose, plot, run_tests):
     """
 
     :param config_file_path: str (path)
@@ -33,15 +34,26 @@ def main(config_file_path, output_dir, export, export_file_path, label, verbose,
     :param label: str
     :param verbose: bool
     :param plot: bool
+    :param run_tests: bool
     """
     # requires a global variable context: :class:'Context'
     context.update(locals())
     disp = verbose > 0
     config_interactive(context, __file__, config_file_path=config_file_path, output_dir=output_dir, export=export,
                        export_file_path=export_file_path, label=label, disp=disp)
+
+    if run_tests:
+        unit_tests_iEPSP()
+
+
+def unit_tests_iEPSP():
+    """
+
+    """
+    features = dict()
     # Stage 0:
-    args = []
-    group_size = 1
+    args = get_args_dynamic_i_holding(context.x0_array, features)
+    group_size = len(args[0])
     sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
                 [[context.plot] * group_size]
     primitives = map(compute_features_iEPSP_i_unit, *sequences)
@@ -150,6 +162,7 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
     context.spike_output_vec = h.Vector()
     cell.spike_detector.record(context.spike_output_vec)
     context.cell = cell
+    config_sim_env(context)
 
 
 def config_sim_env(context):
@@ -223,10 +236,26 @@ def iEPSP_amp_error(x):
     return Err
 
 
-def compute_features_iEPSP_i_unit(x, export=False, plot=False):
+def get_args_dynamic_i_holding(x, features):
+    """
+    A nested map operation is required to compute iEPSP features. The arguments to be mapped depend on prior features
+    (dynamic).
+    :param x: array
+    :param features: dict
+    :return: list of list
+    """
+    if 'i_holding' not in features:
+        i_holding = context.i_holding
+    else:
+        i_holding = features['i_holding']
+    return [[i_holding]]
+
+
+def compute_features_iEPSP_i_unit(x, i_holding, export=False, plot=False):
     """
 
     :param x: array
+    :param i_holding: defaultdict(dict: float)
     :param export: bool
     :param plot: bool
     :return: dict
@@ -240,6 +269,7 @@ def compute_features_iEPSP_i_unit(x, export=False, plot=False):
     duration = context.sim_duration['unit']
 
     v_active = context.v_active
+    context.i_holding = i_holding
     offset_vm('soma', context, v_active, i_history=context.i_holding)
 
     sim = context.sim
@@ -256,6 +286,7 @@ def compute_features_iEPSP_i_unit(x, export=False, plot=False):
 
     result = dict()
     result['iEPSP_i_unit'] = i_EPSC
+    result['i_holding'] = context.i_holding
 
     title = 'iEPSP'
     description = 'i_unit: %.3f (nA)' % i_EPSC
@@ -277,20 +308,25 @@ def compute_features_iEPSP_i_unit(x, export=False, plot=False):
 
 def get_args_dynamic_iEPSP_attenuation(x, features):
     """
-    A nested map operation is required to compute iEPSP_propagation features. The arguments to be mapped depend on each
-    set of parameters and prior features (dynamic).
+    A nested map operation is required to compute iEPSP_propagation features. The arguments to be mapped depend on
+    prior features (dynamic).
     :param x: array
     :param features: dict
     :return: list of list
     """
+    if 'i_holding' not in features:
+        i_holding = context.i_holding
+    else:
+        i_holding = features['i_holding']
     i_EPSC = features['iEPSP_i_unit']
-    return [['long', 'short'], [i_EPSC, i_EPSC]]
+    return [[i_holding] * 2, ['long', 'short'], [i_EPSC, i_EPSC]]
 
 
-def compute_features_iEPSP_attenuation(x, ISI_key, i_EPSC, export=False, plot=False):
+def compute_features_iEPSP_attenuation(x, i_holding, ISI_key, i_EPSC, export=False, plot=False):
     """
 
     :param x:
+    :param i_holding: defaultdict(dict: float)
     :param ISI_key: str
     :param i_EPSC: float
     :param export:
@@ -311,6 +347,7 @@ def compute_features_iEPSP_attenuation(x, ISI_key, i_EPSC, export=False, plot=Fa
     context.i_EPSC['dend'] = i_EPSC
 
     v_active = context.v_active
+    context.i_holding = i_holding
     offset_vm('soma', context, v_active, i_history=context.i_holding)
 
     sim = context.sim

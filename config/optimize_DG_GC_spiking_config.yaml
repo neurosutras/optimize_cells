@@ -1,7 +1,7 @@
 bounds:
   dend.g_pas slope: !!python/tuple
-  - 1.0E-10
-  - 1.0E-5
+  - 1.0E-9
+  - 5.0E-5
   dend.g_pas tau: !!python/tuple
   - 25.
   - 400.
@@ -113,13 +113,14 @@ update_context:
   - update_mechanisms_spiking
 get_features_stages:
 - source: optimize_DG_GC_spiking
+  get_args_dynamic: get_args_dynamic_i_holding
   compute_features: compute_features_spike_shape
 - source: optimize_DG_GC_spiking
   get_args_dynamic: get_args_dynamic_fI
   compute_features: compute_features_fI
   filter_features: filter_features_fI
 - source: optimize_DG_GC_spiking
-  get_args_static: get_args_static_dend_spike
+  get_args_dynamic: get_args_dynamic_dend_spike
   compute_features: compute_features_dend_spike
   filter_features: filter_features_dend_spike
 get_objectives:
@@ -130,7 +131,7 @@ kwargs:
   cell_type: GC
   correct_for_spines: True
   verbose: 2
-  daspk: True
+  daspk: False
   configFile: ../dentate/config/Small_Scale_Control_log_normal_weights.yaml
   templatePaths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoclibPath: ../dentate
@@ -148,7 +149,7 @@ objective_names:
 - slow_depo
 - dend_bAP_ratio
 - soma_spike_amp
-- th_count
+# - th_count
 - adi_residuals
 - f_I_residuals
 - dend_spike_score

@@ -125,23 +125,25 @@ update_context:
   - update_mechanisms_spiking
 get_features_stages:
 - source: optimize_DG_GC_leak
-  compute_features: compute_features_leak
   get_args_static: get_args_static_leak
+  compute_features: compute_features_leak
 - source: optimize_DG_GC_spiking
+  get_args_dynamic: get_args_dynamic_i_holding
   compute_features: compute_features_spike_shape
 - source: optimize_DG_GC_spiking
   get_args_dynamic: get_args_dynamic_fI
   compute_features: compute_features_fI
   filter_features: filter_features_fI
 - source: optimize_DG_GC_spiking
-  get_args_static: get_args_static_dend_spike
+  get_args_dynamic: get_args_dynamic_dend_spike
   compute_features: compute_features_dend_spike
   filter_features: filter_features_dend_spike
 - source: optimize_DG_GC_iEPSP_propagation
+  get_args_dynamic: get_args_dynamic_i_holding
   compute_features: compute_features_iEPSP_i_unit
 - source: optimize_DG_GC_iEPSP_propagation
-  compute_features: compute_features_iEPSP_attenuation
   get_args_dynamic: get_args_dynamic_iEPSP_attenuation
+  compute_features: compute_features_iEPSP_attenuation
 get_objectives:
   optimize_DG_GC_leak: get_objectives_leak
   optimize_DG_GC_spiking: get_objectives_spiking
@@ -152,7 +154,7 @@ kwargs:
   cell_type: GC
   correct_for_spines: True
   verbose: 2
-  daspk: True
+  daspk: False
   configFile: ../dentate/config/Small_Scale_Control_log_normal_weights.yaml
   templatePaths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoclibPath: ../dentate
