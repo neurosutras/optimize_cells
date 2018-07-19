@@ -108,10 +108,10 @@ kwargs:
   correct_for_spines: True
   verbose: 2
   daspk: True
-  configFile: ../dentate/config/Small_Scale_Control_log_normal_weights.yaml
-  templatePaths: ../dgc/Mateos-Aparicio2014:../dentate/templates
+  configFile: Small_Scale_Control_log_normal_weights.yaml
+  templatePaths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoclibPath: ../dentate
-  # datasetPrefix: /mnt/s
+  configPrefix: ../dentate/config
   datasetPrefix: ../dentate/datasets
   resultsPath: data
 objective_names:
