@@ -32,25 +32,21 @@ def standard_modify_mech_param_tests(cell):
     modify_mech_param(cell, 'soma', 'pas', 'g', x['soma.g_pas'])
     soma_seg = cell.tree.root.sec(0.5)
     compare_single_value('soma.g_pas', x, soma_seg, 'pas', 'g')
+    this_sec_types = ['soma', 'apical', 'axon']
 
-    plot_mech_param_distribution(cell, 'pas', 'g', export='dend_gpas.hdf5', description='stage0', show=True,
-                                 sec_types='all', overwrite=True, param_label='dend.gpas')
     modify_mech_param(cell, 'apical', 'pas', 'g', origin='soma', slope=x['dend.g_pas slope'], tau=x['dend.g_pas tau'])
-    plot_mech_param_distribution(cell, 'pas', 'g', export='dend_gpas.hdf5', description='stage1', show=True,
-                                 sec_types='all', param_label='dend.gpas')
-    for sec_type in ['hillock', 'ais', 'axon', 'spine_neck', 'spine_head']:
+    for sec_type in ['hillock', 'ais', 'axon']:
         modify_mech_param(cell, sec_type, 'pas', 'g', origin='soma')
-    modify_mech_param(cell, 'soma', 'pas', 'g', 2. * x['soma.g_pas'])
-    for sec_type in ['hillock', 'ais', 'axon', 'apical','spine_neck', 'spine_head']:
+    plot_mech_param_distribution(cell, 'pas', 'g', export='dend_gpas.hdf5', description='leak_config_1', show=False,
+                                 sec_types=this_sec_types, param_label='leak conductance', overwrite=True)
+    modify_mech_param(cell, 'soma', 'pas', 'g', 100000. * x['soma.g_pas'])
+    for sec_type in ['hillock', 'ais', 'axon', 'apical']:
         update_mechanism_by_sec_type(cell, sec_type, 'pas')
-    plot_mech_param_distribution(cell, 'pas', 'g', export='dend_gpas.hdf5', description='stage2', show=True,
-                                 sec_types='all', param_label='dend.gpas')
-    plot_mech_param_from_file('pas', 'g', 'dend_gpas.hdf5', param_label='dend.gpas')
+    plot_mech_param_distribution(cell, 'pas', 'g', export='dend_gpas.hdf5', description='leak_config_2', show=False,
+                                 sec_types=this_sec_types, param_label='leak conductance')
+    plot_mech_param_from_file('pas', 'g', 'dend_gpas.hdf5', param_label='leak conductance')
 
     modify_mech_param(cell, 'soma', 'kap', 'gkabar', x['soma.gkabar'])
-    plot_mech_param_distribution(cell, 'kap', 'gkabar', export='dend_kap.hdf5', description='stage0',
-                                 param_label='dend.kap', show=False, sec_types='all', overwrite=True)
-
     slope = (x['dend.gkabar'] - x['soma.gkabar']) / 300.
     for sec_type in ['apical']:
         modify_mech_param(cell, sec_type, 'kap', 'gkabar', origin='soma', max_loc=75., slope=slope, outside=0.)
@@ -58,29 +54,36 @@ def standard_modify_mech_param_tests(cell):
                           outside=0., value=(x['soma.gkabar'] + slope * 75.))
         modify_mech_param(cell, sec_type, 'kad', 'gkabar', origin='soma', min_loc=300.,
                           value=(x['soma.gkabar'] + slope * 300.), append=True)
+    plot_mech_param_distribution(cell, 'kap', 'gkabar', export='dend_ka.hdf5', description='kap_config_1',
+                                 param_label='kap conductance', show=False, sec_types=['soma', 'apical'],
+                                 overwrite=True)
+    plot_mech_param_distribution(cell, 'kad', 'gkabar', export='dend_ka.hdf5', description='kad_config_1',
+                                 param_label='kad conductance', show=False, sec_types='dend')
 
-    # should do nothing
-    update_mechanism_by_sec_type(cell, 'axon_hill', 'kap')
+    update_mechanism_by_sec_type(cell, 'axon_hill', 'kap')  # should do nothing
     modify_mech_param(cell, 'ais', 'kap', 'gkabar', x['axon.gkabar'])
     modify_mech_param(cell, 'axon', 'kap', 'gkabar', origin='ais')
-    plot_mech_param_distribution(cell, 'kap', 'gkabar', export='dend_kap.hdf5', description='stage1',
-                                 param_label='dend.kap', show=False, sec_types='all')
-    plot_mech_param_from_file('kap', 'gkabar', 'dend_kap.hdf5', param_label='dend.kap')
-    plot_mech_param_distribution(cell, 'kad', 'gkabar', param_label='dend.kad', show=False, sec_types='all')
+    plot_mech_param_distribution(cell, 'kap', 'gkabar', export='dend_ka.hdf5', description='kap_config_2',
+                                 param_label='kap conductance', show=False, sec_types=this_sec_types)
+    plot_mech_param_from_file('kap', 'gkabar', 'dend_ka.hdf5')  #, param_label='kap conductance')
+    plot_mech_param_from_file('kad', 'gkabar', 'dend_ka.hdf5')  #, param_label='kad conductance')
+
     modify_mech_param(cell, 'soma', 'nas', 'gbar', x['soma.gbar_nas'])
-    plot_mech_param_distribution(cell, 'nas', 'gbar', export='dend_nas.hdf5', description='stage0',
-                                 show=False, sec_types='all', overwrite=True)
-    for sec_type in ['apical']:
-        modify_mech_param(cell, sec_type, 'nas', 'gbar', x['dend.gbar_nas'])
-        modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=x['dend.gbar_nas slope'],
-                          min=x['dend.gbar_nas min'],
-                          custom={'func': 'custom_filter_by_branch_order',
-                                  'branch_order': x['dend.gbar_nas bo']}, append=True)
-        modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=x['dend.gbar_nas slope'],
-                          min=x['dend.gbar_nas min'], custom={'func': 'custom_filter_by_terminal'}, append=True)
-    plot_mech_param_distribution(cell, 'nas', 'gbar', export='dend_nas.hdf5', description='stage1', show=False,
-                                 sec_types='all')
-    plot_mech_param_from_file('nas', 'gbar', 'dend_nas.hdf5', ['stage0', 'stage1'])
+    modify_mech_param(cell, 'apical', 'nas', 'gbar', x['dend.gbar_nas'])
+    plot_mech_param_distribution(cell, 'nas', 'gbar', export='dend_nas.hdf5', description='nas_config_1', show=False,
+                                 sec_types=['apical'], overwrite=True)
+    modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=x['dend.gbar_nas slope'],
+                      min=x['dend.gbar_nas min'],
+                      custom={'func': 'custom_filter_by_branch_order',
+                              'branch_order': x['dend.gbar_nas bo']}, append=True)
+    plot_mech_param_distribution(cell, 'nas', 'gbar', export='dend_nas.hdf5', description='nas_config_2', show=False,
+                                 sec_types=['apical'])
+    modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=x['dend.gbar_nas slope'],
+                      min=x['dend.gbar_nas min'], custom={'func': 'custom_filter_by_terminal'}, append=True)
+    plot_mech_param_distribution(cell, 'nas', 'gbar', export='dend_nas.hdf5', description='nas_config_3', show=False,
+                                 sec_types=['apical'])
+    plot_mech_param_from_file('nas', 'gbar', 'dend_nas.hdf5', param_label='nas conductance',
+                              descriptions=['nas_config_1', 'nas_config_2', 'nas_config_3'])
 
 
 def count_nseg(cell):
@@ -226,7 +229,7 @@ def standard_modify_syn_mech_param_tests(cell, env):
     syn_id_attr_dict = syn_attrs.syn_id_attr_dict[cell.gid]
     sec_index_map = syn_attrs.sec_index_map[cell.gid]
     sec_type = 'apical'
-    syn_name = 'AMPA'
+    syn_name = 'SatAMPA'
     param_name = 'g_unit'
 
     modify_syn_mech_param(cell, env, sec_type, syn_name, param_name=param_name, value=0.0005,
@@ -234,7 +237,7 @@ def standard_modify_syn_mech_param_tests(cell, env):
                           update_targets=True)
     plot_synaptic_attribute_distribution(cell, env, gid, syn_name, param_name, filters=None, from_mech_attrs=True,
                                          from_target_attrs=True, param_label='AMPA.g_unit', export='syn_attrs.hdf5',
-                                         description='stage1', show=True)
+                                         description='stage1', show=True, overwrite=True)
     modify_syn_mech_param(cell, env, sec_type, syn_name, param_name=param_name,
                           filters={'syn_types': ['excitatory'], 'layers': ['OML']}, origin='apical',
                           origin_filters={'syn_types': ['excitatory'], 'layers': ['MML']}, update_targets=True,
@@ -248,40 +251,47 @@ def standard_modify_syn_mech_param_tests(cell, env):
 @click.command()
 @click.option("--gid", required=True, type=int, default=0)
 @click.option("--pop-name", required=True, type=str, default='GC')
-@click.option("--config-file", required=True, type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='../dentate/config/Small_Scale_Control_log_normal_weights.yaml')
-@click.option("--template-paths", type=str, default='../dgc/Mateos-Aparicio2014:../dentate/templates')
+@click.option("--config-file", required=True, type=str,
+              default='Small_Scale_Control_log_normal_weights.yaml')
+@click.option("--template-paths", type=str, default='../DGC/Mateos-Aparicio2014:../dentate/templates')
 @click.option("--hoc-lib-path", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
               default='../dentate')
 @click.option("--dataset-prefix", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
-              default='/mnt/s')  # '/mnt/s')  # '../dentate/datasets'
-@click.option("--mech-file-path", required=True, type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='mechanisms/20180529_DG_GC_mech.yaml')
+              default='../dentate/datasets')
+@click.option("--config-prefix", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
+              default='../dentate/config')
+@click.option("--mech-file", required=True, type=str, default='20180605_DG_GC_excitability_mech.yaml')
 @click.option('--verbose', '-v', is_flag=True)
-def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefix, mech_file_path, verbose):
+def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefix, config_prefix, mech_file,
+         verbose):
     """
 
-    :param gid:
-    :param pop_name:
-    :param config_file:
-    :param template_paths:
-    :param hoc_lib_path:
-    :param dataset_prefix:
-    :param verbose
+    :param gid: int
+    :param pop_name: str
+    :param config_file: str; model configuration file name
+    :param template_paths: str; colon-separated list of paths to directories containing hoc cell templates
+    :param hoc_lib_path: str; path to directory containing required hoc libraries
+    :param dataset_prefix: str; path to directory containing required neuroh5 data files
+    :param config_prefix: str; path to directory containing network and cell mechanism config files
+    :param mech_file: str; cell mechanism config file name
+    :param verbose: bool
     """
     comm = MPI.COMM_WORLD
     np.seterr(all='raise')
-    env = Env(comm, config_file, template_paths, hoc_lib_path, dataset_prefix, verbose=verbose)
+    env = Env(comm, config_file, template_paths, hoc_lib_path, dataset_prefix, config_prefix, verbose=verbose)
     configure_env(env)
 
     cell = get_biophys_cell(env, gid, pop_name)
     context.update(locals())
 
-    #standard_modify_mech_param_tests(cell)
+    standard_modify_mech_param_tests(cell)
+
+    mech_file_path = config_prefix + '/' + mech_file
+
     standard_cable_tests(cell, mech_file_path)
     cm_correction_test(cell, env, mech_file_path)
-    #count_spines(cell, env)
-    #standard_modify_syn_mech_param_tests(cell, env)
+    count_spines(cell, env)
+    standard_modify_syn_mech_param_tests(cell, env)
 
 
 if __name__ == '__main__':
