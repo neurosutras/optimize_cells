@@ -345,7 +345,7 @@ def plot_synaptic_parameter_GC(rec_file_list, param_names=None, description_list
     plt.close()
 
 
-def plot_synaptic_attribute_distribution(cell, env, gid, syn_name, param_name, filters=None, from_mech_attrs=True,
+def plot_synaptic_attribute_distribution(cell, env, syn_name, param_name, filters=None, from_mech_attrs=True,
                                          from_target_attrs=False, export=None, overwrite=False, description=None,
                                          scale_factor=1., param_label=None, ylabel='Peak conductance', yunits='uS',
                                          svg_title=None, show=True, sec_types=None, data_dir='data'):
@@ -359,7 +359,6 @@ def plot_synaptic_attribute_distribution(cell, env, gid, syn_name, param_name, f
 
     :param cell: :class:'BiophysCell'
     :param env: :class:'Env'
-    :param gid: int
     :param syn_name: str
     :param param_name: str
     :param filters: dict (ex. syn_indexes, layers, syn_types) with str values
@@ -402,6 +401,7 @@ def plot_synaptic_attribute_distribution(cell, env, gid, syn_name, param_name, f
     color_x = np.linspace(0., 1., num_colors)
     colors = [cm.Set1(x) for x in color_x]
     syn_attrs = env.synapse_attributes
+    gid = cell.gid
     for sec_type in sec_types_list:
         if len(cell.nodes[sec_type]) > 0:
             for node in cell.nodes[sec_type]:
@@ -416,7 +416,7 @@ def plot_synaptic_attribute_distribution(cell, env, gid, syn_name, param_name, f
                     if from_mech_attrs:
                         this_param_val = syn_attrs.get_mech_attrs(gid, syn_id, syn_name)
                         if this_param_val is not None:
-                            attr_vals['mech_attrs'][sec_type].append(this_param_val[param_name])
+                            attr_vals['mech_attrs'][sec_type].append(this_param_val[param_name] * scale_factor)
                             syn_loc = syn_attrs.syn_id_attr_dict[gid]['syn_locs'][syn_attrs.syn_id_attr_index_map[gid][syn_id]]
                             distances['mech_attrs'][sec_type].append(get_distance_to_node(cell, cell.tree.root, node, syn_loc))
                             if sec_type == 'basal':
@@ -427,7 +427,7 @@ def plot_synaptic_attribute_distribution(cell, env, gid, syn_name, param_name, f
                             attr_vals['target_attrs'][sec_type].append(get_syn_mech_param(syn_name, syn_attrs.syn_param_rules,
                                                                                           param_name,
                                                                                           mech_names=syn_attrs.syn_mech_names,
-                                                                                          nc=this_nc))
+                                                                                          nc=this_nc) * scale_factor)
                             syn_loc = syn_attrs.syn_id_attr_dict[gid]['syn_locs'][syn_attrs.syn_id_attr_index_map[gid][syn_id]]
                             distances['target_attrs'][sec_type].append(get_distance_to_node(cell, cell.tree.root, node, syn_loc))
                             if sec_type == 'basal':
@@ -479,7 +479,6 @@ def plot_synaptic_attribute_distribution(cell, env, gid, syn_name, param_name, f
         else:
             axes.set_title('Plot from ' + attr_type, fontsize=mpl.rcParams['font.size'])
         clean_axes(axes)
-    plt.show()
     if not svg_title is None:
         if param_label is not None:
             svg_title = svg_title + ' - ' + param_label + '.svg'
@@ -526,8 +525,7 @@ def plot_synaptic_attribute_distribution(cell, env, gid, syn_name, param_name, f
         f[filetype][session_id][syn_name].create_group(param_name)
         if param_label is not None:
             f[filetype][session_id][syn_name][param_name].attrs['param_label'] = param_label
-        if gid is not None:
-            f[filetype][session_id][syn_name][param_name].attrs['gid'] = gid
+        f[filetype][session_id][syn_name][param_name].attrs['gid'] = cell.gid
         if svg_title is not None:
             f[filetype][session_id][syn_name][param_name].attrs['svg_title'] = svg_title
         for attr_type in attr_types:
@@ -609,8 +607,8 @@ def plot_syn_attr_from_file(syn_name, param_name, filename, descriptions=None, p
                                 label = sec_type + ' session' + session_id
                             else:
                                 label = sec_type + ' ' + description
-                            axes.scatter(distances, param_vals, color=colors[s], label=label, alpha=0.5,
-                                         marker=marker)
+                            axes.scatter(distances, param_vals, color=colors[s], label=label, alpha=0.25,
+                                         marker=marker, s=10.)
                             if max_param_val is None:
                                 max_param_val = max(param_vals)
                             else:
@@ -667,7 +665,7 @@ def plot_syn_attr_from_file(syn_name, param_name, filename, descriptions=None, p
 
 def plot_mech_param_distribution(cell, mech_name, param_name, export=None, overwrite=False, scale_factor=10000.,
                                  param_label=None, description=None, ylabel='Conductance density', yunits='pS/um2',
-                                 svg_title=None, show=True, sec_types=None, data_dir='data', gid=None):
+                                 svg_title=None, show=True, sec_types=None, data_dir='data'):
     """
     Takes a cell as input rather than a file. No simulation is required, this method just takes a fully specified cell
     and plots the relationship between distance and the specified mechanism parameter for all segments in sections of
@@ -687,7 +685,6 @@ def plot_mech_param_distribution(cell, mech_name, param_name, export=None, overw
     :param show: bool
     :param sec_types: list or str
     :param data_dir: str (path)
-    :param gid: int
     """
     if svg_title is not None:
         remember_font_size = mpl.rcParams['font.size']
@@ -784,8 +781,7 @@ def plot_mech_param_distribution(cell, mech_name, param_name, export=None, overw
         f[filetype][session_id][mech_name].create_group(param_name)
         if param_label is not None:
             f[filetype][session_id][mech_name][param_name].attrs['param_label'] = param_label
-        if gid is not None:
-            f[filetype][session_id][mech_name][param_name].attrs['gid'] = gid
+        f[filetype][session_id][mech_name][param_name].attrs['gid'] = cell.gid
         if svg_title is not None:
             f[filetype][session_id][mech_name][param_name].attrs['svg_title'] = svg_title
         for sec_type in param_vals:
@@ -799,7 +795,7 @@ def plot_mech_param_distribution(cell, mech_name, param_name, export=None, overw
 
 def plot_cable_param_distribution(cell, mech_name, export=None, overwrite=False, scale_factor=1., param_label=None,
                                   description=None, ylabel='Specific capacitance', yunits='uF/cm2', svg_title=None,
-                                  show=True, data_dir='data', gid=None):
+                                  show=True, data_dir='data', sec_types=None):
     """
     Takes a cell as input rather than a file. No simulation is required, this method just takes a fully specified cell
     and plots the relationship between distance and the specified mechanism parameter for all dendritic segments. Used
@@ -815,16 +811,22 @@ def plot_cable_param_distribution(cell, mech_name, export=None, overwrite=False,
     :param yunits: str
     :param svg_title: str
     :param data_dir: str (path)
+    :param sec_types: list of str
     """
     if svg_title is not None:
         remember_font_size = mpl.rcParams['font.size']
         mpl.rcParams['font.size'] = 20
-    sec_types = default_ordered_sec_types
+    if sec_types is None or (isinstance(sec_types, str) and sec_types == 'dend'):
+        sec_types = ['basal', 'trunk', 'apical', 'tuft']
+    elif isinstance(sec_types, str) and sec_types == 'all':
+        sec_types = default_ordered_sec_types
+    elif not all(sec_type in default_ordered_sec_types for sec_type in sec_types):
+        raise ValueError('plot_synaptic_attribute_distribution: unrecognized sec_types: %s' % str(sec_types))
+    sec_types_list = [sec_type for sec_type in sec_types if sec_type in cell.nodes and len(cell.nodes[sec_type]) > 0]
     fig, axes = plt.subplots(1)
     maxval, minval = 1., 0.
     distances = defaultdict(list)
     param_vals = defaultdict(list)
-    sec_types_list = [sec_type for sec_type in sec_types if sec_type in cell.nodes  and len(cell.nodes[sec_type]) > 0]
     num_colors = len(sec_types_list)
     color_x = np.linspace(0., 1., num_colors)
     colors = [cm.Set1(x) for x in color_x]
@@ -906,8 +908,7 @@ def plot_cable_param_distribution(cell, mech_name, export=None, overwrite=False,
         f[filetype][session_id].create_group(mech_name)
         if param_label is not None:
             f[filetype][session_id][mech_name].attrs['param_label'] = param_label
-        if gid is not None:
-            f[filetype][session_id][mech_name].attrs['gid'] = gid
+        f[filetype][session_id][mech_name].attrs['gid'] = cell.gid
         if svg_title is not None:
             f[filetype][session_id][mech_name].attrs['svg_title'] = svg_title
         for sec_type in param_vals:
