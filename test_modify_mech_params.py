@@ -284,17 +284,15 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     env = Env(comm, config_file, template_paths, hoc_lib_path, dataset_prefix, config_prefix, verbose=verbose)
     configure_env(env)
 
+    mech_file_path = config_prefix + '/' + mech_file
     cell = get_biophys_cell(env, gid, pop_name)
     context.update(locals())
 
-    #standard_modify_mech_param_tests(cell)
-
-    mech_file_path = config_prefix + '/' + mech_file
-
-    #standard_cable_tests(cell, mech_file_path)
-    #cm_correction_test(cell, env, mech_file_path)
-    #count_spines(cell, env)
-    standard_modify_syn_mech_param_tests(cell, env)
+    # standard_modify_mech_param_tests(cell)
+    # standard_cable_tests(cell, mech_file_path)
+    # cm_correction_test(cell, env, mech_file_path)
+    # count_spines(cell, env)
+    # standard_modify_syn_mech_param_tests(cell, env)
 
 
 if __name__ == '__main__':

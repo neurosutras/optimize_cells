@@ -449,7 +449,7 @@ def plot_synaptic_attribute_distribution(cell, env, syn_name, param_name, filter
         for j, sec_type in enumerate(attr_vals[attr_type]):
             if len(attr_vals[attr_type][sec_type]) != 0:
                 axes.scatter(distances[attr_type][sec_type], attr_vals[attr_type][sec_type], color=colors[j],
-                             label=sec_type, alpha=0.5)
+                             label=sec_type, alpha=0.5, s=10.)
                 if maxval is None:
                     maxval = max(attr_vals[attr_type][sec_type])
                 else:
