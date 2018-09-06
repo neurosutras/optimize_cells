@@ -818,22 +818,22 @@ def add_diagnostic_recordings(context):
     """
     cell = context.cell
     sim = context.sim
-    #if not sim.has_rec('ica'):
-    #    sim.append_rec(cell, cell.tree.root, name='ica', param='_ref_ica', loc=0.5)
-    #if not sim.has_rec('isk'):
-    #    sim.append_rec(cell, cell.tree.root, name='isk', param='_ref_isk_CadepK', loc=0.5)
-    #if not sim.has_rec('ibk'):
-    #    sim.append_rec(cell, cell.tree.root, name='ibk', param='_ref_ibk_CadepK', loc=0.5)
-    #if not sim.has_rec('ika'):
-    #    sim.append_rec(cell, cell.tree.root, name='ika', param='_ref_ik_kap', loc=0.5)
-    #if not sim.has_rec('ikdr'):
-    #    sim.append_rec(cell, cell.tree.root, name='ikdr', param='_ref_ik_kdr', loc=0.5)
-    #if not sim.has_rec('ikm'):
-    #    sim.append_rec(cell, cell.tree.root, name='ikm', param='_ref_ik_km3', loc=0.5)
-    #if not sim.has_rec('cai'):
-    #    sim.append_rec(cell, cell.tree.root, name='cai', param='_ref_cai', loc=0.5)
-    #if not sim.has_rec('ina'):
-    #    sim.append_rec(cell, cell.tree.root, name='ina', param='_ref_ina', loc=0.5)
+    if not sim.has_rec('ica'):
+        sim.append_rec(cell, cell.tree.root, name='ica', param='_ref_ica', loc=0.5)
+    if not sim.has_rec('isk'):
+        sim.append_rec(cell, cell.tree.root, name='isk', param='_ref_isk_CadepK', loc=0.5)
+    if not sim.has_rec('ibk'):
+        sim.append_rec(cell, cell.tree.root, name='ibk', param='_ref_ibk_CadepK', loc=0.5)
+    if not sim.has_rec('ika'):
+        sim.append_rec(cell, cell.tree.root, name='ika', param='_ref_ik_kap', loc=0.5)
+    if not sim.has_rec('ikdr'):
+        sim.append_rec(cell, cell.tree.root, name='ikdr', param='_ref_ik_kdr', loc=0.5)
+    if not sim.has_rec('ikm'):
+        sim.append_rec(cell, cell.tree.root, name='ikm', param='_ref_ik_km3', loc=0.5)
+    if not sim.has_rec('cai'):
+        sim.append_rec(cell, cell.tree.root, name='cai', param='_ref_cai', loc=0.5)
+    if not sim.has_rec('ina'):
+        sim.append_rec(cell, cell.tree.root, name='ina', param='_ref_ina', loc=0.5)
     if not sim.has_rec('axon_end'):
         axon_seg_locs = [seg.x for seg in cell.axon[0].sec]
         sim.append_rec(cell, cell.axon[0], name='axon_end', loc=axon_seg_locs[-1])
