@@ -442,14 +442,14 @@ def get_spike_shape(vm, spike_times, context=None):
         raise RuntimeError('get_spike_shape: pid: %i; missing required Context object' % os.getpid())
     equilibrate = context.equilibrate
     dt = context.dt
-    th_dvdt = context.th_dvdt
+    th_dvdt = context.th_dvdt #voltage change at threshold
 
-    start = int((equilibrate + 1.) / dt)
+    start = int((equilibrate + 1.) / dt) #start time after equilibrate, expressed in time step
     vm = vm[start:]
-    dvdt = np.gradient(vm, dt)
+    dvdt = np.gradient(vm, dt) #voltage change slope
     th_x_indexes = np.where(dvdt >= th_dvdt)[0]
     if th_x_indexes.any():
-        th_x = th_x_indexes[0] - int(1.6 / dt)
+        th_x = th_x_indexes[0] - int(1.6 / dt) #why subtract 1.6/dt?
     else:
         th_x_indexes = np.where(vm > -30.)[0]
         if th_x_indexes.any():

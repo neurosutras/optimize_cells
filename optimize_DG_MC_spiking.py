@@ -16,7 +16,7 @@ context = Context()
 
 @click.command()
 @click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='config/optimize_DG_GC_spiking_config.yaml')
+              default='config/optimize_DG_MC_spiking_config.yaml')
 @click.option("--output-dir", type=click.Path(exists=True, file_okay=False, dir_okay=True), default='data')
 @click.option("--export", is_flag=True)
 @click.option("--export-file-path", type=str, default=None)
@@ -59,29 +59,20 @@ def unit_tests_spiking(context):
     """
     features = dict()
     # Stage 0:
-    args = get_args_dynamic_i_holding(context.x0_array, features)
+    args = get_args_dynamic_i_holding(context.x0_array, features) #get holding voltage
     group_size = len(args[0])
     sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
-                [[context.plot] * group_size]
-    primitives = map(compute_features_spike_shape, *sequences) ##Get spike for soma
+                [[context.plot] * group_size] #combine x0 of paramaters, i_holding, export, and plot
+    primitives = map(compute_features_spike_shape, *sequences) ##Get rheobase, ADP, fAHP, mAHP threshold, dend_bAP_ratio, ais_delay w/ baseline parameters
     features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
 
     # Stage 1: Run simulation with variety of step current magnitudes
-    args = get_args_dynamic_fI(context.x0_array, features)
+    args = get_args_dynamic_fI(context.x0_array, features) #return holding vm w/ necessary i_holding, rheobase + increments,
     group_size = len(args[0])
     sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
                 [[context.plot] * group_size]
-    primitives = map(compute_features_fI, *sequences) #compute features for each sequence
+    primitives = map(compute_features_fI, *sequences) #Return spike times and current amplitude for sequence to compute f-I. Last one has extend_dur true, computes vm_stability, rebound_firing, vm_th_late
     this_features = filter_features_fI(primitives, features, context.export)
-    features.update(this_features)
-
-    # Stage 2:
-    args = get_args_dynamic_dend_spike(context.x0_array, features)
-    group_size = len(args[0])
-    sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
-                [[context.plot] * group_size]
-    primitives = map(compute_features_dend_spike, *sequences)
-    this_features = filter_features_dend_spike(primitives, features, context.export)
     features.update(this_features)
 
     features, objectives = get_objectives_spiking(features)
@@ -93,41 +84,12 @@ def unit_tests_spiking(context):
     pprint.pprint(objectives)
 
 
-def config_controller(export_file_path, output_dir, **kwargs):
-    """
 
-    :param export_file_path: str (path)
-    :param output_dir: str (dir)
-    """
-    context.update(locals())
-    context.update(kwargs)
-    init_context()
+def config_worker():
 
 
-def config_worker(update_context_funcs, param_names, default_params, feature_names, objective_names, target_val,
-                  target_range, temp_output_path, export_file_path, output_dir, disp, mech_file_path, gid,
-                  cell_type, correct_for_spines, **kwargs):
-    """
-    :param update_context_funcs: list of function references
-    :param param_names: list of str
-    :param default_params: dict
-    :param feature_names: list of str
-    :param objective_names: list of str
-    :param target_val: dict
-    :param target_range: dict
-    :param temp_output_path: str
-    :param export_file_path: str
-    :param output_dir: str (dir path)
-    :param disp: bool
-    :param mech_file_path: str
-    :param gid: int
-    :param cell_type: str
-    :param correct_for_spines: bool
-    """
-    context.update(locals())
-    context.update(kwargs)
     if not context_has_sim_env(context):
-        build_sim_env(context, **kwargs)
+        build_sim_env(context, **context.kwargs)
 
 
 def context_has_sim_env(context):
@@ -151,19 +113,19 @@ def init_context():
     dt = 0.025
     th_dvdt = 10.
     dend_th_dvdt = 30.
-    v_init = -77.
-    v_active = -77.
+    v_init = -60.
+    v_active = -60.
     i_th_start = 0.2
     i_th_max = 0.4
 
     # GC experimental spike adaptation data from Brenner...Aldrich, Nat. Neurosci., 2005
-    experimental_spike_times = [0., 8.57331572, 21.79656539, 39.24702774, 60.92470277, 83.34214003, 109.5640687,
-                                137.1598415, 165.7067371, 199.8546896, 236.2219287, 274.3857332, 314.2404227,
-                                355.2575958, 395.8520476, 436.7635403]
-    experimental_adi_array = get_spike_adaptation_indexes(experimental_spike_times)
+    ##experimental_spike_times = [0., 8.57331572, 21.79656539, 39.24702774, 60.92470277, 83.34214003, 109.5640687,
+    ##                            137.1598415, 165.7067371, 199.8546896, 236.2219287, 274.3857332, 314.2404227,
+    ##                            355.2575958, 395.8520476, 436.7635403]
+    ##experimental_adi_array = get_spike_adaptation_indexes(experimental_spike_times)
 
     # GC experimental f-I data from Kowalski J...Pernia-Andrade AJ, Hippocampus, 2016
-    i_inj_increment = 0.02
+    i_inj_increment = 0.04
     num_increments = 10
     context.update(locals())
 
@@ -197,12 +159,10 @@ def get_spike_adaptation_indexes(spike_times):
     :return: array
     """
     if len(spike_times) < 3:
-        return None
+        return 0
     isi = np.diff(spike_times)
-    adi = []
-    for i in xrange(len(isi) - 1):
-        adi.append((isi[i + 1] - isi[i]) / (isi[i + 1] + isi[i]))
-    return np.array(adi)
+    adi_perc = 100*(isi[len(isi)-1]-isi[len(isi)-2]) / (isi[1]-isi[0])
+    return adi_perc
 
 
 def config_sim_env(context):
@@ -272,6 +232,10 @@ def compute_features_spike_shape(x, i_holding, export=False, plot=False):
     :param plot: bool
     :return: dict
     """
+
+    ##temp initial i_holding amplitude
+    i_holding['soma'][context.v_init] = 0.25
+    ##
     start_time = time.time()
     config_sim_env(context)
     update_source_contexts(x, context)
@@ -283,7 +247,7 @@ def compute_features_spike_shape(x, i_holding, export=False, plot=False):
     v_active = context.v_active
     sim = context.sim
     context.i_holding = i_holding
-    offset_vm('soma', context, v_active, i_history=context.i_holding)
+    offset_vm('soma', context, v_active, i_history=context.i_holding) #change holding current amplitude till holding resting membrane potential reached
     spike_times = np.array(context.cell.spike_detector.get_recordvec())
     if np.any(spike_times < equilibrate):
         if context.verbose > 0:
@@ -359,7 +323,7 @@ def compute_features_spike_shape(x, i_holding, export=False, plot=False):
     sim.parameters['description'] = description
     sim.parameters['duration'] = duration
 
-    spike_shape_dict = get_spike_shape(soma_vm, spike_times, context)
+    spike_shape_dict = get_spike_shape(soma_vm, spike_times, context) #get info on spike/AHP/ADP threshold, amplitude, etc
     if spike_shape_dict is None:
         if context.verbose > 0:
             print 'compute_features_spike_shape: pid: %i; aborting - problem analyzing spike shape' % (os.getpid())
@@ -453,7 +417,7 @@ def compute_features_fI(x, i_holding, amp, extend_dur=False, export=False, plot=
 
     v_active = context.v_active
     context.i_holding = i_holding
-    offset_vm('soma', context, v_active, i_history=context.i_holding)
+    #offset_vm('soma', context, v_active, i_history=context.i_holding)
     sim = context.sim
     dt = context.dt
     stim_dur = context.stim_dur
@@ -518,13 +482,13 @@ def compute_features_fI(x, i_holding, amp, extend_dur=False, export=False, plot=
 def filter_features_fI(primitives, current_features, export=False):
     """
 
-    :param primitives: list of dict (each dict contains results from a single simulation)
+    :param primitives: list of dict (each dict contains results from a single simulation, in this case spike times and current amplitude)
     :param current_features: dict
     :param export: bool
     :return: dict
     """
-    exp_spikes = context.experimental_spike_times
-    exp_adi = context.experimental_adi_array
+    ##exp_spikes = context.experimental_spike_times
+    ##exp_adi = context.experimental_adi_array
     stim_dur = context.stim_dur
 
     new_features = dict()
@@ -535,7 +499,7 @@ def filter_features_fI(primitives, current_features, export=False):
 
     indexes = range(len(i_amp))
     indexes.sort(key=i_amp.__getitem__)
-    for i in indexes:
+    for i in indexes: #loop through primitives, extracting spike rate, adi, vm_stability, rebound_firing, and slow_depol
         this_dict = primitives[i]
         if 'vm_stability' in this_dict:
             new_features['vm_stability'] = this_dict['vm_stability']
@@ -544,11 +508,8 @@ def filter_features_fI(primitives, current_features, export=False):
         if 'vm_th_late' in this_dict:
             new_features['slow_depo'] = abs(this_dict['vm_th_late'] - current_features['vm_th'])
         spike_times = this_dict['spike_times']
-        if (len(exp_spikes) - 2 < len(spike_times) < len(exp_spikes) + 2) or \
-                (len(adi) == 0 and (len(spike_times) > len(exp_spikes) or i == len(primitives) - 1)):
-            this_adi_array = get_spike_adaptation_indexes(spike_times[:len(exp_spikes)])
-            if this_adi_array is not None:
-                adi.append(this_adi_array)
+        this_adi_perc = get_spike_adaptation_indexes(spike_times)
+        adi.append(this_adi_perc)
         this_rate = len(spike_times) / stim_dur * 1000.
         rate.append(this_rate)
     if len(adi) == 0:
@@ -563,7 +524,7 @@ def filter_features_fI(primitives, current_features, export=False):
             print 'filter_features_fI: pid: %i; aborting - failed to compute required feature: %s' % \
                   (os.getpid(), feature_name)
         return dict()
-
+    """
     for i in xrange(len(exp_adi)):
         this_adi_val_list = []
         for this_adi_array in (this_adi_array for this_adi_array in adi if len(this_adi_array) >= i + 1):
@@ -571,18 +532,19 @@ def filter_features_fI(primitives, current_features, export=False):
         if len(this_adi_val_list) > 0:
             this_adi_mean_val = np.mean(this_adi_val_list)
             mean_adi.append(this_adi_mean_val)
+    """
 
-    new_features['adi'] = np.array(mean_adi)
+    new_features['adi'] = adi
     rate = map(rate.__getitem__, indexes)
     new_features['f_I'] = rate
     i_amp = map(i_amp.__getitem__, indexes)
     experimental_f_I_slope = context.target_val['f_I_slope']  # Hz/ln(pA); rate = slope * ln(current - rheobase)
+    experimental_f_I_intercept = context.target_val['f_I_intercept']
     num_increments = context.num_increments
     i_inj_increment = context.i_inj_increment
     rheobase = current_features['rheobase']
-    exp_f_I = [experimental_f_I_slope * np.log((rheobase + i_inj_increment * i) / (rheobase - i_inj_increment))
-               for i in xrange(num_increments)]
-
+    exp_f_I = [experimental_f_I_slope * np.log((rheobase + i_inj_increment * i))+experimental_f_I_intercept
+               for i in xrange(num_increments)] #Not included in new featres?
     if export:
         description = 'f_I'
         with h5py.File(context.export_file_path, 'a') as f:
@@ -610,7 +572,7 @@ def get_args_dynamic_dend_spike(x, features):
         i_holding = context.i_holding
     else:
         i_holding = features['i_holding']
-    return [[i_holding] * 2, [0.4, 0.7]]
+    return [[i_holding] * 2, [0.4, 0.7]] #return i_holding as well as test amplitudes of step current for dend_spike
 
 
 def compute_features_dend_spike(x, i_holding, amp, export=False, plot=False):
@@ -629,7 +591,7 @@ def compute_features_dend_spike(x, i_holding, amp, export=False, plot=False):
 
     v_active = context.v_active
     context.i_holding = i_holding
-    offset_vm('soma', context, v_active, i_history=context.i_holding)
+    #offset_vm('soma', context, v_active, i_history=context.i_holding)
     sim = context.sim
     dt = context.dt
     stim_dur = context.dend_spike_stim_dur
@@ -649,7 +611,7 @@ def compute_features_dend_spike(x, i_holding, amp, export=False, plot=False):
     sim.parameters['i_amp'] = amp
     sim.backup_state()
     sim.set_state(dt=dt, tstop=duration, cvode=False)
-    sim.modify_stim('step', node=node, loc=loc, dur=stim_dur, amp=amp)
+    sim.modify_stim('step', node=node, loc=loc, dur=stim_dur, amp=amp) #change stim to dendrite
     sim.run(v_active)
 
     result = dict()
@@ -717,7 +679,7 @@ def get_objectives_spiking(features):
     #     return dict(), dict()
 
     objectives = dict()
-    for target in ['vm_th', 'fAHP', 'mAHP', 'ADP', 'rebound_firing', 'vm_stability', 'ais_delay', 'dend_bAP_ratio',
+    for target in ['vm_th', 'fAHP', 'mAHP', 'ADP', 'rebound_firing', 'vm_stability', 'ais_delay',
                    'soma_spike_amp']:  # , 'th_count']:
         objectives[target] = ((context.target_val[target] - features[target]) / context.target_range[target]) ** 2.
 
@@ -729,29 +691,37 @@ def get_objectives_spiking(features):
     else:
         objectives[target] = 0.
 
-    exp_adi = context.experimental_adi_array
+    ##exp_adi = context.experimental_adi_array
     adi_residuals = 0.
-    for i, this_adi in enumerate(features['adi']):
-        adi_residuals += ((this_adi - exp_adi[i]) / (0.01 * exp_adi[i])) ** 2.
-    objectives['adi_residuals'] = adi_residuals / len(features['adi'])
-
     rheobase = features['rheobase']
     num_increments = context.num_increments
     i_inj_increment = context.i_inj_increment
-    target_f_I = [context.target_val['f_I_slope'] * np.log((rheobase + i_inj_increment * i) /
-                                                           (rheobase - i_inj_increment))
+    ##calculate target adi
+    target_adi = [context.target_val['adi_slope']*(rheobase+i_inj_increment*i) + context.target_val['adi_intercept'] for i in xrange(num_increments)]
+    lin_i_amp = [(rheobase + i_inj_increment * i)
+                 for i in xrange(num_increments)]
+    slope, intercept, r_value, p_value, std_err = stats.linregress(lin_i_amp, features['adi'])
+    features['adi_slope'] = slope
+    features['adi_intercept'] = intercept
+    ##get adi_residual
+    for i, this_adi in enumerate(features['adi']):
+        adi_residuals += ((this_adi - target_adi[i]) / (0.01 * target_adi[i])) ** 2.
+    objectives['adi_residuals'] = adi_residuals / len(features['adi'])
+
+
+    target_f_I = [context.target_val['f_I_slope'] * np.log((rheobase + i_inj_increment * i)) + context.target_val['f_I_intercept']
                   for i in xrange(num_increments)]
-    log_i_amp = [np.log((rheobase + i_inj_increment * i) / (rheobase - i_inj_increment))
+    log_i_amp = [np.log((rheobase + i_inj_increment * i))
                  for i in xrange(num_increments)]
     slope, intercept, r_value, p_value, std_err = stats.linregress(log_i_amp, features['f_I'])
     features['f_I_slope'] = slope
+    features['f_I_intercept'] = intercept
     f_I_residuals = 0.
     for i, this_rate in enumerate(features['f_I']):
         f_I_residuals += ((this_rate - target_f_I[i]) / context.target_range['spike_rate']) ** 2.
     objectives['f_I_residuals'] = f_I_residuals
     del features['f_I']
-
-    objectives['dend_spike_score'] = features['dend_spike_score']
+    # objectives['dend_spike_score'] = features['dend_spike_score']
 
     return features, objectives
 
@@ -768,26 +738,10 @@ def update_mechanisms_spiking(x, context=None):
     modify_mech_param(cell, 'soma', 'nas', 'gbar', x_dict['soma.gbar_nas'])
     modify_mech_param(cell, 'soma', 'kdr', 'gkdrbar', x_dict['soma.gkdrbar'])
     modify_mech_param(cell, 'soma', 'kap', 'gkabar', x_dict['soma.gkabar'])
-    slope = (x_dict['dend.gkabar'] - x_dict['soma.gkabar']) / 300.
     modify_mech_param(cell, 'soma', 'nas', 'sh', x_dict['soma.sh_nas/x'])
     for sec_type in ['apical']:
-        modify_mech_param(cell, sec_type, 'kap', 'gkabar', origin='soma', max_loc=75., slope=slope, outside=0.)
-        modify_mech_param(cell, sec_type, 'kad', 'gkabar', origin='soma', min_loc=75., max_loc=300., slope=slope,
-                          value=(x_dict['soma.gkabar'] + slope * 75.), outside=0.)
-        modify_mech_param(cell, sec_type, 'kad', 'gkabar', origin='soma', min_loc=300.,
-                          value=(x_dict['soma.gkabar'] + slope * 300.), append=True)
+        modify_mech_param(cell, sec_type, 'kap', 'gkabar', origin='soma')
         modify_mech_param(cell, sec_type, 'kdr', 'gkdrbar', origin='soma')
-        modify_mech_param(cell, sec_type, 'nas', 'sha', 0.)
-        modify_mech_param(cell, sec_type, 'nas', 'sh', origin='soma')
-        modify_mech_param(cell, sec_type, 'nas', 'gbar', x_dict['dend.gbar_nas'])
-        """
-        modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=x_dict['dend.gbar_nas slope'],
-                          min=x_dict['dend.gbar_nas min'],
-                          custom={'func': 'custom_filter_by_branch_order',
-                                  'branch_order': x_dict['dend.gbar_nas bo']}, append=True)
-        """
-        modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=0., min=x_dict['dend.gbar_nas min'],
-                          custom={'func': 'custom_filter_by_terminal'}, append=True)
     modify_mech_param(cell, 'hillock', 'kap', 'gkabar', origin='soma')
     modify_mech_param(cell, 'hillock', 'kdr', 'gkdrbar', origin='soma')
     modify_mech_param(cell, 'ais', 'kdr', 'gkdrbar', x_dict['axon.gkdrbar'])

@@ -28,13 +28,13 @@ get_features_stages:
 get_objectives:
   optimize_DG_MC_leak: get_objectives_leak
 kwargs:
-  mech_file_path: mechanisms/20180605_DG_GC_excitability_mech.yaml
-  gid: 0
-  cell_type: GC
-  correct_for_spines: True
+  mech_file_path: mechanisms/20180905_DG_MC_excitability_mech.yaml
+  gid: 1000000
+  cell_type: MC
+  correct_for_spines: False
   verbose: 2
   daspk: False
-  configFile: Small_Scale_Control_log_normal_weights.yaml
+  configFile: Small_Scale_Control_MC_BC.yaml
   templatePaths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoclibPath: ../dentate
   configPrefix: ../dentate/config

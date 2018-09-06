@@ -64,39 +64,9 @@ def unit_tests_leak():
     pprint.pprint(objectives)
 
 
-def config_controller(export_file_path, output_dir, **kwargs):
-    """
 
-    :param export_file_path: str (path)
-    :param output_dir: str (dir)
-    """
-    context.update(locals())
-    context.update(kwargs)
-    init_context()
+def config_worker(**kwargs):
 
-
-def config_worker(update_context_funcs, param_names, default_params, feature_names, objective_names, target_val,
-                  target_range, temp_output_path, export_file_path, output_dir, disp, mech_file_path, gid,
-                  cell_type, correct_for_spines, **kwargs):
-    """
-    :param update_context_funcs: list of function references
-    :param param_names: list of str
-    :param default_params: dict
-    :param feature_names: list of str
-    :param objective_names: list of str
-    :param target_val: dict
-    :param target_range: dict
-    :param temp_output_path: str
-    :param export_file_path: str
-    :param output_dir: str (dir path)
-    :param disp: bool
-    :param mech_file_path: str
-    :param gid: int
-    :param cell_type: str
-    :param correct_for_spines: bool
-    """
-    context.update(locals())
-    context.update(kwargs)
     if not context_has_sim_env(context):
         build_sim_env(context, **kwargs)
 
