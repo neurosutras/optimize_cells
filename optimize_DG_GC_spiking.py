@@ -46,7 +46,8 @@ def main(config_file_path, output_dir, export, export_file_path, label, verbose,
                        export_file_path=export_file_path, label=label, disp=disp)
 
     if debug:
-        add_diagnostic_recordings(context)
+        # add_diagnostic_recordings(context)
+        add_complete_axon_recordings(context)
 
     if run_tests:
         unit_tests_spiking(context)
@@ -492,7 +493,7 @@ def compute_features_fI(x, i_holding, amp, extend_dur=False, export=False, plot=
         v_after = np.max(vm[-int(50. / dt):-1])
         vm_stability = abs(v_after - vm_rest)
         result['vm_stability'] = vm_stability
-        result['rebound_firing'] = len(np.where(spike_times > stim_dur + 5.)[0])
+        result['rebound_firing'] = len(np.where(spike_times >= stim_dur + 7.)[0])
         last_spike_time = spike_times[np.where(spike_times < stim_dur + 7.)[0][-1]]
         last_spike_index = int((last_spike_time + equilibrate) / dt)
         start = last_spike_index - int(7. / dt)
@@ -836,6 +837,26 @@ def add_diagnostic_recordings(context):
     if not sim.has_rec('axon_end'):
         axon_seg_locs = [seg.x for seg in cell.axon[0].sec]
         sim.append_rec(cell, cell.axon[0], name='axon_end', loc=axon_seg_locs[-1])
+
+
+def add_complete_axon_recordings(context):
+    """
+
+    :param context: :class:'Context'
+    """
+    cell = context.cell
+    sim = context.sim
+    target_distance = 0.
+    for i, seg in enumerate(cell.axon[0].sec):
+        loc=seg.x
+        distance = get_distance_to_node(cell, cell.tree.root, cell.axon[0], loc=loc)
+        if distance >= target_distance:
+            name = 'axon_seg%i' % i
+            print name, distance
+            if not sim.has_rec(name):
+                sim.append_rec(cell, cell.axon[0], name=name, loc=loc)
+            target_distance += 100.
+
 
 
 if __name__ == '__main__':

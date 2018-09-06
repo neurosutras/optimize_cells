@@ -126,7 +126,7 @@ get_features_stages:
 get_objectives:
     optimize_DG_GC_spiking: get_objectives_spiking
 kwargs:
-  mech_file_path: mechanisms/20180605_DG_GC_excitability_mech.yaml
+  mech_file_path: mechanisms/20180720_DG_GC_excitability_mech.yaml
   gid: 0
   cell_type: GC
   correct_for_spines: True
@@ -191,9 +191,9 @@ target_range:
 target_val:
   dend R_inp: 375.
   soma R_inp: 295.
-  ADP: 5.0 #after depolarization
-  fAHP: 7.5 #fast after hyperpolarization (when it passes threshold on
-  mAHP: 5. # medium hyperpolarization
+  ADP: 5.0
+  fAHP: 7.5
+  mAHP: 5.
   ais_delay: 0.0
   dend_bAP_ratio: 0.3
   rebound_firing: 0
@@ -205,23 +205,24 @@ target_val:
   f_I_slope: 58.0
   dend_spike_amp: 15.
 x0:
-  soma.gCa factor: 8.072385E-02
-  soma.tau_Cacum: 3.582782E+01
-  dend.g_pas tau: 6.717500E+01
-  dend.g_pas slope: 8.922957E-06
-  axon.gkabar: 5.253822E-02
-  soma.gkmbar: 4.555918E-03 #contributes to medium HP
-  dend.gbar_nas min: 3.675744E-03
-  ais.sha_nax: -2.792502E+00
-  soma.gkdrbar: 1.587365E-02
-  soma.sh_nas/x: 5.704921E+00
-  ais.gkmbar: 8.910924E-03
-  dend.gkabar: 1.469998E-01
-  ais.gbar_nax: 2.101566E-01
-  soma.g_pas: 4.058603E-09
-  dend.gbar_nas: 2.780691E-02
-  axon.gbar_nax: 6.029868E-02
-  soma.gbar_nas: 4.414296E-02
-  soma.gCadepK factor: 1.133785E+00
-  axon.gkdrbar: 2.081830E-02
-  soma.gkabar: 2.547421E-02
+  soma.gCa factor: 2.674000E-02
+  soma.tau_Cacum: 4.070072E+01
+  dend.gbar_nas min: 1.307792E-02
+  dend.g_pas slope: 3.445070E-05
+  axon.gkabar: 1.319983E-01
+  soma.gkmbar: 4.509615E-03
+  dend.g_pas tau: 8.462166E+01
+  ais.sha_nax: -2.916213E+00
+  soma.gkdrbar: 9.680493E-04
+  soma.sh_nas/x: 5.344927E+00
+  ais.gkmbar: 6.371662E-03
+  dend.gkabar: 2.394512E-01
+  ais.gbar_nax: 2.257536E-01
+  e_pas: -7.498501E+01
+  soma.g_pas: 3.474107E-08
+  dend.gbar_nas: 4.299971E-02
+  axon.gbar_nax: 4.895389E-02
+  soma.gbar_nas: 4.841435E-02
+  soma.gCadepK factor: 1.074359E+00
+  axon.gkdrbar: 1.775097E-03
+  soma.gkabar: 4.681549E-02

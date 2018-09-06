@@ -1,6 +1,7 @@
 __author__ = 'Aaron D. Milstein and Grace Ng'
 from nested.utils import *
 from dentate.cells import *
+from dentate.synapses import *
 
 
 def time2index(tvec, start, stop):
@@ -565,3 +566,14 @@ def reset_biophysics(x, context=None):
         raise RuntimeError('reset_biophysics: missing required Context object')
     init_biophysics(context.cell, reset_cable=False, from_file=True, correct_g_pas=context.correct_for_spines,
                     env=context.env)
+
+
+def reset_syn_mechanisms(x, context=None):
+    """
+
+    :param x: array
+    :param context: :class:'Context'
+    """
+    if context is None:
+        raise RuntimeError('reset_syn_mechanisms: missing required Context object')
+    init_syn_mech_attrs(context.cell, env=context.env, from_file=True, update_targets=True)
