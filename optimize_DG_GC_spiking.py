@@ -493,7 +493,7 @@ def compute_features_fI(x, i_holding, amp, extend_dur=False, export=False, plot=
         v_after = np.max(vm[-int(50. / dt):-1])
         vm_stability = abs(v_after - vm_rest)
         result['vm_stability'] = vm_stability
-        result['rebound_firing'] = len(np.where(spike_times >= stim_dur + 5.)[0])
+        result['rebound_firing'] = len(np.where(spike_times > stim_dur + 5.)[0])
         last_spike_time = spike_times[np.where(spike_times < stim_dur + 7.)[0][-1]]
         last_spike_index = int((last_spike_time + equilibrate) / dt)
         start = last_spike_index - int(7. / dt)
