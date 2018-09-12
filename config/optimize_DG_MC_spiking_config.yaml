@@ -1,0 +1,199 @@
+bounds:
+  dend.g_pas slope: !!python/tuple
+  - 1.0E-9
+  - 5.0E-5
+  dend.g_pas tau: !!python/tuple
+  - 25.
+  - 400.
+  soma.g_pas: !!python/tuple
+  - 1.0E-12
+  - 1.0E-7
+  ais.gbar_nax: !!python/tuple
+  - 0.02
+  - 0.5
+  ais.gkmbar: !!python/tuple
+  - 0.0005
+  - 0.015
+  ais.sha_nax: !!python/tuple
+  - -5.0
+  - -1.0
+  axon.gbar_nax: !!python/tuple
+  - 0.02
+  - 0.1
+  axon.gkabar: !!python/tuple
+  - 0.01
+  - 0.18
+  soma.gCa factor: !!python/tuple
+  - 0.01
+  - 2.0
+  soma.gCadepK factor: !!python/tuple
+  - 0.0005
+  - 2.0
+  soma.gbar_nas: !!python/tuple
+  - 0.01
+  - 0.05
+  soma.gkabar: !!python/tuple
+  - 0.01
+  - 0.05
+  soma.gkdrbar: !!python/tuple
+  - 0.0005
+  - 0.06
+  axon.gkdrbar: !!python/tuple
+  - 0.0005
+  - 0.06
+  soma.gkmbar: !!python/tuple
+  - 0.0005
+  - 0.005
+  soma.sh_nas/x: !!python/tuple
+  - 0.1
+  - 6.0
+  soma.tau_Cacum: !!python/tuple
+  - 9.
+  - 50.
+default_params:
+rel_bounds:
+- - axon.gbar_nax
+  - '>'
+  - 1.0
+  - soma.gbar_nas
+- - ais.gbar_nax
+  - '>'
+  - 2.0
+  - axon.gbar_nax
+- - axon.gkabar
+  - <
+  - 3.0
+  - soma.gkabar
+- - axon.gkdrbar
+  - <
+  - 3.0
+  - soma.gkdrbar
+feature_names:
+- vm_th # spike threshold
+- ADP
+- fAHP
+- mAHP
+- rebound_firing
+- vm_stability
+- ais_delay
+- slow_depo
+- dend_bAP_ratio
+- rheobase
+- soma_spike_amp
+- f_I_slope
+- f_I_intercept
+- adi_intercept
+- adi_slope
+- dend_spike_amp
+update_context:
+- - optimize_DG_MC_spiking
+  - reset_biophysics
+- - optimize_DG_MC_spiking
+  - update_mechanisms_spiking
+get_features_stages:
+- source: optimize_DG_MC_spiking
+  get_args_dynamic: get_args_dynamic_i_holding
+  compute_features: compute_features_spike_shape
+- source: optimize_DG_MC_spiking
+  get_args_dynamic: get_args_dynamic_fI
+  compute_features: compute_features_fI
+  filter_features: filter_features_fI
+get_objectives:
+    optimize_DG_MC_spiking: get_objectives_spiking
+kwargs:
+  mech_file_path: mechanisms/20180905_DG_MC_excitability_mech.yaml
+  gid: 1000000
+  cell_type: MC
+  correct_for_spines: True
+  verbose: 2
+  daspk: False
+  configFile: Small_Scale_Control_MC_BC.yaml
+  templatePaths: ../DGC/Mateos-Aparicio2014:../dentate/templates
+  hoclibPath: ../dentate
+  configPrefix: ../dentate/config
+  datasetPrefix: ../dentate/datasets
+  resultsPath: data
+objective_names:
+- vm_th
+- ADP
+- fAHP
+- mAHP
+- rebound_firing
+- vm_stability
+- ais_delay
+- slow_depo
+##- dend_bAP_ratio
+- soma_spike_amp
+- th_count
+- adi_residuals #difference between spike intervals
+- f_I_residuals
+##- dend_spike_score
+optimization_title: DG_MC_spiking
+param_gen: PopulationAnnealing
+param_names:
+- soma.gbar_nas
+- axon.gbar_nax
+- ais.gbar_nax
+- soma.gkabar
+- soma.gkdrbar
+- axon.gkabar
+- axon.gkdrbar
+- soma.sh_nas/x
+- ais.sha_nax
+- soma.gCa factor
+- soma.gCadepK factor
+- soma.gkmbar
+- ais.gkmbar
+- soma.tau_Cacum
+target_range:
+  dend R_inp: 1.
+  soma R_inp: 0.5
+  ADP: 0.05
+  fAHP: 0.07
+  mAHP: 0.05
+  ais_delay: 0.0005
+  ##dend_bAP_ratio: 0.0002
+  rebound_firing: 0.002
+  soma_spike_amp: 2.0
+  th_count: 0.002
+  vm_th: 0.01
+  vm_stability: 0.1
+  ##dend_spike_amp: 0.1
+  spike_rate: 0.1
+target_val:
+  dend R_inp: 375.
+  soma R_inp: 295.
+  ADP: 5.0 #after depolarization
+  fAHP: 7.5 #fast after hyperpolarization (when it passes threshold on
+  mAHP: 5. # medium hyperpolarization
+  ais_delay: 0.0
+  ##dend_bAP_ratio: 0.3
+  rebound_firing: 0
+  slow_depo: 5.0
+  soma_spike_amp: 90.0
+  th_count: 1
+  vm_th: -48.0
+  vm_stability: 5.0
+  f_I_slope: 31.92
+  f_I_intercept: 38.965
+  adi_slope: 262.39
+  adi_intercept: 94.529
+  ##dend_spike_amp: 15.
+x0:
+  soma.gCa factor: 8.072385E-02
+  soma.tau_Cacum: 3.582782E+01
+  dend.g_pas tau: 6.717500E+01
+  dend.g_pas slope: 8.922957E-06
+  axon.gkabar: 5.253822E-02
+  soma.gkmbar: 4.555918E-03 #contributes to medium HP
+  ais.sha_nax: -2.792502E+00
+  soma.gkdrbar: 1.587365E-02
+  soma.sh_nas/x: 5.704921E+00
+  ais.gkmbar: 8.910924E-03
+  ais.gbar_nax: 2.101566E-01
+  soma.g_pas: 4.058603E-09
+  axon.gbar_nax: 6.029868E-02
+  soma.gbar_nas: 4.414296E-02
+  soma.gCadepK factor: 1.133785E+00
+  axon.gkdrbar: 2.081830E-02
+  soma.gkabar: 2.547421E-02
