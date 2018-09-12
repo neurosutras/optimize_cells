@@ -1,23 +1,45 @@
 bounds:
-  soma.g_pas: !!python/tuple
-  - 1.0E-12
-  - 1.0E-7
+  AMPA.tau: !!python/tuple
+  - 50.
+  - 400.
+  AMPA.slope: !!python/tuple
+  - 1.0e-7
+  - 1.0e-5
+  AMPA.g0: !!python/tuple
+  - 1.0e-4
+  - 0.001
+  NMDA.g_unit: !!python/tuple
+  - 1.0e-3
+  - 5.0e-2
+  NMDA.gamma: !!python/tuple
+  - 0.05
+  - 0.12
+  NMDA.Kd: !!python/tuple
+  - 3.
+  - 10.
 feature_names:
-- iEPSP_i_unit
-- iEPSP_attenuation_short
-- iEPSP_attenuation_long
+- mean_unitary_EPSP_amp
+- mean_NMDA_contribution
+- integration_gain_control
+- integration_gain_AP5
+- initial_gain_control
+- initial_gain_AP5
 update_context:
 - - optimize_DG_GC_synaptic_integration
-  - reset_biophysics
+  - reset_syn_mechanisms
+- - optimize_DG_GC_synaptic_integration
+  - update_syn_mechanisms
 get_features_stages:
 - source: optimize_DG_GC_synaptic_integration
-  get_args_dynamic: get_args_dynamic_i_holding
-  compute_features: compute_features_iEPSP_i_unit
+  get_args_static: get_args_static_unitary_EPSP_amp
+  compute_features: compute_features_unitary_EPSP_amp
+  filter_features: filter_features_unitary_EPSP_amp
 - source: optimize_DG_GC_synaptic_integration
-  get_args_dynamic: get_args_dynamic_iEPSP_attenuation
-  compute_features: compute_features_iEPSP_attenuation
+  get_args_dynamic: get_args_static_compound_EPSP_amp
+  compute_features: compute_features_compound_EPSP_amp
+  filter_features: filter_features_compound_EPSP_amp
 get_objectives:
-  optimize_DG_GC_synaptic_integration: get_objectives_iEPSP_propagation
+  optimize_DG_GC_synaptic_integration: get_objectives_synaptic_integration
 kwargs:
   mech_file_path: mechanisms/20180814_DG_GC_syn_mech.yaml
   gid: 0
@@ -25,23 +47,46 @@ kwargs:
   correct_for_spines: True
   verbose: 2
   daspk: False
-  configFile: Small_Scale_Control_log_normal_weights.yaml
+  configFile: Small_Scale_Control_tune_GC_synapses.yaml
   templatePaths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoclibPath: ../dentate
   configPrefix: ../dentate/config
   datasetPrefix: ../dentate/datasets
   resultsPath: data
 objective_names:
-- iEPSP_attenuation_short
-- iEPSP_attenuation_long
+- mean_unitary_EPSP_amp
+- mean_NMDA_contribution
+- integration_gain_control
+- integration_gain_AP5
+- initial_gain_control
+- initial_gain_AP5
 optimization_title: DG_GC_synaptic_integration
 param_gen: PopulationAnnealing
 param_names:
-- soma.g_pas
+- AMPA.tau
+- AMPA.slope
+- AMPA.g0
+- NMDA.g_unit
+- NMDA.gamma
+- NMDA.Kd
 target_range:
+  mean_unitary_EPSP_amp: 0.005
+  mean_NMDA_contribution: 0.001
+  integration_gain_control: 0.005
+  integration_gain_AP5: 0.005
+  initial_gain_control: 0.005
+  initial_gain_AP5: 0.005
 target_val:
-  iEPSP_unit_amp: 1.
-  iEPSP_attenuation_short: 0.17
-  iEPSP_attenuation_long: 0.23
+  mean_unitary_EPSP_amp: 0.5
+  mean_NMDA_contribution: 0.2
+  integration_gain_control: 1.38
+  integration_gain_AP5: 0.8
+  initial_gain_control: 1.
+  initial_gain_AP5: 1.
 x0:
-  soma.g_pas: 1.050E-10
+  AMPA.g0: 0.000531417018
+  AMPA.slope: 6.43144631e-06
+  AMPA.tau: 51.8492464
+  NMDA.Kd: 6.9342349
+  NMDA.gamma: 0.107891902
+  NMDA.g_unit: 0.0209192397
