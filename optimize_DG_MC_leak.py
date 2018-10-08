@@ -103,8 +103,8 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
     """
     init_context()
     context.env = Env(comm=context.comm, **kwargs)
-    configure_env(context.env)
-    cell = get_biophys_cell(context.env, context.gid, context.cell_type)
+    configure_hoc_env(context.env)
+    cell = get_biophys_cell(context.env, gid=context.gid, pop_name=context.cell_type)
     init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path,
                     correct_cm=context.correct_for_spines, correct_g_pas=context.correct_for_spines, env=context.env)
     context.sim = QuickSim(context.duration, cvode=cvode, daspk=daspk, dt=context.dt, verbose=verbose>1)

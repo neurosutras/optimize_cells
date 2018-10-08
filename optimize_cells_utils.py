@@ -442,14 +442,14 @@ def get_spike_shape(vm, spike_times, context=None):
         raise RuntimeError('get_spike_shape: pid: %i; missing required Context object' % os.getpid())
     equilibrate = context.equilibrate
     dt = context.dt
-    th_dvdt = context.th_dvdt #voltage change at threshold
+    th_dvdt = context.th_dvdt  # slope of voltage change at spike threshold
 
-    start = int((equilibrate + 1.) / dt) #start time after equilibrate, expressed in time step
+    start = int((equilibrate + 1.) / dt)  # start time after equilibrate, expressed in time step
     vm = vm[start:]
-    dvdt = np.gradient(vm, dt) #voltage change slope
+    dvdt = np.gradient(vm, dt)  # slope of voltage change
     th_x_indexes = np.where(dvdt >= th_dvdt)[0]
     if th_x_indexes.any():
-        th_x = th_x_indexes[0] - int(1.6 / dt) #why subtract 1.6/dt?
+        th_x = th_x_indexes[0] - int(1.6 / dt)  # the true spike onset is before the slope threshold is crossed
     else:
         th_x_indexes = np.where(vm > -30.)[0]
         if th_x_indexes.any():
@@ -462,9 +462,12 @@ def get_spike_shape(vm, spike_times, context=None):
     v_peak = vm[x_peak]
     f_end = x_peak + int(10. / dt)
     m_end = x_peak + int(50. / dt)
+
+    spike_detector_delay = spike_times[0] - (equilibrate + 1. + th_x * dt)
+
     if f_end >= len(vm) or m_end >= len(vm):
         return None
-    if len(spike_times) > 1 and int((spike_times[1] - 7.) / dt) - start < m_end:
+    if len(spike_times) > 1 and int((spike_times[1] - spike_detector_delay) / dt) - start < m_end:
         return None
     rising_x = np.where(dvdt[x_peak+1:f_end] > 0.)[0]
     if rising_x.any():
@@ -490,7 +493,8 @@ def get_spike_shape(vm, spike_times, context=None):
             v_mAHP = np.min(vm[x_ADP:m_end])
             mAHP = v_before - v_mAHP
 
-    return {'v_peak': v_peak, 'th_v': th_v, 'fAHP': fAHP, 'mAHP': mAHP, 'ADP': ADP}
+    return {'v_peak': v_peak, 'th_v': th_v, 'fAHP': fAHP, 'mAHP': mAHP, 'ADP': ADP,
+            'spike_detector_delay': spike_detector_delay}
 
 
 def get_DG_GC_thickest_dend_branch(cell, distance_target=None, distance_tolerance=50., terminal=False):
@@ -577,3 +581,25 @@ def reset_syn_mechanisms(x, context=None):
     if context is None:
         raise RuntimeError('reset_syn_mechanisms: missing required Context object')
     init_syn_mech_attrs(context.cell, env=context.env, from_file=True, update_targets=True)
+
+
+def log10_fit(x, slope, offset):
+    """
+    Use with scipy.optimize.curve_fit to obtain least-squares estimate of parameters of a log10 fit to data.
+    :param x: float or array
+    :param slope: float
+    :param offset: float
+    :return: float or array
+    """
+    return slope * np.log10(x) + offset
+
+
+def inverse_log10_fit(y, slope, offset):
+    """
+    Obtain the x values for target y, given parameters of a log10 fit to data.
+    :param y: float or array
+    :param slope: float
+    :param offset: float
+    :return: float or array
+    """
+    return 10. ** ((y - offset) / slope)
