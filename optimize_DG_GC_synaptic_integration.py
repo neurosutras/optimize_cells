@@ -52,6 +52,8 @@ def unit_tests_synaptic_integration():
 
     """
     features = dict()
+    objectives = dict()
+
     # Stage 0:
     args = get_args_static_unitary_EPSP_amp()
     group_size = len(args[0])
@@ -60,7 +62,6 @@ def unit_tests_synaptic_integration():
     primitives = map(compute_features_unitary_EPSP_amp, *sequences)
     this_features = filter_features_unitary_EPSP_amp(primitives, features, context.export)
     features.update(this_features)
-    objectives = {}
 
     # Stage 1:
     args = get_args_static_compound_EPSP_amp()
@@ -82,41 +83,12 @@ def unit_tests_synaptic_integration():
     pprint.pprint(objectives)
 
 
-def config_controller(export_file_path, output_dir, **kwargs):
+def config_worker():
     """
 
-    :param export_file_path: str (path)
-    :param output_dir: str (dir)
     """
-    context.update(locals())
-    context.update(kwargs)
-    init_context()
-
-
-def config_worker(update_context_funcs, param_names, default_params, feature_names, objective_names, target_val,
-                  target_range, temp_output_path, export_file_path, output_dir, disp, mech_file_path, gid,
-                  cell_type, correct_for_spines, **kwargs):
-    """
-    :param update_context_funcs: list of function references
-    :param param_names: list of str
-    :param default_params: dict
-    :param feature_names: list of str
-    :param objective_names: list of str
-    :param target_val: dict
-    :param target_range: dict
-    :param temp_output_path: str
-    :param export_file_path: str
-    :param output_dir: str (dir path)
-    :param disp: bool
-    :param mech_file_path: str
-    :param gid: int
-    :param cell_type: str
-    :param correct_for_spines: bool
-    """
-    context.update(locals())
-    context.update(kwargs)
     if not context_has_sim_env(context):
-        build_sim_env(context, **kwargs)
+        build_sim_env(context, **context.kwargs)
 
 
 def context_has_sim_env(context):
@@ -708,25 +680,32 @@ def filter_features_compound_EPSP_amp(primitives, current_features, export=False
             axes[i].legend(loc='best', frameon=False, framealpha=0.5)
         fig.show()
 
-    """
     if export:
-        description = 'mean_unitary_EPSP_traces'
+        baseline_len = int(context.trace_baseline / context.dt)
+        unitary_len = int(context.ISI['units'] / context.dt)
+        trace_len = int((context.sim_duration['clustered'] - context.equilibrate) / context.dt) + baseline_len
+        t = np.arange(0., len(trace_len) * context.dt, context.dt)
+        t -= context.trace_baseline
+        description = 'compound_EPSP_summary'
         with h5py.File(context.export_file_path, 'a') as f:
             if description not in f:
                 f.create_group(description)
                 f[description].attrs['enumerated'] = False
             group = f[description]
-            t = np.arange(-context.trace_baseline, context.ISI['units'], context.dt)
             group.create_dataset('time', compression='gzip', data=t)
-            data_group = group.create_group('data')
-            for syn_condition in features['unitary_EPSP_traces']['random']:
-                this_group = data_group.create_group(syn_condition)
-                for rec_name in context.sim.recs:
-                    this_mean_trace = \
-                        np.mean([features['unitary_EPSP_traces']['random'][syn_condition][syn_id][rec_name]
-                                 for syn_id in features['unitary_EPSP_traces']['random'][syn_condition]], axis=0)
-                    this_group.create_dataset(rec_name, compression='gzip', data=this_mean_trace)
-    """
+            data_group = group.create_group('traces')
+            for syn_group in features['compound_EPSP_traces']:
+                syn_group_data_group = data_group.create_group(syn_group)
+                for syn_condition in features['compound_EPSP_traces'][syn_group]:
+                    syn_condition_data_group = syn_group_data_group.create_group(syn_condition)
+                    for num_syns in features['compound_EPSP_traces'][syn_group][syn_condition]:
+                        num_syns_data_group = syn_condition_data_group.create_group(num_syns)
+                        for rec_name in features['compound_EPSP_traces'][syn_group][syn_condition][]:
+                            this_mean_trace = \
+                                np.mean([features['unitary_EPSP_traces']['random'][syn_condition][syn_id][rec_name]
+                                         for syn_id in features['unitary_EPSP_traces']['random'][syn_condition]], axis=0)
+                            this_group.create_dataset(rec_name, compression='gzip', data=this_mean_trace)
+
     return features
 
 

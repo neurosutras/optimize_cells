@@ -682,12 +682,17 @@ def compute_features_spike_adaptation(x, i_holding, spike_detector_delay, rheoba
 
     result = dict()
     result['i_amp'] = amp
-    result['ISI1'] = spike_times[1] - spike_times[0]
-    result['ISI2'] = spike_times[2] - spike_times[1]
+    if len(spike_times) >= 3:
+        result['ISI1'] = spike_times[1] - spike_times[0]
+        result['ISI2'] = spike_times[2] - spike_times[1]
+        if context.verbose > 0:
+            print 'compute_features_spike_adaptation: pid: %i; %s: %s took %.1f s; ISI1: %.1f; ISI2: %.1f' % \
+                  (os.getpid(), title, description, time.time() - start_time, result['ISI1'], result['ISI2'])
+    else:
+        if context.verbose > 0:
+            print 'compute_features_spike_adaptation: pid: %i; %s: %s took %.1f s; not enough spikes to compute ISI1 ' \
+                  'and ISI2' % (os.getpid(), title, description, time.time() - start_time)
 
-    if context.verbose > 0:
-        print 'compute_features_spike_adaptation: pid: %i; %s: %s took %.1f s; ISI1: %.1f; ISI2: %.1f' % \
-              (os.getpid(), title, description, time.time() - start_time, result['ISI1'], result['ISI2'])
     if plot:
         sim.plot()
     if export:
@@ -717,6 +722,11 @@ def filter_features_spike_adaptation(primitives, current_features, export=False)
     i_relative_amp = map(i_relative_amp.__getitem__, indexes)
     for i in indexes:
         this_dict = primitives[i]
+        if 'ISI1' not in this_dict or 'ISI2' not in this_dict:
+            if context.verbose > 0:
+                print 'filter_features_spike_adaptation: pid: %i; aborting - failed to compute required features: ' \
+                      'ISI1 and ISI2' % os.getpid()
+            return dict()
         model_ISI1.append(this_dict['ISI1'])
         model_ISI2.append(this_dict['ISI2'])
     new_features['ISI1'] = model_ISI1
