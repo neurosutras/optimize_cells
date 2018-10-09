@@ -5,7 +5,6 @@ import matplotlib.lines as mlines
 import scipy.stats as stats
 import matplotlib.gridspec as gridspec
 from matplotlib import cm
-#from dentate.cells import *
 from dentate.synapses import get_syn_mech_param, get_syn_filter_dict
 
 mpl.rcParams['svg.fonttype'] = 'none'
@@ -518,43 +517,157 @@ def plot_best_norm_features_scatter(storage, target_val, target_range):
     mpl.rcParams['font.size'] = orig_fontsize
 
 
-def plot_exported_f_I(file_path, group_name='f_I'):
+def plot_exported_DG_GC_spiking_features(file_path):
+    """
+    
+    :param file_path: str (path)
+    """
+    orig_fontsize = mpl.rcParams['font.size']
+    if not os.path.isfile(file_path):
+        raise IOError('plot_exported_DG_GC_spiking_features: invalid file path: %s' % file_path)
+    with h5py.File(file_path, 'r') as f:
+        group_name = 'f_I'
+        if group_name not in f:
+            raise AttributeError('plot_exported_DG_GC_spiking_features: provided file path: %s does not contain a '
+                                 'required group: %s' % (file_path, group_name))
+        group = f[group_name]
+        fig1, axes1 = plt.subplots()
+        i_relative_amp = group['i_relative_amp'][:]
+        rate = group['rate'][:]
+        exp_rate = group['exp_rate'][:]
+        axes1.scatter(i_relative_amp, rate, label='Model', c='r', linewidth=0, alpha=0.5)
+        axes1.plot(i_relative_amp, rate, c='r', alpha=0.5)
+        axes1.scatter(i_relative_amp, exp_rate, label='Experiment', c='grey', linewidth=0, alpha=0.5)
+        axes1.plot(i_relative_amp, exp_rate, c='grey', alpha=0.5)
+        axes1.legend(loc='best', frameon=False, framealpha=0.5)
+        axes1.set_xlabel('Amplitude of current injection\nrelative to rheobase (nA)')
+        axes1.set_ylabel('Firing rate (Hz)')
+        axes1.set_ylim(0., axes1.get_ylim()[1])
+        axes1.set_xlim(0., axes1.get_xlim()[1])
+        axes1.set_title('f-I', fontsize=mpl.rcParams['font.size'])
+        clean_axes(axes1)
+        fig1.tight_layout()
+        fig1.show()
+
+        group_name = 'spike_adaptation'
+        if group_name not in f:
+            raise AttributeError('plot_exported_DG_GC_spiking_features: provided file path: %s does not contain a '
+                                 'required group: %s' % (file_path, group_name))
+        group = f[group_name]
+        fig2, axes2 = plt.subplots()
+        i_relative_amp = group['i_relative_amp'][:]
+        model_ISI1 = group['model_ISI1'][:]
+        model_ISI2 = group['model_ISI2'][:]
+        exp_ISI1 = group['exp_ISI1'][:]
+        exp_ISI2 = group['exp_ISI2'][:]
+        axes2.scatter(i_relative_amp, model_ISI1, label='1st ISI: Model', c='r', linewidth=0, alpha=0.5)
+        axes2.plot(i_relative_amp, model_ISI1, c='r', alpha=0.5)
+        axes2.scatter(i_relative_amp, exp_ISI1, label='1st ISI: Experiment', c='lightgrey', linewidth=0, alpha=0.5)
+        axes2.plot(i_relative_amp, exp_ISI1, c='lightgrey', alpha=0.5)
+        axes2.scatter(i_relative_amp, model_ISI2, label='2nd ISI: Model', c='c', linewidth=0, alpha=0.5)
+        axes2.plot(i_relative_amp, model_ISI2, c='k', alpha=0.5)
+        axes2.scatter(i_relative_amp, exp_ISI2, label='2nd ISI: Experiment', c='k', linewidth=0, alpha=0.5)
+        axes2.plot(i_relative_amp, exp_ISI2, c='k', alpha=0.5)
+        axes2.legend(loc='best', frameon=False, framealpha=0.5)
+        axes2.set_xlabel('Amplitude of current injection\nrelative to rheobase (nA)')
+        axes2.set_ylabel('Inter-spike interval (ms)')
+        axes2.set_ylim(0., axes2.get_ylim()[1])
+        axes2.set_title('Spike rate adaptation', fontsize=mpl.rcParams['font.size'])
+        clean_axes(axes2)
+        fig2.tight_layout()
+        fig2.show()
+    mpl.rcParams['font.size'] = orig_fontsize
+
+
+def plot_exported_DG_GC_synaptic_integration_features(file_path):
     """
 
     :param file_path: str (path)
-    :param group_name: str
     """
     orig_fontsize = mpl.rcParams['font.size']
-    # mpl.rcParams['font.size'] = 20.
     if not os.path.isfile(file_path):
-        raise IOError('plot_exported_f_I: invalid file path: %s' % file_path)
+        raise IOError('plot_exported_DG_GC_synaptic_integration_features: invalid file path: %s' % file_path)
+    from matplotlib import cm
     with h5py.File(file_path, 'r') as f:
+        group_name = 'mean_unitary_EPSP_traces'
         if group_name not in f:
-            raise AttributeError('plot_exported_f_I: provided file path: %s does not contain required top-level group '
-                                 'with name: %s' % (file_path, group_name))
+            raise AttributeError('plot_exported_DG_GC_synaptic_integration_features: provided file path: %s does not '
+                                 'contain a required group: %s' % (file_path, group_name))
         group = f[group_name]
-        fig, axes = plt.subplots(1, 2)
-        i_amp = group['i_amp']
-        rate = group['rate']
-        exp_rate = group['exp_rate']
-        adi = group['adi']
-        exp_adi = group['exp_adi']
-        spike_num = range(3, len(adi) + 3)
-        axes[0].scatter(spike_num, adi, label='Simulation', c='r', linewidth=0, alpha=0.5)
-        axes[0].scatter(spike_num, exp_adi[:len(adi)], label='Experiment', c='grey', linewidth=0, alpha=0.5)
+        syn_conditions = f[group_name]['data'].keys()
+        ordered_syn_conditions = ['control'] + [syn_condition for syn_condition in syn_conditions
+                                                if syn_condition not in ['control']]
+        rec_names = f[group_name]['data'].itervalues().next().keys()
+        if 'soma' in rec_names:
+            ordered_rec_names = ['soma'] + [rec_name for rec_name in rec_names if rec_name not in ['soma']]
+        else:
+            ordered_rec_names = rec_names
+        t = group['time'][:]
+        fig, axes = plt.subplots(1, len(rec_names), sharey=True)
+        colors = list(cm.Paired(np.linspace(0, 1, len(syn_conditions))))
+        if len(rec_names) == 1:
+            axes = [axes]
+        for i, rec_name in enumerate(ordered_rec_names):
+            for j, syn_condition in enumerate(ordered_syn_conditions):
+                axes[i].plot(t, f[group_name]['data'][syn_condition][rec_name][:], label=syn_condition, color=colors[j])
+            axes[i].set_title(rec_name + ' Vm', fontsize=mpl.rcParams['font.size'])
+            axes[i].set_xlabel('Time (ms)')
+        axes[0].set_ylabel('Unitary EPSP amplitude (mV)')
         axes[0].legend(loc='best', frameon=False, framealpha=0.5)
-        axes[0].set_xlabel('Spike number in train')
-        axes[0].set_ylabel('Adaptation index')
-        axes[0].set_title('Spike rate adaptation', fontsize=mpl.rcParams['font.size'])
-        axes[1].scatter(i_amp, rate, label='Simulation', c='r', linewidth=0, alpha=0.5)
-        axes[1].scatter(i_amp, exp_rate, label='Experiment', c='grey', linewidth=0, alpha=0.5)
-        axes[1].legend(loc='best', frameon=False, framealpha=0.5)
-        axes[1].set_xlabel('Current injection amp (nA)')
-        axes[1].set_ylabel('Firing Rate (Hz)')
-        axes[1].set_title('f-I', fontsize=mpl.rcParams['font.size'])
-    clean_axes(axes)
-    fig.tight_layout()
-    fig.show()
+        clean_axes(axes)
+        fig.tight_layout()
+        fig.show()
+
+        group_name = 'compound_EPSP_summary'
+        if group_name not in f:
+            raise AttributeError('plot_exported_DG_GC_synaptic_integration_features: provided file path: %s does not '
+                                 'contain a required group: %s' % (file_path, group_name))
+        group = f[group_name]
+        t = group['time'][:]
+        syn_conditions = group['traces'].itervalues().next().keys()
+        ordered_syn_conditions = ['expected', 'control'] + [syn_condition for syn_condition in
+                                                            syn_conditions if
+                                                            syn_condition not in ['expected', 'control']]
+        for branch_name in group['traces']:
+            for rec_name in rec_names:
+                fig, axes = plt.subplots(1, len(syn_conditions), sharey=True)
+                fig.suptitle('Branch: %s\nRecording loc: %s' % (branch_name, rec_name),
+                             fontsize=mpl.rcParams['font.size'])
+                for i, syn_condition in enumerate(ordered_syn_conditions):
+                    for num_syns in group['traces'][branch_name][syn_condition]:
+                        axes[i].plot(t, group['traces'][branch_name][syn_condition][num_syns][rec_name][:], c='k')
+                    axes[i].set_xlabel('Time (ms)')
+                    axes[i].set_title(syn_condition, fontsize=mpl.rcParams['font.size'])
+                axes[0].set_ylabel('Compound EPSP amplitude (mV)')
+                clean_axes(axes)
+                fig.tight_layout()
+                fig.subplots_adjust(top=0.85)
+                fig.show()
+
+        branch_names = group['amp'].keys()
+        fig, axes = plt.subplots(1, len(branch_names), sharey=True)
+        if len(branch_names) == 1:
+            axes = [axes]
+        diagonal = np.linspace(0., np.max(group['amp'].itervalues().next()['expected'][:]), 10)
+        syn_conditions = group['amp'].itervalues().next().keys()
+        ordered_syn_conditions = ['control'] + [syn_condition for syn_condition in
+                                                syn_conditions if syn_condition not in ['expected', 'control']]
+        colors = list(cm.Paired(np.linspace(0, 1, len(syn_conditions))))
+        rec_name = 'soma'
+        for i, branch_name in enumerate(branch_names):
+            for j, syn_condition in enumerate(ordered_syn_conditions):
+                axes[i].plot(group['amp'][branch_name]['expected'][:], group['amp'][branch_name][syn_condition][:],
+                             c=colors[j], label=syn_condition)
+            axes[i].set_title('Branch: %s\nRecording loc: %s' % (branch_name, rec_name),
+                              fontsize=mpl.rcParams['font.size'])
+            axes[i].set_xlabel('Expected EPSP amp (mV)')
+            axes[i].plot(diagonal, diagonal, c='lightgrey', linestyle='--')
+        axes[0].set_ylabel('Actual EPSP amp (mV)')
+        axes[0].legend(loc='best', frameon=False, framealpha=0.5)
+        clean_axes(axes)
+        fig.tight_layout()
+        fig.subplots_adjust(top=0.85)
+        fig.show()
     mpl.rcParams['font.size'] = orig_fontsize
 
 
@@ -565,7 +678,6 @@ def plot_sim_from_file(file_path, group_name='sim_output'):
     :param group_name: str
     """
     orig_fontsize = mpl.rcParams['font.size']
-    # mpl.rcParams['font.size'] = 20.
     if not os.path.isfile(file_path):
         raise IOError('plot_sim_from_file: invalid file path: %s' % file_path)
     with h5py.File(file_path, 'r') as f:

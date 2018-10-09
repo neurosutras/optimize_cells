@@ -8,6 +8,7 @@ __author__ = 'Aaron D. Milstein and Grace Ng'
 from dentate.biophysics_utils import *
 from nested.optimize_utils import *
 from optimize_cells_utils import *
+from plot_results import plot_exported_f_I
 import click
 
 
@@ -72,7 +73,7 @@ def unit_tests_synaptic_integration():
     this_features = filter_features_compound_EPSP_amp(primitives, features, context.export)
     features.update(this_features)
     
-    # features, objectives = get_objectives_iEPSP_propagation(features)
+    features, objectives = get_objectives_synaptic_integration(features)
 
     context.update(locals())
     print 'params:'
@@ -87,6 +88,8 @@ def config_worker():
     """
 
     """
+    if 'plot' not in context():
+        context.plot = False
     if not context_has_sim_env(context):
         build_sim_env(context, **context.kwargs)
 
@@ -112,11 +115,12 @@ def init_context():
     local_random = random.Random()
 
     # for clustered inputs, num_syns corresponds to number of clustered inputs per branch
-    num_syns = {'random': 5, 'clustered': 5}  # {'random': 30, 'clustered': 20}
+    # num_syns = {'random': 5, 'clustered': 5}  # {'random': 30, 'clustered': 20}
+    num_syns = {'random': 30, 'clustered': 20}
     syn_conditions = ['control', 'AP5']
 
     # number of branches to test temporal integration of clustered inputs
-    num_clustered_branches = 1  # 2
+    num_clustered_branches = 2  # 1
     clustered_branch_names = ['clustered%i' % i for i in xrange(num_clustered_branches)]
 
     ISI = {'units': 150., 'clustered': 1.1}  # inter-stimulus interval for synaptic stim (ms)
@@ -144,6 +148,8 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
     :param cvode: bool
     :param daspk: bool
     """
+    if 'previous_module' in context() and context.previous_module == __file__:
+        return
     init_context()
     context.env = Env(comm=context.comm, **kwargs)
     configure_hoc_env(context.env)
@@ -163,7 +169,6 @@ def config_sim_env(context):
 
     :param context: :class:'Context'
     """
-    context.local_random.seed(int(context.seed_offset + context.gid))
     if 'previous_module' in context() and context.previous_module == __file__:
         return
     init_context()
@@ -189,7 +194,8 @@ def config_sim_env(context):
         sim.append_stim(cell, cell.tree.root, name='holding', loc=0.5, amp=0., delay=0., dur=duration)
         offset_vm('soma', context, vm_target=context.v_active, i_history=context.i_holding)
 
-    if 'local_syn_ids' not in context():
+    if 'syn_id_dict' not in context():
+        context.local_random.seed(int(context.seed_offset + context.gid))
         syn_attrs = env.synapse_attributes
         syn_indexes = defaultdict(list)
         # choose a random subset of synapses across all apical branches for tuning a distance-dependent AMPA-R gradient
@@ -256,6 +262,12 @@ def config_sim_env(context):
     sim.parameters['duration'] = duration
     sim.parameters['equilibrate'] = equilibrate
     context.previous_module = __file__
+    if context.plot:
+        import dentate.plot as biophys_plot
+        biophys_plot.plot_synaptic_attribute_distribution(cell, env, context.NMDA_type, 'g_unit', from_mech_attrs=True,
+                                                          from_target_attrs=True, show=True)
+        biophys_plot.plot_synaptic_attribute_distribution(cell, env, context.AMPA_type, 'g_unit', from_mech_attrs=True,
+                                                          from_target_attrs=True, show=True)
 
 
 def update_syn_mechanisms(x, context=None):
@@ -282,12 +294,6 @@ def update_syn_mechanisms(x, context=None):
                           update_targets=True)
     modify_syn_mech_param(cell, env, 'apical', context.NMDA_type, param_name='g_unit', value=x_dict['NMDA.g_unit'],
                           update_targets=True)
-    if context.plot:
-        import dentate.plot as biophys_plot
-        biophys_plot.plot_synaptic_attribute_distribution(cell, env, context.NMDA_type, 'g_unit', from_mech_attrs=True,
-                                                          from_target_attrs=True, show=True)
-        biophys_plot.plot_synaptic_attribute_distribution(cell, env, context.AMPA_type, 'g_unit', from_mech_attrs=True,
-                                                          from_target_attrs=True, show=True)
 
 
 def get_args_static_unitary_EPSP_amp():
@@ -674,17 +680,20 @@ def filter_features_compound_EPSP_amp(primitives, current_features, export=False
     if context.plot:
         fig, axes = plt.subplots(1, len(compound_EPSP_amp))
         for i, syn_group in enumerate(compound_EPSP_amp):
+            if len(compound_EPSP_amp) > 1:
+                this_axes = axes[i]
+            else:
+                this_axes = axes
             for syn_condition in compound_EPSP_amp[syn_group]:
-                axes[i].plot(range(1, num_syns + 1), compound_EPSP_amp[syn_group][syn_condition], label=syn_condition)
-            axes[i].set_title(syn_group)
-            axes[i].legend(loc='best', frameon=False, framealpha=0.5)
+                this_axes.plot(range(1, num_syns + 1), compound_EPSP_amp[syn_group][syn_condition], label=syn_condition)
+            this_axes.set_title(syn_group)
+            this_axes.legend(loc='best', frameon=False, framealpha=0.5)
         fig.show()
 
     if export:
         baseline_len = int(context.trace_baseline / context.dt)
-        unitary_len = int(context.ISI['units'] / context.dt)
         trace_len = int((context.sim_duration['clustered'] - context.equilibrate) / context.dt) + baseline_len
-        t = np.arange(0., len(trace_len) * context.dt, context.dt)
+        t = np.arange(0., trace_len * context.dt, context.dt)[:trace_len]
         t -= context.trace_baseline
         description = 'compound_EPSP_summary'
         with h5py.File(context.export_file_path, 'a') as f:
@@ -699,12 +708,17 @@ def filter_features_compound_EPSP_amp(primitives, current_features, export=False
                 for syn_condition in features['compound_EPSP_traces'][syn_group]:
                     syn_condition_data_group = syn_group_data_group.create_group(syn_condition)
                     for num_syns in features['compound_EPSP_traces'][syn_group][syn_condition]:
-                        num_syns_data_group = syn_condition_data_group.create_group(num_syns)
-                        for rec_name in features['compound_EPSP_traces'][syn_group][syn_condition][]:
-                            this_mean_trace = \
-                                np.mean([features['unitary_EPSP_traces']['random'][syn_condition][syn_id][rec_name]
-                                         for syn_id in features['unitary_EPSP_traces']['random'][syn_condition]], axis=0)
-                            this_group.create_dataset(rec_name, compression='gzip', data=this_mean_trace)
+                        num_syns_data_group = syn_condition_data_group.create_group(str(num_syns))
+                        for rec_name in features['compound_EPSP_traces'][syn_group][syn_condition][num_syns]:
+                            num_syns_data_group.create_dataset(
+                                rec_name, compression='gzip',
+                                data=features['compound_EPSP_traces'][syn_group][syn_condition][num_syns][rec_name])
+            data_group = group.create_group('amp')
+            for syn_group in compound_EPSP_amp:
+                syn_group_data_group = data_group.create_group(syn_group)
+                for syn_condition in compound_EPSP_amp[syn_group]:
+                    syn_group_data_group.create_dataset(syn_condition, compression='gzip',
+                                                        data=compound_EPSP_amp[syn_group][syn_condition])
 
     return features
 
@@ -716,10 +730,12 @@ def get_objectives_synaptic_integration(features):
     :return: tuple of dict
     """
     objectives = dict()
-    for ISI_key in context.ISI:
-        target = 'iEPSP_attenuation_%s' % ISI_key
-        objectives[target] = \
-            ((features[target] - context.target_val[target]) / (0.01 * context.target_val[target])) ** 2.
+    for objective_name in context.objective_names:
+        if objective_name not in features:
+            return dict(), dict()
+        objectives[objective_name] = \
+            ((features[objective_name] - context.target_val[objective_name]) /
+             context.target_range[objective_name]) ** 2.
     return features, objectives
 
 

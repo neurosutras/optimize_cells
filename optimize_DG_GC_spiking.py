@@ -41,7 +41,7 @@ def main(config_file_path, output_dir, export, export_file_path, label, verbose,
     # requires a global variable context: :class:'Context'
     context.update(locals())
     disp = verbose > 0
-    #load context with relative bounds, parameters, paths, etc. for simulation
+    # parse config_file and initialize context with relative bounds, parameters, paths, etc. for simulation
     config_interactive(context, __file__, config_file_path=config_file_path, output_dir=output_dir, export=export,
                        export_file_path=export_file_path, label=label, disp=disp)
 
