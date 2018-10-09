@@ -8,7 +8,6 @@ __author__ = 'Aaron D. Milstein and Grace Ng'
 from dentate.biophysics_utils import *
 from nested.optimize_utils import *
 from optimize_cells_utils import *
-from plot_results import plot_exported_f_I
 import click
 
 
@@ -44,7 +43,6 @@ def main(config_file_path, output_dir, export, export_file_path, label, verbose,
                        export_file_path=export_file_path, label=label, disp=disp)
 
     if run_tests:
-        # pass
         unit_tests_synaptic_integration()
 
 
