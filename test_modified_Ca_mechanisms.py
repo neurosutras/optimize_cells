@@ -7,7 +7,7 @@ context = Context()
 @click.option("--gid", required=True, type=int, default=0)
 @click.option("--pop-name", required=True, type=str, default='GC')
 @click.option("--config-file", required=True, type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='../dentate/config/Small_Scale_Control_log_normal_weights.yaml')
+              default='../dentate/config/Small_Scale_Control_LN_weights.yaml')
 @click.option("--template-paths", type=str, default='../dgc/Mateos-Aparicio2014:../dentate/templates')
 @click.option("--hoc-lib-path", type=str, default='../dentate')
 @click.option("--dataset-prefix", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
@@ -34,7 +34,7 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     comm = MPI.COMM_WORLD
     np.seterr(all='raise')
     env = Env(comm, config_file, template_paths, hoc_lib_path, dataset_prefix, verbose=verbose)
-    configure_env(env)
+    configure_hoc_env(env)
 
     cell = get_biophys_cell(env, gid, pop_name)
     context.update(locals())

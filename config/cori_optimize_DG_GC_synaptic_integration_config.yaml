@@ -51,8 +51,8 @@ kwargs:
   templatePaths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoclibPath: ../dentate
   configPrefix: ../dentate/config
-  datasetPrefix: ../dentate/datasets
-  resultsPath: data
+  datasetPrefix: /global/cscratch1/sd/aaronmil/dentate
+  resultsPath: /global/cscratch1/sd/aaronmil/optimize_cells
 objective_names:
 - mean_unitary_EPSP_amp
 - mean_NMDA_contribution

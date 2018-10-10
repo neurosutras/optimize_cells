@@ -77,41 +77,12 @@ def unit_tests_iEPSP():
     pprint.pprint(objectives)
 
 
-def config_controller(export_file_path, output_dir, **kwargs):
+def config_worker():
     """
 
-    :param export_file_path: str (path)
-    :param output_dir: str (dir)
     """
-    context.update(locals())
-    context.update(kwargs)
-    init_context()
-
-
-def config_worker(update_context_funcs, param_names, default_params, feature_names, objective_names, target_val,
-                  target_range, temp_output_path, export_file_path, output_dir, disp, mech_file_path, gid,
-                  cell_type, correct_for_spines, **kwargs):
-    """
-    :param update_context_funcs: list of function references
-    :param param_names: list of str
-    :param default_params: dict
-    :param feature_names: list of str
-    :param objective_names: list of str
-    :param target_val: dict
-    :param target_range: dict
-    :param temp_output_path: str
-    :param export_file_path: str
-    :param output_dir: str (dir path)
-    :param disp: bool
-    :param mech_file_path: str
-    :param gid: int
-    :param cell_type: str
-    :param correct_for_spines: bool
-    """
-    context.update(locals())
-    context.update(kwargs)
     if not context_has_sim_env(context):
-        build_sim_env(context, **kwargs)
+        build_sim_env(context, **context.kwargs)
 
 
 def context_has_sim_env(context):
@@ -154,8 +125,8 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
     """
     init_context()
     context.env = Env(comm=context.comm, **kwargs)
-    configure_env(context.env)
-    cell = get_biophys_cell(context.env, context.gid, context.cell_type)
+    configure_hoc_env(context.env)
+    cell = get_biophys_cell(context.env, gid=context.gid, pop_name=context.cell_type)
     init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path,
                     correct_cm=context.correct_for_spines, correct_g_pas=context.correct_for_spines, env=context.env)
     context.sim = QuickSim(context.duration, cvode=cvode, daspk=daspk, dt=context.dt, verbose=verbose>1)

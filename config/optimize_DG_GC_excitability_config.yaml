@@ -88,15 +88,15 @@ rel_bounds:
   - 1.0
   - soma.gkabar
 - - axon.gkabar
-  - <
+  - '<'
   - 3.0
   - soma.gkabar
 - - axon.gkdrbar
-  - <
+  - '<'
   - 3.0
   - soma.gkdrbar
 - - ais.gkmbar
-  - >=
+  - '>='
   - 1.0
   - soma.gkmbar
 feature_names:
@@ -115,7 +115,7 @@ feature_names:
 - dend_bAP_ratio
 - rheobase
 - soma_spike_amp
-- f_I_slope
+- f_I_log10_slope
 - dend_spike_amp
 - iEPSP_i_unit
 - iEPSP_attenuation_short
@@ -139,6 +139,10 @@ get_features_stages:
   compute_features: compute_features_fI
   filter_features: filter_features_fI
 - source: optimize_DG_GC_spiking
+  get_args_dynamic: get_args_dynamic_spike_adaptation
+  compute_features: compute_features_spike_adaptation
+  filter_features: filter_features_spike_adaptation
+- source: optimize_DG_GC_spiking
   get_args_dynamic: get_args_dynamic_dend_spike
   compute_features: compute_features_dend_spike
   filter_features: filter_features_dend_spike
@@ -159,7 +163,7 @@ kwargs:
   correct_for_spines: True
   verbose: 2
   daspk: False
-  configFile: Small_Scale_Control_log_normal_weights.yaml
+  configFile: Small_Scale_Control_LN_weights.yaml
   templatePaths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoclibPath: ../dentate
   configPrefix: ../dentate/config
@@ -180,8 +184,7 @@ objective_names:
 - slow_depo
 - dend_bAP_ratio
 - soma_spike_amp
-# - th_count
-- adi_residuals
+- spike_adaptation_residuals
 - f_I_residuals
 - dend_spike_score
 - iEPSP_attenuation_short
@@ -221,7 +224,6 @@ target_range:
   dend_bAP_ratio: 0.0002
   rebound_firing: 0.002
   soma_spike_amp: 2.0
-  th_count: 0.002
   vm_th: 0.01
   vm_stability: 0.1
   dend_spike_amp: 0.1
@@ -238,10 +240,8 @@ target_val:
   rebound_firing: 0
   slow_depo: 5.0
   soma_spike_amp: 90.0
-  th_count: 1
   vm_th: -48.0
   vm_stability: 5.0
-  f_I_slope: 58.0
   dend_spike_amp: 15.
   iEPSP_unit_amp: 1.
   iEPSP_attenuation_short: 0.17
