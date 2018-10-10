@@ -23,6 +23,9 @@ bounds:
   axon.gkabar: !!python/tuple
   - 0.01
   - 0.18
+  e_pas: !!python/tuple
+  - -65.0
+  - -58.0
   soma.gCa factor: !!python/tuple
   - 0.01
   - 2.0
@@ -51,6 +54,98 @@ bounds:
   - 9.
   - 50.
 default_params:
+feature_names:
+- dend R_inp
+- term_dend R_inp
+- soma R_inp
+- vm_th
+- ADP
+- fAHP
+- mAHP
+- rebound_firing
+- vm_stability
+- ais_delay
+- slow_depo
+- dend_bAP_ratio
+- rheobase
+- soma_spike_amp
+- f_I_slope
+- f_I_intercept
+- adi_intercept
+- adi_slope
+- dend_spike_amp
+- soma_vm_rest
+update_context:
+- - optimize_DG_MC_spiking
+  - reset_biophysics
+- - optimize_DG_MC_leak
+  - update_mechanisms_leak
+- - optimize_DG_MC_spiking
+  - update_mechanisms_spiking
+get_features_stages:
+- source: optimize_DG_MC_leak
+  compute_features: compute_features_leak
+  get_args_static: get_args_static_leak
+- source: optimize_DG_MC_spiking
+  compute_features: compute_features_spike_shape
+- source: optimize_DG_MC_spiking
+  get_args_dynamic: get_args_dynamic_fI
+  compute_features: compute_features_fI
+  filter_features: filter_features_fI
+get_objectives:
+  optimize_DG_MC_leak: get_objectives_leak
+  optimize_DG_MC_spiking: get_objectives_spiking
+kwargs:
+  mech_file_path: mechanisms/20180905_DG_MC_excitability_mech.yaml
+  gid: 1000000
+  cell_type: MC
+  correct_for_spines: True
+  verbose: 2
+  daspk: False
+  configFile: Small_Scale_Control_MC_BC.yaml
+  templatePaths: ../DGC/Mateos-Aparicio2014:../dentate/templates
+  hoclibPath: ../dentate
+  configPrefix: ../dentate/config
+  datasetPrefix: ../dentate/datasets
+  resultsPath: data
+objective_names:
+- dend R_inp
+- term_dend R_inp
+- soma R_inp
+- soma_vm_rest
+- vm_th
+- ADP
+- fAHP
+- mAHP
+- rebound_firing
+- vm_stability
+- ais_delay
+- slow_depo
+##- dend_bAP_ratio
+- soma_spike_amp
+- th_count
+- adi_residuals #difference between spike intervals
+- f_I_residuals
+##- dend_spike_score
+optimization_title: DG_MC_leak_spiking
+param_gen: PopulationAnnealing
+param_names:
+- soma.g_pas
+- soma.gbar_nas
+- axon.gbar_nax
+- ais.gbar_nax
+- soma.gkabar
+- soma.gkdrbar
+- axon.gkabar
+- axon.gkdrbar
+- soma.sh_nas/x
+- ais.sha_nax
+- soma.gCa factor
+- soma.gCadepK factor
+- soma.gkmbar
+- ais.gkmbar
+- soma.tau_Cacum
+- e_pas
 rel_bounds:
 - - axon.gbar_nax
   - '>'
@@ -68,83 +163,6 @@ rel_bounds:
   - <
   - 3.0
   - soma.gkdrbar
-feature_names:
-- vm_th # spike threshold
-- ADP
-- fAHP
-- mAHP
-- rebound_firing
-- vm_stability
-- ais_delay
-- slow_depo
-- dend_bAP_ratio
-- rheobase
-- soma_spike_amp
-- f_I_slope
-- f_I_intercept
-- adi_intercept
-- adi_slope
-- dend_spike_amp
-update_context:
-- - optimize_DG_MC_spiking
-  - reset_biophysics
-- - optimize_DG_MC_spiking
-  - update_mechanisms_spiking
-get_features_stages:
-- source: optimize_DG_MC_spiking
-  get_args_dynamic: get_args_dynamic_i_holding
-  compute_features: compute_features_spike_shape
-- source: optimize_DG_MC_spiking
-  get_args_dynamic: get_args_dynamic_fI
-  compute_features: compute_features_fI
-  filter_features: filter_features_fI
-get_objectives:
-    optimize_DG_MC_spiking: get_objectives_spiking
-kwargs:
-  mech_file_path: mechanisms/20180905_DG_MC_excitability_mech.yaml
-  gid: 1000000
-  cell_type: MC
-  correct_for_spines: True
-  verbose: 2
-  daspk: False
-  configFile: Small_Scale_Control_MC_BC.yaml
-  templatePaths: ../DGC/Mateos-Aparicio2014:../dentate/templates
-  hoclibPath: ../dentate
-  configPrefix: ../dentate/config
-  datasetPrefix: ../dentate/datasets
-  resultsPath: data
-objective_names:
-- vm_th
-- ADP
-- fAHP
-- mAHP
-- rebound_firing
-- vm_stability
-- ais_delay
-- slow_depo
-##- dend_bAP_ratio
-- soma_spike_amp
-- th_count
-- adi_residuals #difference between spike intervals
-- f_I_residuals
-##- dend_spike_score
-optimization_title: DG_MC_spiking
-param_gen: PopulationAnnealing
-param_names:
-- soma.gbar_nas
-- axon.gbar_nax
-- ais.gbar_nax
-- soma.gkabar
-- soma.gkdrbar
-- axon.gkabar
-- axon.gkdrbar
-- soma.sh_nas/x
-- ais.sha_nax
-- soma.gCa factor
-- soma.gCadepK factor
-- soma.gkmbar
-- ais.gkmbar
-- soma.tau_Cacum
 target_range:
   dend R_inp: 1.
   soma R_inp: 0.5
@@ -160,9 +178,10 @@ target_range:
   vm_stability: 0.1
   ##dend_spike_amp: 0.1
   spike_rate: 0.1
+  soma vm_rest: 0.1
 target_val:
-  dend R_inp: 375.
-  soma R_inp: 295.
+  dend R_inp: 160.
+  soma R_inp: 126.
   ADP: 5.0 #after depolarization
   fAHP: 7.5 #fast after hyperpolarization (when it passes threshold on
   mAHP: 5. # medium hyperpolarization
@@ -179,6 +198,7 @@ target_val:
   adi_slope: 262.39
   adi_intercept: 94.529
   ##dend_spike_amp: 15.
+  soma vm_rest: -66.0
 x0:
   ais.gbar_nax: 2.101566E-01
   ais.gkmbar: 8.910924E-03
@@ -186,14 +206,15 @@ x0:
   axon.gbar_nax: 6.029868E-02
   axon.gkabar: 5.253822E-02
   axon.gkdrbar: 2.081830E-02
-  dend.g_pas slope: 8.922957E-06
-  dend.g_pas tau: 6.717500E+01
-  soma.gCa factor: 8.072385E-02
-  soma.gCadepK factor: 1.133785E+00
+  dend.g_pas slope: 1.058E-08
+  dend.g_pas tau: 3.886E+01
+  e_pas: -60.0
+  soma.gCa factor: 8.072385E-0
+  soma.gCadepK factor: 1.133785E+002
   soma.gbar_nas: 4.414296E-02
   soma.gkabar: 2.547421E-02
   soma.gkdrbar: 1.587365E-02
   soma.gkmbar: 4.555918E-03 #contributes to medium HP
-  soma.g_pas: 4.058603E-09
+  soma.g_pas: 1.050E-10
   soma.tau_Cacum: 3.582782E+01
   soma.sh_nas/x: 5.704921E+00
