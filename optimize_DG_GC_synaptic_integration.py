@@ -350,7 +350,7 @@ def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, expo
 
     sim = context.sim
     sim.backup_state()
-    sim.set_state(dt=dt, tstop=duration, cvode=False)
+    sim.set_state(dt=dt, tstop=duration, cvode=True)  # cvode=False)
 
     sim.modify_stim('holding', node=node, loc=loc, amp=context.i_holding['soma'][context.v_active])
 
@@ -534,7 +534,7 @@ def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, exp
 
     sim = context.sim
     sim.backup_state()
-    sim.set_state(dt=dt, tstop=duration, cvode=False)
+    sim.set_state(dt=dt, tstop=duration, cvode=True)  # cvode=False)
 
     sim.modify_stim('holding', node=node, loc=loc, amp=context.i_holding['soma'][context.v_active])
 
