@@ -65,10 +65,10 @@ def unit_tests_leak():
 
 
 
-def config_worker(**kwargs):
+def config_worker():
 
     if not context_has_sim_env(context):
-        build_sim_env(context, **kwargs)
+        build_sim_env(context, **context.kwargs)
 
 
 def context_has_sim_env(context):
@@ -88,8 +88,8 @@ def init_context():
     stim_dur = 500.
     duration = equilibrate + stim_dur
     dt = 0.025
-    v_init = -77.
-    v_active = -77.
+    v_init = -60.
+    v_active = -60.
     context.update(locals())
 
 
@@ -193,7 +193,7 @@ def compute_features_leak(x, section, export=False, plot=False):
     sim.parameters['duration'] = duration
     amp = -0.025
     context.sim.parameters['amp'] = amp
-    vm_rest, vm_offset, context.i_holding[section][v_init] = offset_vm(section, context, v_init)  # , i_history=context.i_holding)
+    vm_rest, vm_offset, context.i_holding[section][v_init] = offset_vm(section, context, v_init, vm_tol=0.1, dynamic=True)  # , i_history=context.i_holding)
     rec_dict = sim.get_rec(section)
     loc = rec_dict['loc']
     node = rec_dict['node']

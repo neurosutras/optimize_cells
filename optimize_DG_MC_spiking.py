@@ -161,7 +161,7 @@ def get_spike_adaptation_indexes(spike_times):
     if len(spike_times) < 3:
         return 0
     isi = np.diff(spike_times)
-    adi_perc = 100*(isi[len(isi)-1]-isi[len(isi)-2]) / (isi[1]-isi[0])
+    adi_perc = 100*(isi[len(isi)-1]) / isi[0]
     return adi_perc
 
 
@@ -234,7 +234,7 @@ def compute_features_spike_shape(x, i_holding, export=False, plot=False):
     """
 
     ##temp initial i_holding amplitude
-    i_holding['soma'][context.v_init] = 0.25
+    #i_holding['soma'][context.v_init] = 0.25
     ##
     start_time = time.time()
     config_sim_env(context)
@@ -247,7 +247,7 @@ def compute_features_spike_shape(x, i_holding, export=False, plot=False):
     v_active = context.v_active
     sim = context.sim
     context.i_holding = i_holding
-    offset_vm('soma', context, v_active, i_history=context.i_holding) #change holding current amplitude till holding resting membrane potential reached
+    offset_vm('soma', context, v_active, i_history=context.i_holding, vm_tol=0.1, dynamic=True) #change holding current amplitude till holding resting membrane potential reached
     spike_times = np.array(context.cell.spike_detector.get_recordvec())
     if np.any(spike_times < equilibrate):
         if context.verbose > 0:
@@ -543,7 +543,7 @@ def filter_features_fI(primitives, current_features, export=False):
     num_increments = context.num_increments
     i_inj_increment = context.i_inj_increment
     rheobase = current_features['rheobase']
-    exp_f_I = [experimental_f_I_slope * np.log((rheobase + i_inj_increment * i))+experimental_f_I_intercept
+    exp_f_I = [experimental_f_I_slope * np.log10((rheobase + i_inj_increment * i))+experimental_f_I_intercept
                for i in xrange(num_increments)] #Not included in new featres?
     if export:
         description = 'f_I'
@@ -591,7 +591,7 @@ def compute_features_dend_spike(x, i_holding, amp, export=False, plot=False):
 
     v_active = context.v_active
     context.i_holding = i_holding
-    #offset_vm('soma', context, v_active, i_history=context.i_holding)
+    offset_vm('soma', context, v_active, i_history=context.i_holding)
     sim = context.sim
     dt = context.dt
     stim_dur = context.dend_spike_stim_dur
@@ -697,7 +697,8 @@ def get_objectives_spiking(features):
     num_increments = context.num_increments
     i_inj_increment = context.i_inj_increment
     ##calculate target adi
-    target_adi = [context.target_val['adi_slope']*(rheobase+i_inj_increment*i) + context.target_val['adi_intercept'] for i in xrange(num_increments)]
+    target_adi = [context.target_val['adi_slope']*(rheobase+i_inj_increment*i) + context.target_val['adi_intercept']
+                  for i in xrange(num_increments)]
     lin_i_amp = [(rheobase + i_inj_increment * i)
                  for i in xrange(num_increments)]
     slope, intercept, r_value, p_value, std_err = stats.linregress(lin_i_amp, features['adi'])
@@ -708,10 +709,9 @@ def get_objectives_spiking(features):
         adi_residuals += ((this_adi - target_adi[i]) / (0.01 * target_adi[i])) ** 2.
     objectives['adi_residuals'] = adi_residuals / len(features['adi'])
 
-
-    target_f_I = [context.target_val['f_I_slope'] * np.log((rheobase + i_inj_increment * i)) + context.target_val['f_I_intercept']
-                  for i in xrange(num_increments)]
-    log_i_amp = [np.log((rheobase + i_inj_increment * i))
+    target_f_I = [context.target_val['f_I_slope'] * np.log10((rheobase + i_inj_increment * i)) +
+                  context.target_val['f_I_intercept'] for i in xrange(num_increments)]
+    log_i_amp = [np.log10((rheobase + i_inj_increment * i))
                  for i in xrange(num_increments)]
     slope, intercept, r_value, p_value, std_err = stats.linregress(log_i_amp, features['f_I'])
     features['f_I_slope'] = slope

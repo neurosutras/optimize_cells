@@ -340,7 +340,7 @@ def flush_engine_buffer(result):
     sys.stdout.flush()
 
 
-def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.005, vm_tol=0.5, i_history=None):
+def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.005, vm_tol=0.5, i_history=None, dynamic=False):
     """
 
     :param rec_name: str
@@ -391,10 +391,58 @@ def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.005, vm_tol=0.5, i
     if sim.verbose:
         print 'offset_vm: pid: %i; %s; vm_rest: %.1f, vm_target: %.1f' % (os.getpid(), rec_name, vm_rest, vm_target)
 
-    if vm_rest > vm_target:
-        i_inc *= -1.
-        delta_str = 'decreased'
-        while vm_rest > vm_target - vm_tol:
+    if dynamic is True:
+        if not vm_target - vm_tol <= vm_rest <= vm_target + vm_tol:
+            #Initial step to calculate i_inc multiplier
+            i_amp += i_inc
+            delta_str = 'increased'
+            sim.modify_stim('holding', amp=i_amp)
+            sim.run(vm_target)
+            vm = np.interp(t, sim.tvec, rec)
+            vm_rest = np.mean(vm[int((duration - 3.) / dt):int((duration - 1.) / dt)])
+            vm_inc = vm_rest-vm_before
+            vm_diff = vm_target-vm_rest
+            i_inc_mult = (vm_diff/vm_inc)
+            i_inc = i_inc_mult*i_inc
+            if sim.verbose:
+                print 'offset_vm: pid: %i; %s; %s i_holding to %.3f nA; vm_rest: %.1f; i_inc_mult: %.1f; i_inc: %.5f' % \
+                      (os.getpid(), rec_name, delta_str, i_amp, vm_rest, i_inc_mult, i_inc)
+            while not vm_target - vm_tol <= vm_rest <= vm_target + vm_tol:
+                i_amp += i_inc
+                if i_inc > 0:
+                    delta_str = 'increased'
+                else:
+                    delta_str = 'decreased'
+                vm_before = vm_rest
+                sim.modify_stim('holding', amp=i_amp)
+                sim.run(vm_target)
+                vm = np.interp(t, sim.tvec, rec)
+                vm_rest = np.mean(vm[int((duration - 3.) / dt):int((duration - 1.) / dt)])
+                vm_inc = vm_rest-vm_before
+                vm_diff = vm_target-vm_rest
+                i_inc_mult = (vm_diff / vm_inc)
+                i_inc = i_inc_mult * i_inc
+                if sim.verbose:
+                    print 'offset_vm: pid: %i; %s; %s i_holding to %.3f nA; vm_rest: %.1f; i_inc_mult: %.1f; i_inc: %.1f' % \
+                          (os.getpid(), rec_name, delta_str, i_amp, vm_rest, i_inc_mult, i_inc)
+    else:
+        if vm_rest > vm_target:
+            i_inc *= -1.
+            delta_str = 'decreased'
+            while vm_rest > vm_target - vm_tol:
+                i_amp += i_inc
+                sim.modify_stim('holding', amp=i_amp)
+                sim.run(vm_target)
+                vm = np.interp(t, sim.tvec, rec)
+                vm_rest = np.mean(vm[int((duration - 3.) / dt):int((duration - 1.) / dt)])
+                if sim.verbose:
+                    print 'offset_vm: pid: %i; %s; %s i_holding to %.3f nA; vm_rest: %.1f' % \
+                          (os.getpid(), rec_name, delta_str, i_amp, vm_rest)
+        if i_inc < 0.:
+            i_inc *= -1.
+        delta_str = 'increased'
+        while vm_rest < vm_target:
+            prev_vm_rest = vm_rest
             i_amp += i_inc
             sim.modify_stim('holding', amp=i_amp)
             sim.run(vm_target)
@@ -403,23 +451,11 @@ def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.005, vm_tol=0.5, i
             if sim.verbose:
                 print 'offset_vm: pid: %i; %s; %s i_holding to %.3f nA; vm_rest: %.1f' % \
                       (os.getpid(), rec_name, delta_str, i_amp, vm_rest)
-    if i_inc < 0.:
-        i_inc *= -1.
-    delta_str = 'increased'
-    while vm_rest < vm_target:
-        prev_vm_rest = vm_rest
-        i_amp += i_inc
+        if abs(vm_rest - vm_target) > abs(prev_vm_rest - vm_target):
+            i_amp -= i_inc
+            vm_rest = prev_vm_rest
         sim.modify_stim('holding', amp=i_amp)
-        sim.run(vm_target)
-        vm = np.interp(t, sim.tvec, rec)
-        vm_rest = np.mean(vm[int((duration - 3.) / dt):int((duration - 1.) / dt)])
-        if sim.verbose:
-            print 'offset_vm: pid: %i; %s; %s i_holding to %.3f nA; vm_rest: %.1f' % \
-                  (os.getpid(), rec_name, delta_str, i_amp, vm_rest)
-    if abs(vm_rest - vm_target) > abs(prev_vm_rest - vm_target):
-        i_amp -= i_inc
-        vm_rest = prev_vm_rest
-    sim.modify_stim('holding', amp=i_amp)
+
     if sim.verbose:
         print 'offset_vm: pid: %i; %s; vm_rest: %.1f, vm_target: %.1f' % (os.getpid(), rec_name, vm_rest, vm_target)
 
