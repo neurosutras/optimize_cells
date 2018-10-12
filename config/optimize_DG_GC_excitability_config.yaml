@@ -36,11 +36,11 @@ bounds:
   - 0.01
   - 0.25
   soma.gCa factor: !!python/tuple
-  - 0.01
-  - 2.0
+  - 0.005
+  - 1.5
   soma.gCadepK factor: !!python/tuple
-  - 0.0005
-  - 2.0
+  - 0.01
+  - 3.0
   soma.gbar_nas: !!python/tuple
   - 0.01
   - 0.05
@@ -57,14 +57,11 @@ bounds:
   - 0.0005
   - 0.005
   soma.sh_nas/x: !!python/tuple
-  - 0.1
-  - 6.0
-  dend.sh_nas: !!python/tuple
-  - 0.
-  - 6.0
+  - 1.0
+  - 8.0
   soma.tau_Cacum: !!python/tuple
   - 9.
-  - 50.
+  - 100.
 default_params:
 rel_bounds:
 - - dend.gbar_nas
@@ -232,9 +229,12 @@ target_val:
   dend R_inp: 375.
   soma R_inp: 295.
   soma vm_rest: -77.0
-  ADP: 5.0
-  fAHP: 7.5
-  mAHP: 5.
+  min_ADP: 1.
+  max_ADP: 5.
+  min_fAHP: 3.0
+  max_fAHP: 7.5
+  min_mAHP: 5.0
+  max_mAHP: 12.5
   ais_delay: 0.0
   dend_bAP_ratio: 0.3
   rebound_firing: 0

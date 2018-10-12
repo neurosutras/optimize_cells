@@ -411,7 +411,8 @@ def compute_features_spike_shape(x, i_holding, export=False, plot=False):
         end = th_x + int(10. / dt)
     dend_peak = np.max(dend_vm[th_x:end])
     dend_pre = np.mean(dend_vm[th_x - int(3. / dt):th_x - int(1. / dt)])
-    result['dend_bAP_ratio'] = (dend_peak - dend_pre) / result['soma_spike_amp'] #back propagation ratio
+    # ratio of back-propagating spike amplitude in dendrite to somatic spike amplitude
+    result['dend_bAP_ratio'] = (dend_peak - dend_pre) / result['soma_spike_amp']
 
     # calculate AIS delay
     soma_dvdt = np.gradient(soma_vm, dt)
@@ -864,17 +865,29 @@ def get_objectives_spiking(features):
     :return: tuple of dict
     """
     objectives = dict()
-    for target in ['vm_th', 'fAHP', 'mAHP', 'ADP', 'rebound_firing', 'vm_stability', 'ais_delay', 'dend_bAP_ratio',
+    for target in ['vm_th', 'rebound_firing', 'vm_stability', 'ais_delay', 'dend_bAP_ratio',
                    'soma_spike_amp']:
         objectives[target] = ((context.target_val[target] - features[target]) / context.target_range[target]) ** 2.
 
-    # don't penalize slow_depo outside target range:
+    # only penalize slow_depo outside target range:
     target = 'slow_depo'
     if features[target] > context.target_val[target]:
         objectives[target] = ((features[target] - context.target_val[target]) /
                               (0.01 * context.target_val[target])) ** 2.
     else:
         objectives[target] = 0.
+    # only penalize AHP and ADP amplitudes outside target range:
+    for target in ['fAHP', 'mAHP', 'ADP']:
+        min_val_key = 'min_' + target
+        max_val_key = 'max_' + target
+        if features[target] < context.target_val[min_val_key]:
+            objectives[target] = ((features[target] - context.target_val[min_val_key]) /
+                                  context.target_range[target]) ** 2.
+        elif features[target] > context.target_val[max_val_key]:
+            objectives[target] = ((features[target] - context.target_val[max_val_key]) /
+                                  context.target_range[target]) ** 2.
+        else:
+            objectives[target] = 0.
 
     exp_ISI1 = context.exp_ISI1_array
     exp_ISI2 = context.exp_ISI2_array
