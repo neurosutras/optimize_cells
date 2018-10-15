@@ -146,8 +146,6 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
     :param cvode: bool
     :param daspk: bool
     """
-    if 'previous_module' in context() and context.previous_module == __file__:
-        return
     init_context()
     context.env = Env(comm=context.comm, **kwargs)
     configure_hoc_env(context.env)
