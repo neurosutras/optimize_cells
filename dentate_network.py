@@ -766,5 +766,5 @@ def main(config_file, template_paths, dataset_prefix, results_path, results_id, 
 
 if __name__ == '__main__':
     # main(args=sys.argv[(sys.argv.index("main.py") + 1):])
-    main('../dentate/config/Small_Scale_Control_log_normal_weights.yaml', '../dgc/Mateos-Aparicio2014',
+    main('../dentate/config/Small_Scale_Control_LN_weights.yaml', '../dgc/Mateos-Aparicio2014',
          '../dentate/datasets', 'data', '', None, 1, False, 0.001, 1, -75., 1., 360., 0.025, False, False, False)
