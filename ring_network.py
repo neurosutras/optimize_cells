@@ -112,8 +112,8 @@ def runring(ring, pc, comm, tstop=100):
   ring.vecdict_to_pydict(ring.voltage_recvec, 'rec')
   nhost = int(pc.nhost())
   #Use MPI Gather instead:
-  #all_dicts = pc.py_alltoall([ring.pydicts for i in range(nhost)])
-  all_dicts = comm.gather(ring.pydicts, root=0)
+  all_dicts = pc.py_alltoall([ring.pydicts for i in range(nhost)])
+  #all_dicts = comm.gather(ring.pydicts, root=0)
   if int(pc.id()) == 0:
     t = {key: value for dict in all_dicts for key, value in dict['t'].iteritems()}
     rec = {key: value for dict in all_dicts for key, value in dict['rec'].iteritems()}
