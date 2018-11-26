@@ -30,6 +30,8 @@ class Network(object):
   def mknetwork(self, ncell):
     self.mkcells(ncell)
     self.connectcells(ncell)
+    if int(self.pc.id() == 0):
+        print "fin"
 
   def mkcells(self, ncell):
     rank = int(self.pc.id())
