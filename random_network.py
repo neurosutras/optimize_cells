@@ -30,8 +30,6 @@ class Network(object):
   def mknetwork(self, ncell):
     self.mkcells(ncell)
     self.connectcells(ncell)
-    if int(self.pc.id() == 0):
-        print "fin"
 
   def mkcells(self, ncell):
     rank = int(self.pc.id())
@@ -88,7 +86,7 @@ class Network(object):
     self.stim.number = 1
     self.stim.start = 0
     for i in range(ncell):
-      if random.random() >= .3:  # stimulate only 30% of FF
+      if not self.pc.gid_exists(i) or random.random() >= .3:  # stimulate only 30% of FF
         continue
       nc = h.NetCon(self.stim, self.pc.gid2cell(i).syn)
       nc.delay = 0
@@ -130,13 +128,18 @@ class Network(object):
       self.ratedict = {}
       self.peakdict = {}
       for key, vec in vecdict.iteritems():
-          isivec = h.Vector()
-          isivec.deriv(vec, 1, 1)
-          rate = 1. / (isivec.mean() * 1000)
-          self.ratedict[key] = rate
-          histvec = vec.histogram(0, 100, 20)  #tstop
-          self.peakdict[key] = histvec.max() / float(20 * 1000)
+        isivec = h.Vector()
+        isivec.deriv(vec, 1, 1)
+        rate = 1. / (isivec.mean() * 1000)
+        self.ratedict[key] = rate
+        histvec = vec.histogram(0, 100, 20)  #tstop
+        self.peakdict[key] = histvec.max() / float(20 * 1000)
 
+  def remake_syn(self):
+    for pair, nc in self.ncdict.iteritems():
+        nc.weight[0] = 0.
+        self.ndict.pop(pair)
+    connectcells(self, self.ncells)
 
 def run_network(network, pc, comm, tstop=100):
   pc.set_maxstep(10)

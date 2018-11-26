@@ -111,6 +111,7 @@ def compute_features(x, export=False):
     context.pc.gid_clear()
     context.network = Network(context.ncell, context.delay, context.pc,
                               e2e=context.e2e, e2i=context.e2i, i2i=context.i2i, i2e=context.i2e)
+    #context.network.remake_syn()
     results = run_network(context.network, context.pc, context.interface.comm)
     if int(context.pc.id()) == 0:
         processed_result = results
