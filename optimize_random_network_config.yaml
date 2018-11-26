@@ -1,0 +1,55 @@
+bounds:
+  EE_connection_prob: !!python/tuple
+  - 1.0E-4
+  - .4
+  EI_connection_prob: !!python/tuple
+  - 1.0E-4
+  - .4
+  IE_connection_prob: !!python/tuple
+  - 1.0E-4
+  - .4
+  II_connection_prob: !!python/tuple
+  - 1.0E-4
+  - .4
+feature_names:
+- E_peak_rate
+- I_peak_rate
+- E_mean_rate
+- I_mean_rate
+update_context:
+- - optimize_random_network
+  - update_context
+get_features_stages:
+- source: optimize_random_network
+  compute_features: compute_features
+get_objectives:
+  optimize_random_network: get_objectives
+kwargs:
+  verbose: True
+objective_names:
+- E_peak_rate
+- I_peak_rate
+- E_mean_rate
+- I_mean_rate
+optimization_title: random_network
+param_gen: PopulationAnnealing
+param_names:
+- EE_connection_prob
+- EI_connection_prob
+- II_connection_prob
+- IE_connection_prob
+target_range:
+  E_peak_rate: 5.
+  I_peak_rate: 10.
+  E_mean_rate: 2.
+  I_mean_rate: 11.
+target_val:
+  E_peak_rate: 10.
+  I_peak_rate: 30.
+  E_mean_rate: 3.
+  I_mean_rate: 3.5
+x0:
+  EE_connection_prob: 0.05
+  EI_connection_prob: 0.05
+  IE_connection_prob: 0.05
+  II_connection_prob: 0.05
