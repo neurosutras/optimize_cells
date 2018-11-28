@@ -12,7 +12,8 @@ feature_names:
 - n2.EPSP
 - n2.IPSP
 update_context:
-  optimize_simple_ring: update_context_simple_ring
+- - optimize_simple_ring
+  - update_context_simple_ring
 get_features_stages:
 - source: optimize_simple_ring
   compute_features: compute_features_simple_ring

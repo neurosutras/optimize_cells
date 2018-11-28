@@ -1,31 +1,25 @@
-"""
-Uses nested.optimize to tune synaptic weights within a simple ring network.
-
-Requires a YAML file to specify required configuration parameters.
-Requires use of a nested.parallel interface.
-"""
-__author__ = 'Aaron D. Milstein and Grace Ng'
 from nested.optimize_utils import *
 from nested.parallel import *
-from ring_network import *
+from random_network import *
 import collections
 import click
 
 
-script_filename='optimize_simple_ring.py'
+script_filename='optimize_random_network.py'
 
 context = Context()
 
 
 @click.command()
 @click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='archived/config/optimize_simple_ring_config.yaml')
+              default='optimize_random_network_config.yaml')
 @click.option("--export", is_flag=True)
 @click.option("--output-dir", type=str, default='data')
 @click.option("--export-file-path", type=str, default=None)
 @click.option("--label", type=str, default=None)
 @click.option("--disp", is_flag=True)
 @click.option("--verbose", is_flag=True)
+#keep
 def main(config_file_path, export, output_dir, export_file_path, label, disp, verbose):
     """
 
@@ -49,7 +43,7 @@ def main(config_file_path, export, output_dir, export_file_path, label, disp, ve
     sequences = [[context.x0_array] * num_params] + [[context.export] * num_params]
     primitives = context.interface.map(compute_features_simple_ring, *sequences)
     features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
-    features, objectives = get_objectives_simple_ring(features)
+    features, objectives = get_objectives(features)
     print 'params:'
     pprint.pprint(context.x0_dict)
     print 'features:'
@@ -59,6 +53,7 @@ def main(config_file_path, export, output_dir, export_file_path, label, disp, ve
     context.interface.stop()
 
 
+#keep
 def config_worker():
     """
 
@@ -71,7 +66,7 @@ def config_worker():
     context.pc = pc
     setup_network(**context.kwargs)
 
-
+#keep
 def init_context():
     """
 
@@ -81,7 +76,7 @@ def init_context():
     tstop = 100
     context.update(locals())
 
-
+#keep
 def report_pc_id():
     return {'pc.id_world': context.pc.id_world(), 'pc.id': context.pc.id()}
 
@@ -93,12 +88,10 @@ def setup_network(verbose=False, cvode=False, daspk=False, **kwargs):
     :param cvode: bool
     :param daspk: bool
     """
-    context.ring = Ring(context.ncell, context.delay, context.pc)
-    # context.pc.set_maxstep(10)
+    context.network = Network(context.ncell, context.delay, context.pc)
 
 
-#Need to update this as well -- do we need both update functions?
-def update_context_simple_ring(x, local_context=None):
+def update_context(x, local_context=None):
     """
 
     :param x: array
@@ -107,43 +100,34 @@ def update_context_simple_ring(x, local_context=None):
     if local_context is None:
         local_context = context
     param_indexes = local_context.param_indexes
-    context.ring.update_syn_weight((0, 1), x[param_indexes['n0.syn_weight n1']])
-    context.ring.update_syn_weight((0, 2), x[param_indexes['n0.syn_weight n2']])
-    context.ring.update_syn_weight((1, 2), x[param_indexes['n1.syn_weight n2']])
+    context.e2e = x[param_indexes['EE_connection_prob']]
+    context.e2i = x[param_indexes['EI_connection_prob']]
+    context.i2i = x[param_indexes['II_connection_prob']]
+    context.i2e = x[param_indexes['IE_connection_prob']]
 
-
-def compute_features_simple_ring(x, export=False):
+# magic nums
+def compute_features(x, export=False):
     update_source_contexts(x, context)
-    results = runring(context.ring, context.pc, context.interface.comm)
+    context.pc.gid_clear()
+    context.network = Network(context.ncell, context.delay, context.pc,
+                              e2e=context.e2e, e2i=context.e2i, i2i=context.i2i, i2e=context.i2e)
+    #context.network.remake_syn()
+    results = run_network(context.network, context.pc, context.interface.comm)
     if int(context.pc.id()) == 0:
-        max_ind = np.argmax(np.array(results['rec'][2]))
-        min_ind = np.argmin(np.array(results['rec'][2]))
-        equil_index = np.floor(0.05*len(results['rec'][2]))
-        vm_baseline = np.mean(np.array(results['rec'][2][:int(equil_index)]))
-        processed_result = {'n2.EPSP': results['rec'][2][max_ind] - vm_baseline, 'peak_t': results['t'][2][max_ind],
-                            'n2.IPSP': results['rec'][2][min_ind] - vm_baseline, 'min_t': results['t'][2][min_ind],
-                            'PC id': context.pc.id_world()}
+        processed_result = results
     else:
         processed_result = None
     return processed_result
 
 
-def get_objectives_simple_ring(features):
+# keep
+def get_objectives(features):
     objectives = {}
-    for feature_name in ['n2.EPSP', 'n2.IPSP']:
+    for feature_name in ['E_peak_rate', 'I_peak_rate', 'E_mean_rate', 'I_mean_rate']:
         objective_name = feature_name
         objectives[objective_name] = ((context.target_val[objective_name] - features[feature_name]) /
                                                   context.target_range[objective_name]) ** 2.
     return features, objectives
-
-
-"""
-def calc_spike_count(indiv, i):
-    """"""
-    x = indiv['x']
-    results = runring(context.ring)
-    return {'pop_id': int(i), 'result_list': [{'id': context.pc.id_world()}, results]}
-"""
 
 
 if __name__ == '__main__':
