@@ -24,7 +24,7 @@ conda remove openmpi --force
 conda remove hdf5 --force
 conda remove h5py --force
 
-conda install ipyparallel -no-deps
+conda install ipyparallel --no-deps
 
 2) install mpich2:
 
@@ -74,15 +74,21 @@ git clone https://github.com/nrnhines/iv.git .
 make
 make install
 
+On MacOS Mojave (10.14), stdlibc++ is deprecated, and needs some workarounds: Try:
+xcode-select --install
+# open /Library/Developer/CommandLineTools/Packages/
+# Run the package macOS_SDK_headers_for_macOS_10.14.pkg
+
 mkdir ~/neuron/nrnsrc
 mkdir ~/neuron/nrn
 cd ~/neuron/nrnsrc
 git clone https://github.com/nrnhines/nrn.git .
 ./build.sh
+export CFLAGS='-Qunused-arguments -mmacosx-version-min=10.9 -stdlib=libc++'
+export CXXFLAGS='-Qunused-arguments -mmacosx-version-min=10.9 -stdlib=libc++'
+export LDFLAGS='-Qunused-arguments -mmacosx-version-min=10.9 -stdlib=libc++'
 ./configure --prefix=$HOME/neuron/nrn --with-iv=$HOME/neuron/iv --with-nrnpython=$HOME/anaconda2/bin/python \
-    --with-paranrn --with-mpi
-# export CFLAGS='-Qunused-arguments'
-# export CXXFLAGS='-Qunused-arguments'
+--with-paranrn --with-mpi --with-readline=no
 cd ~/neuron/nrnsrc/src/nrnmpi
 sh mkdynam.sh
 cd ~/neuron/nrnsrc
@@ -159,7 +165,7 @@ f.close()
 run with:
 mpiexec -n 4 python test_phdf5.py
 check contents of file with:
-h5dump test_phdf5.py
+h5dump parallel_test.hdf5
 
 
 II) Special tips for installing neuron on some linux clusters:

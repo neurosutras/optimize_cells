@@ -23,8 +23,8 @@ update_context:
   - update_mechanisms_leak
 get_features_stages:
 - source: optimize_DG_GC_leak
-  compute_features: compute_features_leak
   get_args_static: get_args_static_leak
+  compute_features: compute_features_leak
 get_objectives:
   optimize_DG_GC_leak: get_objectives_leak
 kwargs:
@@ -34,7 +34,7 @@ kwargs:
   correct_for_spines: True
   verbose: 2
   daspk: False
-  configFile: Small_Scale_Control_LN_weights.yaml
+  configFile: Small_Scale_Control_LN_weights_Sat.yaml
   templatePaths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoclibPath: ../dentate
   configPrefix: ../dentate/config

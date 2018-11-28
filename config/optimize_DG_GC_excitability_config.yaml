@@ -37,10 +37,10 @@ bounds:
   - 0.25
   soma.gCa factor: !!python/tuple
   - 0.005
-  - 1.5
+  - 2.0
   soma.gCadepK factor: !!python/tuple
-  - 0.01
-  - 3.0
+  - 0.0005
+  - 2.0
   soma.gbar_nas: !!python/tuple
   - 0.01
   - 0.05
@@ -158,9 +158,9 @@ kwargs:
   gid: 0
   cell_type: GC
   correct_for_spines: True
-  verbose: 2
+  verbose: 1
   daspk: False
-  configFile: Small_Scale_Control_LN_weights.yaml
+  configFile: Small_Scale_Control_LN_weights_Sat.yaml
   templatePaths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoclibPath: ../dentate
   configPrefix: ../dentate/config

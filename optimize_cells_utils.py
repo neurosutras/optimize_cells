@@ -349,6 +349,7 @@ def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.005, vm_tol=0.5, i
     :param i_inc: float (nA)
     :param vm_tol: float (mV)
     :param i_history: defaultdict of dict
+    :param dynamic: bool; whether to use a gradient-based approach to determine i_inc
     """
     if context is None:
         raise RuntimeError('offset_vm: pid: %i; missing required Context object' % os.getpid())
@@ -392,39 +393,26 @@ def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.005, vm_tol=0.5, i
         print 'offset_vm: pid: %i; %s; vm_rest: %.1f, vm_target: %.1f' % (os.getpid(), rec_name, vm_rest, vm_target)
 
     if dynamic is True:
-        if not vm_target - vm_tol <= vm_rest <= vm_target + vm_tol:
-            #Initial step to calculate i_inc multiplier
-            i_amp += i_inc
-            delta_str = 'increased'
+        dyn_i_inc = i_inc
+        while not vm_target - vm_tol <= vm_rest <= vm_target + vm_tol:
+            prev_i_inc = dyn_i_inc
+            i_amp += dyn_i_inc
+            if dyn_i_inc > 0:
+                delta_str = 'increased'
+            else:
+                delta_str = 'decreased'
+            prev_vm_rest = vm_rest
             sim.modify_stim('holding', amp=i_amp)
             sim.run(vm_target)
             vm = np.interp(t, sim.tvec, rec)
             vm_rest = np.mean(vm[int((duration - 3.) / dt):int((duration - 1.) / dt)])
-            vm_inc = vm_rest-vm_before
-            vm_diff = vm_target-vm_rest
-            i_inc_mult = (vm_diff/vm_inc)
-            i_inc = i_inc_mult*i_inc
+            vm_inc = vm_rest - prev_vm_rest
+            vm_diff = vm_target - vm_rest
+            i_inc_mult = vm_diff / vm_inc
+            dyn_i_inc = i_inc_mult * prev_i_inc
             if sim.verbose:
-                print 'offset_vm: pid: %i; %s; %s i_holding to %.3f nA; vm_rest: %.1f; i_inc_mult: %.1f; i_inc: %.5f' % \
-                      (os.getpid(), rec_name, delta_str, i_amp, vm_rest, i_inc_mult, i_inc)
-            while not vm_target - vm_tol <= vm_rest <= vm_target + vm_tol:
-                i_amp += i_inc
-                if i_inc > 0:
-                    delta_str = 'increased'
-                else:
-                    delta_str = 'decreased'
-                vm_before = vm_rest
-                sim.modify_stim('holding', amp=i_amp)
-                sim.run(vm_target)
-                vm = np.interp(t, sim.tvec, rec)
-                vm_rest = np.mean(vm[int((duration - 3.) / dt):int((duration - 1.) / dt)])
-                vm_inc = vm_rest-vm_before
-                vm_diff = vm_target-vm_rest
-                i_inc_mult = (vm_diff / vm_inc)
-                i_inc = i_inc_mult * i_inc
-                if sim.verbose:
-                    print 'offset_vm: pid: %i; %s; %s i_holding to %.3f nA; vm_rest: %.1f; i_inc_mult: %.1f; i_inc: %.1f' % \
-                          (os.getpid(), rec_name, delta_str, i_amp, vm_rest, i_inc_mult, i_inc)
+                print 'offset_vm: pid: %i; %s; %s i_holding to %.3f nA; vm_rest: %.1f; i_inc_mult: %.1f; ' \
+                      'i_inc: %.5f' % (os.getpid(), rec_name, delta_str, i_amp, vm_rest, i_inc_mult, dyn_i_inc)
     else:
         if vm_rest > vm_target:
             i_inc *= -1.
@@ -456,8 +444,8 @@ def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.005, vm_tol=0.5, i
             vm_rest = prev_vm_rest
         sim.modify_stim('holding', amp=i_amp)
 
-    if sim.verbose:
-        print 'offset_vm: pid: %i; %s; vm_rest: %.1f, vm_target: %.1f' % (os.getpid(), rec_name, vm_rest, vm_target)
+        if sim.verbose:
+            print 'offset_vm: pid: %i; %s; vm_rest: %.1f, vm_target: %.1f' % (os.getpid(), rec_name, vm_rest, vm_target)
 
     if i_history is not None:
         i_history[rec_name][vm_target] = i_amp
@@ -496,22 +484,30 @@ def get_spike_shape(vm, spike_times, context=None):
     v_before = np.mean(vm[th_x - int(0.1 / dt):th_x])
     x_peak = np.argmax(vm[th_x:th_x + int(5. / dt)]) + th_x
     v_peak = vm[x_peak]
-    f_end = x_peak + int(10. / dt)
-    m_end = x_peak + int(50. / dt)
 
+    min_ISI = 20.  # ms; abort if 2nd spike occurs within this interval at rheobase
     spike_detector_delay = spike_times[0] - (equilibrate + 1. + th_x * dt)
 
-    if f_end >= len(vm) or m_end >= len(vm):
+    if len(spike_times) > 1:
+        this_ISI = spike_times[1] - spike_times[0]
+        if this_ISI < min_ISI:
+            return None
+        else:
+            m_end = th_x + int(this_ISI / dt)
+    elif len(vm) - th_x <= int(min_ISI / dt):
         return None
-    if len(spike_times) > 1 and int((spike_times[1] - spike_detector_delay) / dt) - start < m_end:
-        return None
-    rising_x = np.where(dvdt[x_peak+1:f_end] > 0.)[0]
+    else:
+        m_end = len(vm)
+
+    # find fAHP trough
+    rising_x = np.where(dvdt[x_peak+1:m_end] > 0.)[0]
     if rising_x.any():
         f_end = x_peak + 1 + rising_x[0]
     x_fAHP = np.argmin(vm[x_peak:f_end]) + x_peak
     v_fAHP = vm[x_fAHP]
     fAHP = v_before - v_fAHP
-    
+
+    # find ADP
     rising_x = np.where(dvdt[x_fAHP:m_end] > 0.)[0]
     if not rising_x.any():
         ADP = 0.

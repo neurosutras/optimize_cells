@@ -1,13 +1,4 @@
 bounds:
-  dend.g_pas slope: !!python/tuple
-  - 1.0E-9
-  - 5.0E-5
-  dend.g_pas tau: !!python/tuple
-  - 25.
-  - 400.
-  soma.g_pas: !!python/tuple
-  - 1.0E-12
-  - 1.0E-7
   ais.gbar_nax: !!python/tuple
   - 0.02
   - 0.5
@@ -33,7 +24,7 @@ bounds:
   - 0.01
   - 0.25
   soma.gCa factor: !!python/tuple
-  - 0.01
+  - 0.005
   - 2.0
   soma.gCadepK factor: !!python/tuple
   - 0.0005
@@ -54,14 +45,11 @@ bounds:
   - 0.0005
   - 0.005
   soma.sh_nas/x: !!python/tuple
-  - 0.1
-  - 6.0
-  dend.sh_nas: !!python/tuple
-  - 0.
-  - 6.0
+  - 1.0
+  - 8.0
   soma.tau_Cacum: !!python/tuple
   - 9.
-  - 50.
+  - 100.
 default_params:
 rel_bounds:
 - - dend.gbar_nas
@@ -85,15 +73,15 @@ rel_bounds:
   - 1.0
   - soma.gkabar
 - - axon.gkabar
-  - <
+  - '<'
   - 3.0
   - soma.gkabar
 - - axon.gkdrbar
-  - <
+  - '<'
   - 3.0
   - soma.gkdrbar
 - - ais.gkmbar
-  - >=
+  - '>='
   - 1.0
   - soma.gkmbar
 feature_names:
@@ -140,7 +128,7 @@ kwargs:
   correct_for_spines: True
   verbose: 2
   daspk: False
-  configFile: Small_Scale_Control_LN_weights.yaml
+  configFile: Small_Scale_Control_LN_weights_Sat.yaml
   templatePaths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoclibPath: ../dentate
   configPrefix: ../dentate/config
@@ -181,8 +169,6 @@ param_names:
 - ais.gkmbar
 - soma.tau_Cacum
 target_range:
-  dend R_inp: 1.
-  soma R_inp: 0.5
   ADP: 0.05
   fAHP: 0.07
   mAHP: 0.05
@@ -195,11 +181,12 @@ target_range:
   dend_spike_amp: 0.1
   spike_rate: 0.1
 target_val:
-  dend R_inp: 375.
-  soma R_inp: 295.
-  ADP: 5.0
-  fAHP: 7.5
-  mAHP: 5.
+  min_ADP: 1.
+  max_ADP: 5.
+  min_fAHP: 3.0
+  max_fAHP: 7.5
+  min_mAHP: 5.0
+  max_mAHP: 12.5
   ais_delay: 0.0
   dend_bAP_ratio: 0.3
   rebound_firing: 0
@@ -212,18 +199,14 @@ x0:
   soma.gCa factor: 2.674000E-02
   soma.tau_Cacum: 4.070072E+01
   dend.gbar_nas min: 1.307792E-02
-  dend.g_pas slope: 3.445070E-05
   axon.gkabar: 1.319983E-01
   soma.gkmbar: 4.509615E-03
-  dend.g_pas tau: 8.462166E+01
   ais.sha_nax: -2.916213E+00
   soma.gkdrbar: 9.680493E-04
   soma.sh_nas/x: 5.344927E+00
   ais.gkmbar: 6.371662E-03
   dend.gkabar: 2.394512E-01
   ais.gbar_nax: 2.257536E-01
-  e_pas: -7.498501E+01
-  soma.g_pas: 3.474107E-08
   dend.gbar_nas: 4.299971E-02
   axon.gbar_nax: 4.895389E-02
   soma.gbar_nas: 4.841435E-02
