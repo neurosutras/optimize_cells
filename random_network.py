@@ -6,6 +6,7 @@ h.load_file('nrngui.hoc')
 
 # adopted from ring_network.py and ring_cell.py
 NUM_POP = 3
+import numpy as np
 
 #=================== network class
 class Network(object):
@@ -54,6 +55,10 @@ class Network(object):
       for o in output_indices:
         if random.random() >= prob:
           pair_list.append((i, o))
+    for elem in pair_list:
+        x, y = elem
+        if x == y:
+            pair_list.remove(elem)
     return pair_list
 
   def connectcells(self, ncell):
@@ -74,7 +79,7 @@ class Network(object):
           syn = target.syn
           nc = self.pc.gid_connect(presyn_gid, syn)
           nc.delay = self.delay
-          nc.weight[0] = 0.01
+          nc.weight[0] = 0.8
           self.ncdict.update({pair: nc})
     # print self.ncdict
 
@@ -82,15 +87,17 @@ class Network(object):
   def mkstim(self, ncell):
     if not self.pc.gid_exists(0):
       return
+    print "k"
     self.stim = h.NetStim()
-    self.stim.number = 1
+    self.stim.number = 1000
+    self.stim.interval = 1
     self.stim.start = 0
     for i in range(ncell):
-      if not self.pc.gid_exists(i) or random.random() >= .3:  # stimulate only 30% of FF
+      if not self.pc.gid_exists(i): #or random.random() >= .3:  # stimulate only 30% of FF
         continue
       nc = h.NetCon(self.stim, self.pc.gid2cell(i).syn)
       nc.delay = 0
-      nc.weight[0] = 0.01
+      nc.weight[0] = 0.8
 
   def spike_record(self):
     self.spike_tvec = {}
@@ -103,6 +110,12 @@ class Network(object):
       # Alternatively, could use nc.record(tvec)
       self.spike_tvec[gid] = tvec
       self.spike_idvec[gid] = idvec
+    li1 = []
+    li2 = []
+    for x in tvec: li1.append(x)
+    for x in idvec: li2.append(x)
+    print gid, "t", li1
+    print gid, "id", li2
 
   def voltage_record(self, dt=None):
     self.voltage_tvec = {}
@@ -128,12 +141,15 @@ class Network(object):
       self.ratedict = {}
       self.peakdict = {}
       for key, vec in vecdict.iteritems():
+        li = []
+        for i, x in enumerate(vecdict[key]): 
+            if i % 100 == 0: li.append(x)
+       #print key, li
         isivec = h.Vector()
         isivec.deriv(vec, 1, 1)
         rate = 1. / (isivec.mean() * 1000)
         self.ratedict[key] = rate
-        histvec = vec.histogram(0, 100, 20)  #tstop
-        self.peakdict[key] = histvec.max() / float(20 * 1000)
+        self.peakdict[key] = 1. / (isivec.min() * 1000)
 
   def remake_syn(self):
     for pair, nc in self.ncdict.iteritems():
@@ -141,7 +157,7 @@ class Network(object):
         self.ndict.pop(pair)
     connectcells(self, self.ncells)
 
-def run_network(network, pc, comm, tstop=100):
+def run_network(network, pc, comm, tstop=3000):
   pc.set_maxstep(10)
   h.stdinit()
   pc.psolve(tstop)
@@ -154,6 +170,7 @@ def run_network(network, pc, comm, tstop=100):
   processed_p = {key : val for dict in peak_dicts for key, val in dict.iteritems()}
   #all_dicts = pc.py_alltoall([network.voltage_recvec for i in range(nhost)])
   if int(pc.id()) == 0:
+    print network.ncdict
     E_mean = 0; I_mean = 0; I_max = 0; E_max = 0
     for i in range(network.ncell, network.ncell * 2):
       E_mean += processed_rd[i] / float(network.ncell)
@@ -161,7 +178,6 @@ def run_network(network, pc, comm, tstop=100):
     for i in range(network.ncell * 2, network.ncell * 3):
       I_mean += processed_rd[i] / float(network.ncell)
       I_max += processed_p[i] / float(network.ncell)
-
 
     #t = {key: value for dict in all_dicts for key, value in dict['t'].iteritems()}
     #rec = {key: value for dict in all_dicts for key, value in dict['rec'].iteritems()}

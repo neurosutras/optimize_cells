@@ -57,7 +57,7 @@ class Ring(object):
     if not self.pc.gid_exists(0):
       return
     self.stim = h.NetStim()
-    self.stim.number = 1
+    self.stim.number = 10
     self.stim.start = 0
     self.ncstim = h.NetCon(self.stim, self.pc.gid2cell(0).synlist[0])
     self.ncstim.delay = 0
@@ -82,6 +82,11 @@ class Ring(object):
       #Alternatively, could use nc.record(tvec)
       self.spike_tvec[gid] = tvec
       self.spike_idvec[gid] = idvec
+    li1 = []; li2 = []
+    for x in tvec: li1.append(x)
+    for x in idvec: li2.append(x)
+    print gid, "t", li1
+    print gid, "id", li2
 
   def voltage_record(self, dt=None):
     self.voltage_tvec = {}
@@ -97,7 +102,7 @@ class Ring(object):
       rec.record(getattr(cell.soma(0), '_ref_v')) #dt is not accepted as an argument
       self.voltage_tvec[self.gids[i]] = tvec
       self.voltage_recvec[self.gids[i]] = rec
-
+    
   def vecdict_to_pydict(self, vecdict, name):
     self.pydicts[name] = {}
     for key, value in vecdict.iteritems():

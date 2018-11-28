@@ -71,9 +71,9 @@ def init_context():
     """
 
     """
-    ncell = 3
+    ncell = 2
     delay = 1
-    tstop = 100
+    tstop = 1000
     context.update(locals())
 
 #keep

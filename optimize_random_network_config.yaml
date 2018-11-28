@@ -1,16 +1,16 @@
 bounds:
   EE_connection_prob: !!python/tuple
   - 1.0E-4
-  - .4
+  - .8
   EI_connection_prob: !!python/tuple
   - 1.0E-4
-  - .4
+  - .8
   IE_connection_prob: !!python/tuple
   - 1.0E-4
-  - .4
+  - .8
   II_connection_prob: !!python/tuple
   - 1.0E-4
-  - .4
+  - .8
 feature_names:
 - E_peak_rate
 - I_peak_rate
@@ -49,7 +49,7 @@ target_val:
   E_mean_rate: 3.
   I_mean_rate: 3.5
 x0:
-  EE_connection_prob: 0.05
-  EI_connection_prob: 0.05
-  IE_connection_prob: 0.05
-  II_connection_prob: 0.05
+  EE_connection_prob: 0.1
+  EI_connection_prob: 0.1
+  IE_connection_prob: 0.1
+  II_connection_prob: 0.1
