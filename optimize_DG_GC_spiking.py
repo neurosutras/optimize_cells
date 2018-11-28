@@ -302,7 +302,7 @@ def compute_features_spike_shape(x, i_holding, export=False, plot=False):
     v_active = context.v_active
     sim = context.sim
     context.i_holding = i_holding
-    offset_vm('soma', context, v_active, i_history=context.i_holding)
+    offset_vm('soma', context, v_active, i_history=context.i_holding, dynamic=True)
     spike_times = np.array(context.cell.spike_detector.get_recordvec())
     if np.any(spike_times < equilibrate):
         if context.verbose > 0:
@@ -481,7 +481,7 @@ def compute_features_fI(x, i_holding, spike_detector_delay, rheobase, relative_a
 
     v_active = context.v_active
     context.i_holding = i_holding
-    offset_vm('soma', context, v_active, i_history=context.i_holding)
+    offset_vm('soma', context, v_active, i_history=context.i_holding, dynamic=True)
     sim = context.sim
     dt = context.dt
     stim_dur = context.stim_dur_f_I
@@ -489,7 +489,7 @@ def compute_features_fI(x, i_holding, spike_detector_delay, rheobase, relative_a
 
     if extend_dur:
         # extend duration of simulation to examine rebound
-        duration = equilibrate + stim_dur + 100.
+        duration = equilibrate + stim_dur + 200.
     else:
         duration = equilibrate + stim_dur
 
@@ -654,7 +654,7 @@ def compute_features_spike_adaptation(x, i_holding, spike_detector_delay, rheoba
 
     v_active = context.v_active
     context.i_holding = i_holding
-    offset_vm('soma', context, v_active, i_history=context.i_holding)
+    offset_vm('soma', context, v_active, i_history=context.i_holding, dynamic=True)
     sim = context.sim
     dt = context.dt
     stim_dur = context.stim_dur_spike_adaptation
@@ -781,7 +781,7 @@ def compute_features_dend_spike(x, i_holding, amp, export=False, plot=False):
 
     v_active = context.v_active
     context.i_holding = i_holding
-    offset_vm('soma', context, v_active, i_history=context.i_holding)
+    offset_vm('soma', context, v_active, i_history=context.i_holding, dynamic=True)
     sim = context.sim
     dt = context.dt
     stim_dur = context.dend_spike_stim_dur
@@ -865,17 +865,16 @@ def get_objectives_spiking(features):
     :return: tuple of dict
     """
     objectives = dict()
-    for target in ['vm_th', 'rebound_firing', 'vm_stability', 'ais_delay', 'dend_bAP_ratio',
-                   'soma_spike_amp']:
+    for target in ['vm_th', 'rebound_firing', 'ais_delay', 'dend_bAP_ratio']:  # , 'soma_spike_amp']:
         objectives[target] = ((context.target_val[target] - features[target]) / context.target_range[target]) ** 2.
 
-    # only penalize slow_depo outside target range:
-    target = 'slow_depo'
-    if features[target] > context.target_val[target]:
-        objectives[target] = ((features[target] - context.target_val[target]) /
-                              (0.01 * context.target_val[target])) ** 2.
-    else:
-        objectives[target] = 0.
+    # only penalize slow_depo and vm_stability outside target range:
+    for target in ['slow_depo', 'vm_stability']:
+        if features[target] > context.target_val[target]:
+            objectives[target] = ((features[target] - context.target_val[target]) /
+                                  (0.01 * context.target_val[target])) ** 2.
+        else:
+            objectives[target] = 0.
     # only penalize AHP and ADP amplitudes outside target range:
     for target in ['fAHP', 'mAHP', 'ADP']:
         min_val_key = 'min_' + target

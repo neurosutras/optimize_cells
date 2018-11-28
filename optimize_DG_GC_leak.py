@@ -194,7 +194,8 @@ def compute_features_leak(x, section, export=False, plot=False):
     sim.parameters['duration'] = duration
     amp = -0.025
     context.sim.parameters['amp'] = amp
-    vm_rest, vm_offset, context.i_holding[section][v_init] = offset_vm(section, context, v_init)  # , i_history=context.i_holding)
+    # vm_rest, vm_offset, context.i_holding[section][v_init] = offset_vm(section, context, v_init)
+    vm_rest, vm_offset, context.i_holding[section][v_init] = offset_vm(section, context, v_init, dynamic=True)
     rec_dict = sim.get_rec(section)
     loc = rec_dict['loc']
     node = rec_dict['node']
@@ -260,7 +261,7 @@ def update_mechanisms_leak(x, context):
     for sec_type in ['axon_hill', 'ais', 'axon', 'apical', 'spine_neck', 'spine_head']:
         update_mechanism_by_sec_type(cell, sec_type, 'pas')
     if context.correct_for_spines:
-        correct_cell_for_spines_g_pas(cell, context.env)
+        correct_cell_for_spines_g_pas(cell, context.env, context.verbose > 1)
 
 
 if __name__ == '__main__':

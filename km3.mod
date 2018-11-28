@@ -48,7 +48,7 @@ INITIAL {
 BREAKPOINT {
 	SOLVE state METHOD cnexp
 	gk = gkmbar*m^st
-	ik = gk*m^st*(v-ek)
+	ik = gk*(v-ek)
 }
 
 FUNCTION alpt(v(mV)) {
