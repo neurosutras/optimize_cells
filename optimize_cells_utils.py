@@ -503,6 +503,8 @@ def get_spike_shape(vm, spike_times, context=None):
     rising_x = np.where(dvdt[x_peak+1:m_end] > 0.)[0]
     if rising_x.any():
         f_end = x_peak + 1 + rising_x[0]
+    else:
+        f_end = m_end
     x_fAHP = np.argmin(vm[x_peak:f_end]) + x_peak
     v_fAHP = vm[x_fAHP]
     fAHP = v_before - v_fAHP
