@@ -865,17 +865,16 @@ def get_objectives_spiking(features):
     :return: tuple of dict
     """
     objectives = dict()
-    for target in ['vm_th', 'rebound_firing', 'vm_stability', 'ais_delay', 'dend_bAP_ratio',
-                   'soma_spike_amp']:
+    for target in ['vm_th', 'rebound_firing', 'ais_delay', 'dend_bAP_ratio']:  # , 'soma_spike_amp']:
         objectives[target] = ((context.target_val[target] - features[target]) / context.target_range[target]) ** 2.
 
-    # only penalize slow_depo outside target range:
-    target = 'slow_depo'
-    if features[target] > context.target_val[target]:
-        objectives[target] = ((features[target] - context.target_val[target]) /
-                              (0.01 * context.target_val[target])) ** 2.
-    else:
-        objectives[target] = 0.
+    # only penalize slow_depo and vm_stability outside target range:
+    for target in ['slow_depo', 'vm_stability']:
+        if features[target] > context.target_val[target]:
+            objectives[target] = ((features[target] - context.target_val[target]) /
+                                  (0.01 * context.target_val[target])) ** 2.
+        else:
+            objectives[target] = 0.
     # only penalize AHP and ADP amplitudes outside target range:
     for target in ['fAHP', 'mAHP', 'ADP']:
         min_val_key = 'min_' + target
