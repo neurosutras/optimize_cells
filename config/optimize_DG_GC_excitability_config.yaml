@@ -18,7 +18,7 @@ bounds:
   - 0.0005
   - 0.03
   ais.sha_nax: !!python/tuple
-  - -5.0
+  - -6.0
   - -1.0
   axon.gbar_nax: !!python/tuple
   - 0.02
