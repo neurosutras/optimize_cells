@@ -76,6 +76,13 @@ class BallStick(object):
     return nc
 
   def synapses(self):
+    """s = h.Izhi2003b(self.dend(0.8))
+    s.a = .1
+    self.synlist.append(s)
+    s = h.Izhi2003b(self.dend(0.1))
+    s.a = .02
+    self.synlist.append(s)"""
+      
     s = h.ExpSyn(self.dend(0.8)) # E0
     s.tau = 2
     self.synlist.append(s)

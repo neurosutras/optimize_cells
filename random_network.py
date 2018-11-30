@@ -11,7 +11,7 @@ import numpy as np
 #=================== network class
 class Network(object):
 
-  def __init__(self, ncell, delay, pc, dt=None, ff=.2, e2e=.05, e2i=.05, i2i=.05, i2e=.05):
+  def __init__(self, ncell, delay, pc, dt=None, ff=1., e2e=.05, e2i=.05, i2i=.05, i2e=.05):
     # spiking script uses dt = 0.02
     self.pc = pc
     self.delay = delay
@@ -27,6 +27,7 @@ class Network(object):
     self.voltage_record(dt)
     self.spike_record()
     self.pydicts = {}
+
 
   def mknetwork(self, ncell):
     self.mkcells(ncell)
@@ -80,24 +81,22 @@ class Network(object):
           nc = self.pc.gid_connect(presyn_gid, syn)
           nc.delay = self.delay
           nc.weight[0] = 0.8
-          self.ncdict.update({pair: nc})
-    # print self.ncdict
+          self.ncdict[pair] = nc
 
   # Instrumentation - stimulation and recording
   def mkstim(self, ncell):
-    if not self.pc.gid_exists(0):
-      return
-    print "k"
-    self.stim = h.NetStim()
-    self.stim.number = 1000
-    self.stim.interval = 1
-    self.stim.start = 0
+    ns = h.NetStim()
+    ns.number = 10
+    ns.interval = 1
+    ns.start = 0
     for i in range(ncell):
       if not self.pc.gid_exists(i): #or random.random() >= .3:  # stimulate only 30% of FF
         continue
-      nc = h.NetCon(self.stim, self.pc.gid2cell(i).syn)
+      nc = h.NetCon(ns, self.pc.gid2cell(i).syn, 0, 1, 10)
       nc.delay = 0
-      nc.weight[0] = 0.8
+      nc.weight[0] = 2
+      self.pc.gid2cell(i).syn.taug = 3
+      self.ncdict[('stim', i)] = nc
 
   def spike_record(self):
     self.spike_tvec = {}
@@ -114,8 +113,8 @@ class Network(object):
     li2 = []
     for x in tvec: li1.append(x)
     for x in idvec: li2.append(x)
-    print gid, "t", li1
-    print gid, "id", li2
+    #print gid, "t", li1
+    #print gid, "id", li2
 
   def voltage_record(self, dt=None):
     self.voltage_tvec = {}
@@ -143,8 +142,8 @@ class Network(object):
       for key, vec in vecdict.iteritems():
         li = []
         for i, x in enumerate(vecdict[key]): 
-            if i % 100 == 0: li.append(x)
-       #print key, li
+            if i % 5000 == 0: li.append(x)
+        if key == 0: print li
         isivec = h.Vector()
         isivec.deriv(vec, 1, 1)
         rate = 1. / (isivec.mean() * 1000)
@@ -152,12 +151,14 @@ class Network(object):
         self.peakdict[key] = 1. / (isivec.min() * 1000)
 
   def remake_syn(self):
-    for pair, nc in self.ncdict.iteritems():
-        nc.weight[0] = 0.
-        self.ndict.pop(pair)
-    connectcells(self, self.ncells)
+    if int(self.pc.id() == 0):
+        for pair, nc in self.ncdict.iteritems():
+            nc.weight[0] = 0.
+            self.ncdict.pop(pair)
+            print pair
+    self.connectcells(self.ncell)
 
-def run_network(network, pc, comm, tstop=3000):
+def run_network(network, pc, comm, tstop=3000): 
   pc.set_maxstep(10)
   h.stdinit()
   pc.psolve(tstop)
@@ -169,8 +170,11 @@ def run_network(network, pc, comm, tstop=3000):
   processed_rd = {key : val for dict in rate_dicts for key, val in dict.iteritems()}
   processed_p = {key : val for dict in peak_dicts for key, val in dict.iteritems()}
   #all_dicts = pc.py_alltoall([network.voltage_recvec for i in range(nhost)])
+  network.vecdict_to_pydict(network.voltage_recvec, 'rec')
+  test = pc.py_alltoall([network.pydicts for i in range(nhost)])
   if int(pc.id()) == 0:
-    print network.ncdict
+    rec = {key : val for dict in test for key, val in dict['rec'].iteritems()}
+    #print "pydict", rec[0]
     E_mean = 0; I_mean = 0; I_max = 0; E_max = 0
     for i in range(network.ncell, network.ncell * 2):
       E_mean += processed_rd[i] / float(network.ncell)
@@ -253,10 +257,10 @@ class BallStick(object):
 
   def synapses(self):
     if self.excitatory: #RS
-        s = h.Izhi2003b(self.dend(0.8))
+        s = h.Izhi2003a(self.dend(0.8))
         s.a = .1
         self.syn = s
     else: #FS
-        s = h.Izhi2003b(self.dend(0.8))
+        s = h.Izhi2003a(self.dend(0.1))
         s.a = .02
         self.syn = s

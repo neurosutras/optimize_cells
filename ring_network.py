@@ -61,7 +61,7 @@ class Ring(object):
     self.stim.start = 0
     self.ncstim = h.NetCon(self.stim, self.pc.gid2cell(0).synlist[0])
     self.ncstim.delay = 0
-    self.ncstim.weight[0] = 0.01
+    self.ncstim.weight[0] = .01
 
   def update_stim_weight(self, new_weight):
     if 0 in self.gids:
@@ -122,5 +122,10 @@ def runring(ring, pc, comm, tstop=100):
   if int(pc.id()) == 0:
     t = {key: value for dict in all_dicts for key, value in dict['t'].iteritems()}
     rec = {key: value for dict in all_dicts for key, value in dict['rec'].iteritems()}
+    li = []
+    for i in range(len(rec[0])):
+        if i % 300 == 0:
+           li.append(rec[0][i])
+    print li
     return {'t': t, 'rec': rec}
   return None
