@@ -180,7 +180,7 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
     :param daspk: bool
     """
     init_context()
-    context.env = Env(comm=context.comm, **kwargs)
+    context.env = Env(comm=context.comm, verbose=verbose > 1, **kwargs)
     configure_hoc_env(context.env)
     cell = get_biophys_cell(context.env, gid=context.gid, pop_name=context.cell_type)
     init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path,
@@ -229,7 +229,7 @@ def config_sim_env(context):
     # if context.v_active not in context.i_th_history['soma']:
     #    context.i_th_history['soma'][context.v_active] = context.i_th_start
     if not sim.has_rec('dend'):
-        dend, dend_loc = get_DG_GC_thickest_dend_branch(context.cell, 200., terminal=False)
+        dend, dend_loc = get_DG_GC_thickest_dend_branch(context.cell, 100., terminal=False)
         sim.append_rec(cell, dend, name='dend', loc=dend_loc)
     if not sim.has_rec('ais'):
         sim.append_rec(cell, cell.ais[0], name='ais', loc=1.)
@@ -315,11 +315,51 @@ def compute_features_spike_shape(x, i_holding, export=False, plot=False):
     spike_times = np.array(context.cell.spike_detector.get_recordvec())
 
     spike = np.any(spike_times > equilibrate)
+    soma_vm = np.array(soma_rec)  # Get voltage waveforms of spike from various subcellular compartments
+    ais_vm = np.array(sim.get_rec('ais')['vec'])
+    axon_vm = np.array(sim.get_rec('axon')['vec'])
+    dend_vm = np.array(sim.get_rec('dend')['vec'])
     if spike:
         i_inc = -0.01
         delta_str = 'decreased'
         while spike and i_th > 0.:
             i_th += i_inc
+            sim.modify_stim('step', amp=i_th)
+            prev_soma_vm = soma_vm
+            prev_ais_vm = ais_vm
+            prev_axon_vm = axon_vm
+            prev_dend_vm = dend_vm
+            prev_spike_times = spike_times
+            sim.run(v_active)
+            spike_times = np.array(context.cell.spike_detector.get_recordvec())
+            if sim.verbose:
+                print 'compute_features_spike_shape: pid: %i; %s; %s i_th to %.3f nA; num_spikes: %i' % \
+                      (os.getpid(), 'soma', delta_str, i_th, len(spike_times))
+            spike = np.any(spike_times > equilibrate)
+            soma_vm = np.array(soma_rec)  # Get voltage waveforms of spike from various subcellular compartments
+            ais_vm = np.array(sim.get_rec('ais')['vec'])
+            axon_vm = np.array(sim.get_rec('axon')['vec'])
+            dend_vm = np.array(sim.get_rec('dend')['vec'])
+        if not spike:
+            soma_vm = prev_soma_vm
+            ais_vm = prev_ais_vm
+            axon_vm = prev_axon_vm
+            dend_vm = prev_dend_vm
+            spike_times = prev_spike_times
+            i_th -= i_inc
+        if i_th <= 0.:
+            if context.verbose > 0:
+                print 'compute_features_spike_shape: pid: %i; aborting - spontaneous firing' % (os.getpid())
+            return dict()
+    else:
+        i_inc = 0.01
+        delta_str = 'increased'
+        while not spike:  # Increase step current until spike. Resting Vm is v_active.
+            i_th += i_inc
+            if i_th > context.i_th_max:
+                if context.verbose > 0:
+                    print 'compute_features_spike_shape: pid: %i; aborting - rheobase outside target range' % (os.getpid())
+                return dict()
             sim.modify_stim('step', amp=i_th)
             sim.run(v_active)
             spike_times = np.array(context.cell.spike_detector.get_recordvec())
@@ -327,33 +367,10 @@ def compute_features_spike_shape(x, i_holding, export=False, plot=False):
                 print 'compute_features_spike_shape: pid: %i; %s; %s i_th to %.3f nA; num_spikes: %i' % \
                       (os.getpid(), 'soma', delta_str, i_th, len(spike_times))
             spike = np.any(spike_times > equilibrate)
-    if i_th <= 0.:
-        if context.verbose > 0:
-            print 'compute_features_spike_shape: pid: %i; aborting - spontaneous firing' % (os.getpid())
-        return dict()
-
-    i_inc = 0.01
-    delta_str = 'increased'
-    while not spike:  # Increase step current until spike. Resting Vm is v_active.
-        i_th += i_inc
-        if i_th > context.i_th_max:
-            if context.verbose > 0:
-                print 'compute_features_spike_shape: pid: %i; aborting - rheobase outside target range' % (os.getpid())
-            return dict()
-        sim.modify_stim('step', amp=i_th)
-        sim.run(v_active)
-        spike_times = np.array(context.cell.spike_detector.get_recordvec())
-        if sim.verbose:
-            print 'compute_features_spike_shape: pid: %i; %s; %s i_th to %.3f nA; num_spikes: %i' % \
-                  (os.getpid(), 'soma', delta_str, i_th, len(spike_times))
-        spike = np.any(spike_times > equilibrate)
-
-    # context.i_th_history['soma'][v_active] = i_th
-
-    soma_vm = np.array(soma_rec)  # Get voltage waveforms of spike from various subcellular compartments
-    ais_vm = np.array(sim.get_rec('ais')['vec'])
-    axon_vm = np.array(sim.get_rec('axon')['vec'])
-    dend_vm = np.array(sim.get_rec('dend')['vec'])
+            soma_vm = np.array(soma_rec)  # Get voltage waveforms of spike from various subcellular compartments
+            ais_vm = np.array(sim.get_rec('ais')['vec'])
+            axon_vm = np.array(sim.get_rec('axon')['vec'])
+            dend_vm = np.array(sim.get_rec('dend')['vec'])
 
     title = 'spike_shape'  # simulation metadata to be exported to file along with the data
     description = 'rheobase: %.3f' % i_th
@@ -818,10 +835,12 @@ def filter_features_dend_spike(primitives, current_features, export=False):
         spike_amp = this_dict['dend_spike_amp']
         if i_amp == 0.4:
             target_amp = 0.
+            dend_spike_score += ((spike_amp - target_amp) / context.target_range['dend_spike_amp']) ** 2.
         elif i_amp == 0.7:
             target_amp = context.target_val['dend_spike_amp']
             new_features['dend_spike_amp'] = spike_amp
-        dend_spike_score += ((spike_amp - target_amp) / context.target_range['dend_spike_amp']) ** 2.
+            if spike_amp < target_amp:
+                dend_spike_score += ((spike_amp - target_amp) / context.target_range['dend_spike_amp']) ** 2.
     new_features['dend_spike_score'] = dend_spike_score
     return new_features
 

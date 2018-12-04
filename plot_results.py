@@ -555,21 +555,15 @@ def plot_exported_DG_GC_spiking_features(file_path):
                                  'required group: %s' % (file_path, group_name))
         group = f[group_name]
         fig2, axes2 = plt.subplots()
-        i_relative_amp = group['i_relative_amp'][:]
-        model_ISI1 = group['model_ISI1'][:]
-        model_ISI2 = group['model_ISI2'][:]
-        exp_ISI1 = group['exp_ISI1'][:]
-        exp_ISI2 = group['exp_ISI2'][:]
-        axes2.scatter(i_relative_amp, model_ISI1, label='1st ISI: Model', c='r', linewidth=0, alpha=0.5)
-        axes2.plot(i_relative_amp, model_ISI1, c='r', alpha=0.5)
-        axes2.scatter(i_relative_amp, exp_ISI1, label='1st ISI: Experiment', c='lightgrey', linewidth=0, alpha=0.5)
-        axes2.plot(i_relative_amp, exp_ISI1, c='lightgrey', alpha=0.5)
-        axes2.scatter(i_relative_amp, model_ISI2, label='2nd ISI: Model', c='c', linewidth=0, alpha=0.5)
-        axes2.plot(i_relative_amp, model_ISI2, c='k', alpha=0.5)
-        axes2.scatter(i_relative_amp, exp_ISI2, label='2nd ISI: Experiment', c='k', linewidth=0, alpha=0.5)
-        axes2.plot(i_relative_amp, exp_ISI2, c='k', alpha=0.5)
+        model_ISI_array = group['model_ISI_array'][:]
+        exp_ISI_array = group['exp_ISI_array'][:]
+        ISI_num = range(1, len(exp_ISI_array) + 1)
+        axes2.scatter(ISI_num, model_ISI_array, label='Model', c='r', linewidth=0, alpha=0.5)
+        axes2.plot(ISI_num, model_ISI_array, c='r', alpha=0.5)
+        axes2.scatter(ISI_num, exp_ISI_array, label='Experiment', c='k', linewidth=0, alpha=0.5)
+        axes2.plot(ISI_num, exp_ISI_array, c='k', alpha=0.5)
         axes2.legend(loc='best', frameon=False, framealpha=0.5)
-        axes2.set_xlabel('Amplitude of current injection\nrelative to rheobase (nA)')
+        axes2.set_xlabel('ISI number')
         axes2.set_ylabel('Inter-spike interval (ms)')
         axes2.set_ylim(0., axes2.get_ylim()[1])
         axes2.set_title('Spike rate adaptation', fontsize=mpl.rcParams['font.size'])

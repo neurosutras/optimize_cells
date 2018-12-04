@@ -487,12 +487,12 @@ def get_spike_shape(vm, spike_times, context=None):
     window_dur = 100.  # ms
     fAHP_window_dur = 20.  # ms
     ADP_min_start = 5.  # ms
-    ADP_window_dur = 50. # ms
+    ADP_window_dur = 75. # ms
     if len(spike_times) > 1:
         window_dur = min(window_dur, spike_times[1] - spike_times[0])
     window_end = min(len(vm), th_x + int(window_dur / dt))
     fAHP_window_end = min(window_end, th_x + int(fAHP_window_dur / dt))
-    ADP_min_start_len = min(window_end, th_x + int(ADP_min_start / dt))
+    ADP_min_start_len = min(window_end - th_x, int(ADP_min_start / dt))
     ADP_window_end = min(window_end, th_x + int(ADP_window_dur / dt))
 
     x_peak = np.argmax(vm[th_x:window_end]) + th_x
@@ -511,7 +511,6 @@ def get_spike_shape(vm, spike_times, context=None):
     if not rising_x.any():
         ADP = 0.
     else:
-        print 'rising'
         falling_x = np.where(dvdt[x_fAHP + rising_x[0]:ADP_window_end] < 0.)[0]
         if not falling_x.any():
             ADP = 0.

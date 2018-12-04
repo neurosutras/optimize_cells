@@ -11,12 +11,12 @@ NEURON {
 UNITS {
 	(mA) = (milliamp)
 	(mV) = (millivolt)
-	(pS) = (picosiemens)
+	(S) = (siemens)
 	(um) = (micron)
 } 
 
 PARAMETER {
-	gbar = 10  	    				(pS/um2)
+	gbar = 0.001  	    				(S/cm2)
 	k = 9           				(mV)
 	Vhalf = -50             (mV)  :for minf(V)
 	Vshift = 0              (mV)	:for g(V) and minf(V)     
@@ -42,7 +42,7 @@ ASSIGNED {
 	v 	     	(mV)
 	ek		(mV)
 	celsius		(degC)
-	ginf			(pS/um2)
+	ginf			(S/cm2)
 	Vhalf1    (mV) 
 	Dtau1     (ms)
 	z1               
@@ -57,7 +57,7 @@ ASSIGNED {
 	beta2	
 	i 	    	(mA/cm2)
 	ik 	     	(mA/cm2)
-	g		      (pS/um2)
+	g		      (S/cm2)
 	minf
 	v0        (mV)      
 	tau1			(ms)
@@ -77,7 +77,7 @@ INITIAL {
 BREAKPOINT {
   SOLVE states METHOD cnexp
 	g = gbar*gsat(v)*(m1^2)*m2
-	ik = (1e-4)*g*(v - ek)
+	ik = g*(v - ek)
 	i = ik
 } 
 
