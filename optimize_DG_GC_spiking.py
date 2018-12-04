@@ -660,11 +660,10 @@ def compute_features_spike_adaptation(x, i_holding, spike_detector_delay, start_
     max_amp = start_amp + 0.1
 
     title = 'spike_adaptation'
-    description = 'step current amp: %.3f' % amp
+    description = 'step current'
     sim.parameters['duration'] = duration
     sim.parameters['title'] = title
     sim.parameters['description'] = description
-    sim.parameters['i_amp'] = amp
     sim.backup_state()
     sim.set_state(dt=dt, tstop=duration, cvode=False)
     sim.modify_stim('step', node=node, loc=loc, dur=stim_dur, amp=amp)
@@ -674,10 +673,12 @@ def compute_features_spike_adaptation(x, i_holding, spike_detector_delay, start_
     prev_spike_times = spike_times
     target_spike_count = len(context.exp_ISI_array) + 1
     spike_count = len(np.where(spike_times > equilibrate + spike_detector_delay)[0])
+    prev_amp = amp
     if spike_count > target_spike_count:
         i_inc = -0.01
         delta_str = 'decreased'
         while spike_count > target_spike_count:
+            prev_amp = amp
             amp += i_inc
             sim.modify_stim('step', amp=amp)
             sim.run(v_active)
@@ -690,7 +691,7 @@ def compute_features_spike_adaptation(x, i_holding, spike_detector_delay, start_
     if spike_count < target_spike_count:
         if len(prev_spike_times) > spike_count:
             spike_times = prev_spike_times
-            amp -= i_inc
+            amp = prev_amp
         else:
             i_inc = 0.01
             delta_str = 'increased'
@@ -709,14 +710,13 @@ def compute_features_spike_adaptation(x, i_holding, spike_detector_delay, start_
                     print 'compute_features_spike_adaptation: pid: %i; %s; %s i_inj to %.3f nA; num_spikes: %i' % \
                           (os.getpid(), 'soma', delta_str, amp, spike_count)
 
+    sim.parameters['i_amp'] = amp
     result = dict()
     result['ISI_array'] = np.diff(spike_times)
     if context.verbose > 0:
         print 'compute_features_spike_adaptation: pid: %i; %s: %s took %.1f s; ISI1: %.1f; ISI2: %.1f' % \
               (os.getpid(), title, description, time.time() - start_time, result['ISI_array'][0],
                result['ISI_array'][1])
-    sim.restore_state()
-    sim.modify_stim('step', amp=0.)
 
     if plot:
         sim.plot()
@@ -731,6 +731,9 @@ def compute_features_spike_adaptation(x, i_holding, spike_detector_delay, start_
             group.attrs['i_amp'] = amp
             group.create_dataset('model_ISI_array', compression='gzip', data=result['ISI_array'])
             group.create_dataset('exp_ISI_array', compression='gzip', data=context.exp_ISI_array)
+
+    sim.restore_state()
+    sim.modify_stim('step', amp=0.)
 
     return result
 
