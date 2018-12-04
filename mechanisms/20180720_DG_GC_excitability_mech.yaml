@@ -61,7 +61,7 @@ apical:
     gbar:
     - value: 0.04299971
     - custom:
-        func: custom_filter_by_terminal
+        func: custom_filter_modify_slope_if_terminal
       min: 0.01307792
       origin: parent
       slope: 0.0

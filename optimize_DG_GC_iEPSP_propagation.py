@@ -173,7 +173,7 @@ def config_sim_env(context):
         seg = node.sec(loc)
         context.i_syn = add_unique_synapse(context.syn_mech_name, seg)
         config_syn(context.syn_mech_name, context.env.synapse_attributes.syn_param_rules, syn=context.i_syn,
-                   i_unit=context.i_EPSC['dend'], tau_rise=0.1, tau_decay=5.)
+                   i_unit=context.i_EPSC['dend'], tau_rise=1., tau_decay=10.)
     if 'i_nc' not in context():
         context.i_nc, context.i_vs = mknetcon_vecstim(context.i_syn)
 
@@ -241,7 +241,7 @@ def compute_features_iEPSP_i_unit(x, i_holding, export=False, plot=False):
 
     v_active = context.v_active
     context.i_holding = i_holding
-    offset_vm('soma', context, v_active, i_history=context.i_holding)
+    offset_vm('soma', context, v_active, i_history=context.i_holding, dynamic=True)
 
     sim = context.sim
     sim.backup_state()
@@ -319,7 +319,7 @@ def compute_features_iEPSP_attenuation(x, i_holding, ISI_key, i_EPSC, export=Fal
 
     v_active = context.v_active
     context.i_holding = i_holding
-    offset_vm('soma', context, v_active, i_history=context.i_holding)
+    offset_vm('soma', context, v_active, i_history=context.i_holding, dynamic=True)
 
     sim = context.sim
     sim.backup_state()

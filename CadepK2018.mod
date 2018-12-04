@@ -17,8 +17,8 @@ UNITS {
 }
 
 PARAMETER {
-	gbkbar = .0003	(S/cm2)	: maximum permeability
-	gskbar = .0005	(S/cm2)	: maximum permeability
+	gbkbar = .00009	(S/cm2)	: maximum permeability; Aradi (1999) was .0003
+	gskbar = .0001	(S/cm2)	: maximum permeability; Aradi (1999) was .0005
 	gcakmult = 1.
 	alphar = 7.5	(/ms)
 	stau = 10		(ms)

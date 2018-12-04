@@ -113,12 +113,12 @@ def init_context():
     local_random = random.Random()
 
     # for clustered inputs, num_syns corresponds to number of clustered inputs per branch
-    # num_syns = {'random': 5, 'clustered': 5}  # {'random': 30, 'clustered': 20}
-    num_syns = {'random': 30, 'clustered': 20}
+    num_syns = {'random': 30, 'clustered': 5}
+    # num_syns = {'random': 30, 'clustered': 20}
     syn_conditions = ['control', 'AP5']
 
     # number of branches to test temporal integration of clustered inputs
-    num_clustered_branches = 2  # 1
+    num_clustered_branches = 1  # 2
     clustered_branch_names = ['clustered%i' % i for i in xrange(num_clustered_branches)]
 
     ISI = {'units': 150., 'clustered': 1.1}  # inter-stimulus interval for synaptic stim (ms)
@@ -131,7 +131,7 @@ def init_context():
     trace_baseline = 10.
     duration = max(sim_duration.values())
 
-    AMPA_type = 'SatAMPA'
+    AMPA_type = 'AMPA'
     NMDA_type = 'NMDA'
     syn_mech_names = [AMPA_type, NMDA_type]
 
@@ -206,7 +206,7 @@ def config_sim_env(context):
                     else:
                         this_num_syns = min(len(this_syn_indexes), int(branch.sec.L / 10.))
                         syn_indexes['random'].extend(context.local_random.sample(this_syn_indexes, this_num_syns))
-                elif this_syn_indexes:
+                elif len(this_syn_indexes) > 0:
                     syn_indexes['random'].append(this_syn_indexes[0])
         if len(syn_indexes['random']) < context.num_syns['random']:
             raise RuntimeError('optimize_DG_GC_synaptic_integration: problem finding required number of synapses for'
@@ -281,6 +281,10 @@ def update_syn_mechanisms(x, context=None):
                           filters={'syn_types': ['excitatory']}, origin='soma', slope=x_dict['AMPA.slope'],
                           tau=x_dict['AMPA.tau'], update_targets=True)
     modify_syn_mech_param(cell, env, 'apical', context.AMPA_type, param_name='g_unit',
+                          filters={'syn_types': ['excitatory']}, origin='parent',
+                          origin_filters={'syn_types': ['excitatory']},
+                          custom={'func': 'custom_filter_if_terminal'}, update_targets=True, append=True)
+    modify_syn_mech_param(cell, env, 'apical', context.AMPA_type, param_name='g_unit',
                           filters={'syn_types': ['excitatory'], 'layers': ['OML']}, origin='apical',
                           origin_filters={'syn_types': ['excitatory'], 'layers': ['MML']}, update_targets=True,
                           append=True)
@@ -292,15 +296,20 @@ def update_syn_mechanisms(x, context=None):
                           update_targets=True)
 
 
-def get_args_static_unitary_EPSP_amp():
+def get_args_dynamic_unitary_EPSP_amp(x, features):
     """
-    A nested map operation is required to compute unitary EPSP amplitude features. The arguments to be mapped are the
-    same (static) for each set of parameters.
+    A nested map operation is required to compute unitary EPSP amplitude features. The arguments to be mapped include
+    a unique file_path for each set of parameters that will be used to temporarily store simulation output.
+    :param x: array
+    :param features: dict
     :return: list of list
     """
     syn_group_list = []
     syn_id_lists = []
     syn_condition_list = []
+    import uuid
+    temp_file_path = context.output_dir + '/' + str(uuid.uuid1()) + '.hdf5'
+    temp_file_path_list = []
     for syn_group in context.syn_id_dict:
         this_syn_id_group = context.syn_id_dict[syn_group]
         this_syn_id_lists = []
@@ -312,12 +321,14 @@ def get_args_static_unitary_EPSP_amp():
         syn_id_lists.extend(this_syn_id_lists)
         syn_group_list.extend([syn_group] * num_sims)
         syn_condition_list.extend(['control'] * num_sims)
+        temp_file_path_list.extend([temp_file_path] * num_sims)
         if syn_group == 'random':
             syn_id_lists.extend(this_syn_id_lists)
             syn_group_list.extend([syn_group] * num_sims)
             syn_condition_list.extend(['AP5'] * num_sims)
-
-    return [syn_id_lists, syn_condition_list, syn_group_list]
+            temp_file_path_list.extend([temp_file_path] * num_sims)
+    print len(syn_id_lists), len(temp_file_path_list)
+    return [syn_id_lists, syn_condition_list, syn_group_list, temp_file_path_list]
 
 
 def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, export=False, plot=False):

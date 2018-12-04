@@ -41,7 +41,7 @@ get_features_stages:
 get_objectives:
   optimize_DG_GC_synaptic_integration: get_objectives_synaptic_integration
 kwargs:
-  mech_file_path: mechanisms/20180814_DG_GC_syn_mech.yaml
+  mech_file_path: mechanisms/20181128_DG_GC_syn_mech.yaml
   gid: 0
   cell_type: GC
   correct_for_spines: True

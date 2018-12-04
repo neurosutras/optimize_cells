@@ -482,52 +482,48 @@ def get_spike_shape(vm, spike_times, context=None):
             return None
     th_v = vm[th_x]
     v_before = np.mean(vm[th_x - int(0.1 / dt):th_x])
-    x_peak = np.argmax(vm[th_x:th_x + int(5. / dt)]) + th_x
+
+    spike_detector_delay = spike_times[0] - (equilibrate + 1. + th_x * dt)
+    window_dur = 100.  # ms
+    fAHP_window_dur = 20.  # ms
+    ADP_min_start = 5.  # ms
+    ADP_window_dur = 50. # ms
+    if len(spike_times) > 1:
+        window_dur = min(window_dur, spike_times[1] - spike_times[0])
+    window_end = min(len(vm), th_x + int(window_dur / dt))
+    fAHP_window_end = min(window_end, th_x + int(fAHP_window_dur / dt))
+    ADP_min_start_len = min(window_end, th_x + int(ADP_min_start / dt))
+    ADP_window_end = min(window_end, th_x + int(ADP_window_dur / dt))
+
+    x_peak = np.argmax(vm[th_x:window_end]) + th_x
     v_peak = vm[x_peak]
 
-    min_ISI = 20.  # ms; abort if 2nd spike occurs within this interval at rheobase
-    spike_detector_delay = spike_times[0] - (equilibrate + 1. + th_x * dt)
-
-    if len(spike_times) > 1:
-        this_ISI = spike_times[1] - spike_times[0]
-        if this_ISI < min_ISI:
-            return None
-        else:
-            m_end = th_x + int(this_ISI / dt)
-    elif len(vm) - th_x <= int(min_ISI / dt):
-        return None
-    else:
-        m_end = len(vm)
-
     # find fAHP trough
-    rising_x = np.where(dvdt[x_peak+1:m_end] > 0.)[0]
+    rising_x = np.where(dvdt[x_peak+1:fAHP_window_end] > 0.)[0]
     if rising_x.any():
-        f_end = x_peak + 1 + rising_x[0]
-    else:
-        f_end = m_end
-    x_fAHP = np.argmin(vm[x_peak:f_end]) + x_peak
+        fAHP_window_end = x_peak + 1 + rising_x[0]
+    x_fAHP = np.argmin(vm[x_peak:fAHP_window_end]) + x_peak
     v_fAHP = vm[x_fAHP]
     fAHP = v_before - v_fAHP
 
-    # find ADP
-    rising_x = np.where(dvdt[x_fAHP:m_end] > 0.)[0]
+    # find ADP and mAHP
+    rising_x = np.where(dvdt[x_fAHP:ADP_window_end] > 0.)[0]
     if not rising_x.any():
         ADP = 0.
-        v_mAHP = np.min(vm[x_fAHP:m_end])
-        mAHP = v_before - v_mAHP
     else:
-        falling_x = np.where(dvdt[x_fAHP + rising_x[0]:m_end] < 0.)[0]
+        print 'rising'
+        falling_x = np.where(dvdt[x_fAHP + rising_x[0]:ADP_window_end] < 0.)[0]
         if not falling_x.any():
             ADP = 0.
-            mAHP = 0.
         else:
             x_ADP = np.argmax(vm[x_fAHP + rising_x[0]:x_fAHP + rising_x[0] + falling_x[0]]) + x_fAHP + rising_x[0]
-            v_ADP = vm[x_ADP]
-            ADP = v_ADP - v_fAHP
-            v_mAHP = np.min(vm[x_ADP:m_end])
-            mAHP = v_before - v_mAHP
+            if x_ADP - th_x < ADP_min_start_len:
+                ADP = 0.
+            else:
+                v_ADP = vm[x_ADP]
+                ADP = v_ADP - v_fAHP
 
-    return {'v_peak': v_peak, 'th_v': th_v, 'fAHP': fAHP, 'mAHP': mAHP, 'ADP': ADP,
+    return {'v_peak': v_peak, 'th_v': th_v, 'fAHP': fAHP, 'ADP': ADP,
             'spike_detector_delay': spike_detector_delay}
 
 

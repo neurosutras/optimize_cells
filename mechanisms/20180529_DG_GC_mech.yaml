@@ -71,7 +71,7 @@ apical:
       origin: parent
       slope: -0.00022791073975362896
     - custom:
-        func: custom_filter_by_terminal
+        func: custom_filter_modify_slope_if_terminal
       min: 0.0
       origin: parent
       slope: -0.00022791073975362896

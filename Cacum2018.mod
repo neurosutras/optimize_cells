@@ -17,7 +17,7 @@ UNITS {
 
 PARAMETER {
 	tau = 100		(ms)
-	depth = 0.05 	(um)
+	depth = 0.2 	(um)  : stuck with depth from Aradi (1999)
 	cai0 = 7e-5 	(mM)
  	cao0 = 1.3 		(mM)
 }
@@ -47,6 +47,7 @@ DERIVATIVE state {	: exact when v held constant; integrates over dt step
 INITIAL {
 	cai = cai0
  	cao = cao0
+	: From Beining (2017)
 	if (2. * depth >= diam) {
 		VSR = 0.25 * diam : if diameter gets less than double the depth,
 						: the surface to volume ratio (here volume to surface ratio VSR)
