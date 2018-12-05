@@ -10,7 +10,7 @@ bounds:
   - 1.0E-7
   e_pas: !!python/tuple
   - -77.0
-  - -65.0
+  - -70.0
 feature_names:
 - dend R_inp
 - term_dend R_inp

@@ -315,62 +315,43 @@ def compute_features_spike_shape(x, i_holding, export=False, plot=False):
     spike_times = np.array(context.cell.spike_detector.get_recordvec())
 
     spike = np.any(spike_times > equilibrate)
-    soma_vm = np.array(soma_rec)  # Get voltage waveforms of spike from various subcellular compartments
-    ais_vm = np.array(sim.get_rec('ais')['vec'])
-    axon_vm = np.array(sim.get_rec('axon')['vec'])
-    dend_vm = np.array(sim.get_rec('dend')['vec'])
     if spike:
         i_inc = -0.01
         delta_str = 'decreased'
         while spike and i_th > 0.:
             i_th += i_inc
             sim.modify_stim('step', amp=i_th)
-            prev_soma_vm = soma_vm
-            prev_ais_vm = ais_vm
-            prev_axon_vm = axon_vm
-            prev_dend_vm = dend_vm
-            prev_spike_times = spike_times
             sim.run(v_active)
             spike_times = np.array(context.cell.spike_detector.get_recordvec())
             if sim.verbose:
                 print 'compute_features_spike_shape: pid: %i; %s; %s i_th to %.3f nA; num_spikes: %i' % \
                       (os.getpid(), 'soma', delta_str, i_th, len(spike_times))
             spike = np.any(spike_times > equilibrate)
-            soma_vm = np.array(soma_rec)  # Get voltage waveforms of spike from various subcellular compartments
-            ais_vm = np.array(sim.get_rec('ais')['vec'])
-            axon_vm = np.array(sim.get_rec('axon')['vec'])
-            dend_vm = np.array(sim.get_rec('dend')['vec'])
-        if not spike:
-            soma_vm = prev_soma_vm
-            ais_vm = prev_ais_vm
-            axon_vm = prev_axon_vm
-            dend_vm = prev_dend_vm
-            spike_times = prev_spike_times
-            i_th -= i_inc
-        if i_th <= 0.:
+    if i_th <= 0.:
+        if context.verbose > 0:
+            print 'compute_features_spike_shape: pid: %i; aborting - spontaneous firing' % (os.getpid())
+        return dict()
+
+    i_inc = 0.01
+    delta_str = 'increased'
+    while not spike:  # Increase step current until spike. Resting Vm is v_active.
+        i_th += i_inc
+        if i_th > context.i_th_max:
             if context.verbose > 0:
-                print 'compute_features_spike_shape: pid: %i; aborting - spontaneous firing' % (os.getpid())
+                print 'compute_features_spike_shape: pid: %i; aborting - rheobase outside target range' % (os.getpid())
             return dict()
-    else:
-        i_inc = 0.01
-        delta_str = 'increased'
-        while not spike:  # Increase step current until spike. Resting Vm is v_active.
-            i_th += i_inc
-            if i_th > context.i_th_max:
-                if context.verbose > 0:
-                    print 'compute_features_spike_shape: pid: %i; aborting - rheobase outside target range' % (os.getpid())
-                return dict()
-            sim.modify_stim('step', amp=i_th)
-            sim.run(v_active)
-            spike_times = np.array(context.cell.spike_detector.get_recordvec())
-            if sim.verbose:
-                print 'compute_features_spike_shape: pid: %i; %s; %s i_th to %.3f nA; num_spikes: %i' % \
-                      (os.getpid(), 'soma', delta_str, i_th, len(spike_times))
-            spike = np.any(spike_times > equilibrate)
-            soma_vm = np.array(soma_rec)  # Get voltage waveforms of spike from various subcellular compartments
-            ais_vm = np.array(sim.get_rec('ais')['vec'])
-            axon_vm = np.array(sim.get_rec('axon')['vec'])
-            dend_vm = np.array(sim.get_rec('dend')['vec'])
+        sim.modify_stim('step', amp=i_th)
+        sim.run(v_active)
+        spike_times = np.array(context.cell.spike_detector.get_recordvec())
+        if sim.verbose:
+            print 'compute_features_spike_shape: pid: %i; %s; %s i_th to %.3f nA; num_spikes: %i' % \
+                  (os.getpid(), 'soma', delta_str, i_th, len(spike_times))
+        spike = np.any(spike_times > equilibrate)
+
+    soma_vm = np.array(soma_rec)  # Get voltage waveforms of spike from various subcellular compartments
+    ais_vm = np.array(sim.get_rec('ais')['vec'])
+    axon_vm = np.array(sim.get_rec('axon')['vec'])
+    dend_vm = np.array(sim.get_rec('dend')['vec'])
 
     title = 'spike_shape'  # simulation metadata to be exported to file along with the data
     description = 'rheobase: %.3f' % i_th
