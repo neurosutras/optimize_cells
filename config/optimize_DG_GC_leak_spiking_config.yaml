@@ -142,7 +142,7 @@ get_objectives:
   optimize_DG_GC_leak: get_objectives_leak
   optimize_DG_GC_spiking: get_objectives_spiking
 kwargs:
-  mech_file_path: mechanisms/20181205_DG_GC_excitability.yaml
+  mech_file_path: mechanisms/20181205_DG_GC_excitability_mech.yaml
   gid: 0
   cell_type: GC
   correct_for_spines: True
