@@ -55,12 +55,12 @@ kwargs:
   datasetPrefix: ../dentate/datasets
   resultsPath: data
 objective_names:
-- mean_unitary_EPSP_amp
-- mean_NMDA_contribution
-- integration_gain_control
-- integration_gain_AP5
-- initial_gain_control
-- initial_gain_AP5
+- mean_unitary_EPSP_amp_residuals
+- mean_NMDA_contribution_residuals
+- integration_gain_control_residuals
+- integration_gain_AP5_residuals
+- initial_gain_control_residuals
+- initial_gain_AP5_residuals
 optimization_title: DG_GC_synaptic_integration
 param_gen: PopulationAnnealing
 param_names:

@@ -116,6 +116,7 @@ feature_names:
 - iEPSP_i_unit
 - iEPSP_attenuation_short
 - iEPSP_attenuation_long
+- spike_detector_delay
 update_context:
 - - optimize_DG_GC_leak
   - reset_biophysics

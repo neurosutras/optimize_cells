@@ -45,7 +45,7 @@ kwargs:
   gid: 0
   cell_type: GC
   correct_for_spines: True
-  verbose: 2
+  verbose: 1
   seed_offset: 14e6
   daspk: False
   configFile: Small_Scale_Control_tune_GC_synapses.yaml
@@ -55,12 +55,12 @@ kwargs:
   datasetPrefix: /global/cscratch1/sd/aaronmil/dentate
   resultsPath: /global/cscratch1/sd/aaronmil/optimize_cells
 objective_names:
-- mean_unitary_EPSP_amp
-- mean_NMDA_contribution
-- integration_gain_control
-- integration_gain_AP5
-- initial_gain_control
-- initial_gain_AP5
+- mean_unitary_EPSP_amp_residuals
+- mean_NMDA_contribution_residuals
+- integration_gain_control_residuals
+- integration_gain_AP5_residuals
+- initial_gain_control_residuals
+- initial_gain_AP5_residuals
 optimization_title: DG_GC_synaptic_integration
 param_gen: PopulationAnnealing
 param_names:
