@@ -59,12 +59,12 @@ def unit_tests_synaptic_integration():
     group_size = len(args[0])
     sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
                 [[context.plot] * group_size]
-    #primitives = map(compute_features_unitary_EPSP_amp, *sequences)
-    #"""
+    primitives = map(compute_features_unitary_EPSP_amp, *sequences)
+    """
     primitives = [compute_features_unitary_EPSP_amp(*zip(*sequences)[0]),
                   compute_features_unitary_EPSP_amp(*zip(*sequences)[1]),
                   compute_features_unitary_EPSP_amp(*zip(*sequences)[17])]
-    #"""
+    """
     this_features = filter_features_unitary_EPSP_amp(primitives, features, context.export)
     features.update(this_features)
 
@@ -120,11 +120,11 @@ def init_context():
     # for clustered inputs, num_syns corresponds to number of clustered inputs per branch
     max_syns_per_random_branch = 5
     min_random_inter_syn_distance = 30.  # um
-    num_syns_per_clustered_branch = 5  # 20
+    num_syns_per_clustered_branch = 20
     syn_conditions = ['control', 'AP5']
 
     # number of branches to test temporal integration of clustered inputs
-    num_clustered_branches = 1  # 2
+    num_clustered_branches = 2
     clustered_branch_names = ['clustered%i' % i for i in xrange(num_clustered_branches)]
 
     ISI = {'units': 200., 'clustered': 1.1}  # inter-stimulus interval for synaptic stim (ms)
