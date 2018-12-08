@@ -10,6 +10,7 @@ from nested.optimize_utils import *
 from optimize_cells_utils import *
 import click
 import uuid
+import glob
 
 
 context = Context()
@@ -532,8 +533,6 @@ def filter_features_unitary_EPSP_amp(primitives, current_features, export=False)
                                 unitary_EPSP_traces_dict[syn_group][syn_condition][rec_name].append(this_array)
                                 target_group[syn_group][syn_condition][syn_key].create_dataset(
                                     rec_name, compression='gzip', data=this_array)
-    for temp_traces_path in temp_traces_path_set:
-        os.remove(temp_traces_path)
 
     features['merged_temp_traces_path'] = merged_temp_traces_path
 
@@ -756,7 +755,6 @@ def filter_features_compound_EPSP_amp(primitives, current_features, export=False
                 for rec_name in this_group[syn_id_key]:
                     unitary_EPSP_traces_dict[syn_group]['control'][syn_id][rec_name] = \
                         this_group[syn_id_key][rec_name][:]
-
     os.remove(merged_temp_traces_path)
 
     compound_EPSP_traces_dict = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
@@ -772,9 +770,6 @@ def filter_features_compound_EPSP_amp(primitives, current_features, export=False
                             for rec_name in this_group:
                                 compound_EPSP_traces_dict[syn_group][syn_condition][num_syns][rec_name] = \
                                     this_group[rec_name][:]
-
-    for temp_traces_path in temp_traces_path_set:
-        os.remove(temp_traces_path)
 
     for syn_group in compound_EPSP_traces_dict:
         compound_EPSP_traces_dict[syn_group]['expected'] = \
@@ -857,6 +852,8 @@ def get_objectives_synaptic_integration(features):
     :param features: dict
     :return: tuple of dict
     """
+    for temp_traces_path in glob.iglob(os.path.join(context.output_dir, '*temp_traces*.hdf5')):
+        os.remove(temp_traces_path)
     objectives = dict()
     for objective_name in context.objective_names:
         if objective_name not in features:
