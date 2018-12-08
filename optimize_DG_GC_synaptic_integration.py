@@ -99,6 +99,14 @@ def config_worker():
         build_sim_env(context, **context.kwargs)
 
 
+def reset_worker():
+    """
+
+    """
+    if 'temp_traces_path' in context() and os.path.isfile(context.temp_traces_path):
+        os.remove(context.temp_traces_path)
+
+
 def context_has_sim_env(context):
     """
 
@@ -852,8 +860,6 @@ def get_objectives_synaptic_integration(features):
     :param features: dict
     :return: tuple of dict
     """
-    for temp_traces_path in glob.iglob(os.path.join(context.output_dir, '*temp_traces*.hdf5')):
-        os.remove(temp_traces_path)
     objectives = dict()
     for objective_name in context.objective_names:
         if objective_name not in features:
