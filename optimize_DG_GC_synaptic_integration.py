@@ -513,7 +513,7 @@ def filter_features_unitary_EPSP_amp(primitives, current_features, export=False)
     features['mean_NMDA_contribution_residuals'] = mean_NMDA_contribution_residuals
     features['model_key'] = model_key
 
-    merged_temp_traces_path = '%s/%s_temp_traces_%s.hdf5' % (context.output_dir,
+    merged_temp_traces_path = '%s/%s_merged_temp_traces_%s.hdf5' % (context.output_dir,
                                                       datetime.datetime.today().strftime('%Y%m%d_%H%M'),
                                                       model_key)
 
