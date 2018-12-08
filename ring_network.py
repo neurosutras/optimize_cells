@@ -33,6 +33,8 @@ class Ring(object):
       self.pc.set_gid2node(i, rank)
       nc = cell.connect2target(None)
       self.pc.cell(i, nc)
+      test = self.pc.gid2cell(i)
+      print "mkcell",  type(test)
     #print self.gids
 
   def connectcells(self, ncell):
