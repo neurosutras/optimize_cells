@@ -25,11 +25,11 @@ kwargs:
   correct_for_spines: True
   verbose: 2
   daspk: False
-  configFile: Small_Scale_Control_LN_weights_Sat.yaml
-  templatePaths: ../DGC/Mateos-Aparicio2014:../dentate/templates
-  hoclibPath: ../dentate
-  configPrefix: ../dentate/config
-  datasetPrefix: ../dentate/datasets
+  config_file: Small_Scale_Control_LN_weights_Sat.yaml
+  template_paths: ../DGC/Mateos-Aparicio2014:../dentate/templates
+  hoc_lib_path: ../dentate
+  config_prefix: ../dentate/config
+  dataset_prefix: ../dentate/datasets
   resultsPath: data
 objective_names:
 - iEPSP_attenuation_short

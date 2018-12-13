@@ -103,7 +103,7 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
     :param daspk: bool
     """
     init_context()
-    context.env = Env(comm=context.comm, **kwargs)
+    context.env = Env(comm=context.comm, verbose=verbose > 1, **kwargs)
     configure_hoc_env(context.env)
     cell = get_biophys_cell(context.env, gid=context.gid, pop_name=context.cell_type)
     init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path,
@@ -132,12 +132,12 @@ def config_sim_env(context):
     if context.v_init not in context.i_holding['soma']:
         context.i_holding['soma'][context.v_init] = 0.
     if not sim.has_rec('dend'):
-        dend, dend_loc = get_DG_GC_thickest_dend_branch(context.cell, 200., terminal=False)
+        dend, dend_loc = get_thickest_dend_branch(context.cell, 100., terminal=False)
         sim.append_rec(cell, dend, name='dend', loc=dend_loc)
     if context.v_init not in context.i_holding['dend']:
         context.i_holding['dend'][context.v_init] = 0.
     if not sim.has_rec('term_dend'):
-        term_dend = get_DG_GC_distal_most_terminal_branch(context.cell, 250.)
+        term_dend = get_distal_most_terminal_branch(context.cell, 250.)
         sim.append_rec(cell, term_dend, name='term_dend', loc=1.)
     if context.v_init not in context.i_holding['term_dend']:
         context.i_holding['term_dend'][context.v_init] = 0.

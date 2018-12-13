@@ -155,7 +155,7 @@ def config_sim_env(context):
     if context.v_active not in context.i_holding['soma']:
         context.i_holding['soma'][context.v_active] = 0.
     if not sim.has_rec('dend'):
-        dend, dend_loc = get_DG_GC_thickest_dend_branch(context.cell, 100., terminal=False)
+        dend, dend_loc = get_thickest_dend_branch(context.cell, 100., terminal=False)
         sim.append_rec(cell, dend, name='dend', loc=dend_loc)
     if 'dend' not in context.i_EPSC:
         context.i_EPSC['dend'] = -0.05
@@ -171,7 +171,7 @@ def config_sim_env(context):
         node = rec_dict['node']
         loc = rec_dict['loc']
         seg = node.sec(loc)
-        context.i_syn = add_unique_synapse(context.syn_mech_name, seg)
+        context.i_syn = make_unique_synapse_mech(context.syn_mech_name, seg)
         config_syn(context.syn_mech_name, context.env.synapse_attributes.syn_param_rules, syn=context.i_syn,
                    i_unit=context.i_EPSC['dend'], tau_rise=1., tau_decay=10.)
     if 'i_nc' not in context():

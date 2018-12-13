@@ -48,11 +48,11 @@ kwargs:
   verbose: 2
   seed_offset: 14e6
   daspk: False
-  configFile: Small_Scale_Control_tune_GC_synapses.yaml
-  templatePaths: ../DGC/Mateos-Aparicio2014:../dentate/templates
-  hoclibPath: ../dentate
-  configPrefix: ../dentate/config
-  datasetPrefix: ../dentate/datasets
+  config_file: Small_Scale_Control_tune_GC_synapses.yaml
+  template_paths: ../DGC/Mateos-Aparicio2014:../dentate/templates
+  hoc_lib_path: ../dentate
+  config_prefix: ../dentate/config
+  dataset_prefix: ../dentate/datasets
   resultsPath: data
 objective_names:
 - mean_unitary_EPSP_amp_residuals

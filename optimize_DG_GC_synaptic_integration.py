@@ -197,7 +197,7 @@ def config_sim_env(context):
     if context.v_active not in context.i_holding['soma']:
         context.i_holding['soma'][context.v_active] = 0.
     if not sim.has_rec('dend'):
-        dend, dend_loc = get_DG_GC_thickest_dend_branch(context.cell, 100., terminal=False)
+        dend, dend_loc = get_thickest_dend_branch(context.cell, 100., terminal=False)
         sim.append_rec(cell, dend, name='dend', loc=dend_loc)
         sim.append_rec(cell, dend, name='local_branch', loc=0.5)
 
@@ -211,23 +211,21 @@ def config_sim_env(context):
     if 'syn_id_dict' not in context():
         context.local_random.seed(int(float(context.seed_offset)) + int(context.gid))
         syn_attrs = env.synapse_attributes
-        syn_indexes = defaultdict(list)
+        syn_id_dict = defaultdict(list)
         # choose a random subset of synapses across all apical branches for tuning a distance-dependent AMPA-R gradient
         for branch in cell.apical:
-            if branch.index in syn_attrs.sec_index_map[cell.gid]:
-                this_syn_indexes = syn_attrs.sec_index_map[cell.gid][branch.index]
-                this_syn_indexes = syn_attrs.get_filtered_syn_indexes(cell.gid, syn_indexes=this_syn_indexes,
-                                                                      syn_types=[env.syntypes_dict['excitatory']])
-                if len(this_syn_indexes) > 1:
-                    if branch.sec.L <= context.min_random_inter_syn_distance:
-                        syn_indexes['random'].extend(context.local_random.sample(this_syn_indexes, 1))
-                    else:
-                        this_num_syns = min(len(this_syn_indexes),
-                                            int(branch.sec.L / context.min_random_inter_syn_distance),
-                                            context.max_syns_per_random_branch)
-                        syn_indexes['random'].extend(context.local_random.sample(this_syn_indexes, this_num_syns))
-                elif len(this_syn_indexes) > 0:
-                    syn_indexes['random'].append(this_syn_indexes[0])
+            this_syn_ids = syn_attrs.get_filtered_syn_ids(cell.gid, syn_sections=[branch.index],
+                                                          syn_types=[env.Synapse_Types['excitatory']])
+            if len(this_syn_ids) > 1:
+                if branch.sec.L <= context.min_random_inter_syn_distance:
+                    syn_id_dict['random'].extend(context.local_random.sample(this_syn_ids, 1))
+                else:
+                    this_num_syns = min(len(this_syn_ids),
+                                        int(branch.sec.L / context.min_random_inter_syn_distance),
+                                        context.max_syns_per_random_branch)
+                    syn_id_dict['random'].extend(context.local_random.sample(this_syn_ids, this_num_syns))
+            elif len(this_syn_ids) > 0:
+                syn_id_dict['random'].append(this_syn_ids[0])
 
         # choose a random subset of apical branches that contain the required number of clustered synapses to tune
         # NMDAR-R properties to match target features for spatiotemporal integration
@@ -239,21 +237,19 @@ def config_sim_env(context):
         parents = []
         branch_count = 0
         for branch in (branch for branch in candidate_branches if branch.parent not in parents):
-            if branch.index in syn_attrs.sec_index_map[cell.gid]:
-                this_syn_indexes = syn_attrs.sec_index_map[cell.gid][branch.index]
-                this_syn_indexes = syn_attrs.get_filtered_syn_indexes(cell.gid, syn_indexes=this_syn_indexes,
-                                                                      syn_types=[env.syntypes_dict['excitatory']])
-                candidate_syn_indexes = []
-                for syn_index in this_syn_indexes:
-                    syn_loc = syn_attrs.syn_id_attr_dict[cell.gid]['syn_locs'][syn_index]
-                    if 30. <= syn_loc * branch.sec.L <= 60.:
-                        candidate_syn_indexes.append(syn_index)
-                if len(candidate_syn_indexes) >= context.num_syns_per_clustered_branch:
-                    branch_key = context.clustered_branch_names[branch_count]
-                    syn_indexes[branch_key].extend(context.local_random.sample(candidate_syn_indexes,
-                                                                               context.num_syns_per_clustered_branch))
-                    branch_count += 1
-                    parents.append(branch.parent)
+            this_syn_ids = syn_attrs.get_filtered_syn_ids(cell.gid, syn_sections=[branch.index],
+                                                          syn_types=[env.Synapse_Types['excitatory']])
+            candidate_syn_ids = []
+            for syn_id in this_syn_ids:
+                syn_loc = syn_attrs.syn_id_attr_dict[cell.gid][syn_id].syn_loc
+                if 30. <= syn_loc * branch.sec.L <= 60.:
+                    candidate_syn_ids.append(syn_id)
+            if len(candidate_syn_ids) >= context.num_syns_per_clustered_branch:
+                branch_key = context.clustered_branch_names[branch_count]
+                syn_id_dict[branch_key].extend(context.local_random.sample(candidate_syn_ids,
+                                                                           context.num_syns_per_clustered_branch))
+                branch_count += 1
+                parents.append(branch.parent)
             if branch_count >= context.num_clustered_branches:
                 break
         if branch_count < context.num_clustered_branches:
@@ -261,16 +257,16 @@ def config_sim_env(context):
                                'satisfy the requirement for clustered synapses: %i/%i' %
                                (branch_count, context.num_clustered_branches))
 
-        context.syn_id_dict = defaultdict(list)
+        context.syn_id_dict = syn_id_dict
         syn_id_set = set()
         context.syn_id_list = []
-        for group_key in syn_indexes:
-            context.syn_id_dict[group_key] = syn_attrs.syn_id_attr_dict[cell.gid]['syn_ids'][syn_indexes[group_key]]
+        for group_key in syn_id_dict:
             syn_id_set.update(context.syn_id_dict[group_key])
         context.syn_id_list = list(syn_id_set)
 
-        config_syns_from_mech_attrs(context.cell.gid, context.env, context.cell.pop_name, syn_ids=context.syn_id_list,
-                                    insert=True, verbose=True)
+        config_biophys_cell_syns(env=context.env, gid=context.cell.gid, postsyn_name=context.cell.pop_name,
+                                 syn_ids=context.syn_id_list, insert=True, insert_netcons=True, insert_vecstims=True,
+                                 verbose=context.verbose > 1)
 
     sim.parameters['duration'] = duration
     sim.parameters['equilibrate'] = equilibrate
@@ -294,22 +290,22 @@ def update_syn_mechanisms(x, context=None):
     x_dict = param_array_to_dict(x, context.param_names)
     cell = context.cell
     env = context.env
-    modify_syn_mech_param(cell, env, 'apical', context.AMPA_type, param_name='g_unit', value=x_dict['AMPA.g0'],
+    modify_syn_param(cell, env, 'apical', context.AMPA_type, param_name='g_unit', value=x_dict['AMPA.g0'],
                           filters={'syn_types': ['excitatory']}, origin='soma', slope=x_dict['AMPA.slope'],
                           tau=x_dict['AMPA.tau'], update_targets=True)
-    modify_syn_mech_param(cell, env, 'apical', context.AMPA_type, param_name='g_unit',
+    modify_syn_param(cell, env, 'apical', context.AMPA_type, param_name='g_unit',
                           filters={'syn_types': ['excitatory']}, origin='parent',
                           origin_filters={'syn_types': ['excitatory']},
                           custom={'func': 'custom_filter_if_terminal'}, update_targets=True, append=True)
-    modify_syn_mech_param(cell, env, 'apical', context.AMPA_type, param_name='g_unit',
+    modify_syn_param(cell, env, 'apical', context.AMPA_type, param_name='g_unit',
                           filters={'syn_types': ['excitatory'], 'layers': ['OML']}, origin='apical',
                           origin_filters={'syn_types': ['excitatory'], 'layers': ['MML']}, update_targets=True,
                           append=True)
-    modify_syn_mech_param(cell, env, 'apical', context.NMDA_type, param_name='Kd', value=x_dict['NMDA.Kd'],
+    modify_syn_param(cell, env, 'apical', context.NMDA_type, param_name='Kd', value=x_dict['NMDA.Kd'],
                           update_targets=True)
-    modify_syn_mech_param(cell, env, 'apical', context.NMDA_type, param_name='gamma', value=x_dict['NMDA.gamma'],
+    modify_syn_param(cell, env, 'apical', context.NMDA_type, param_name='gamma', value=x_dict['NMDA.gamma'],
                           update_targets=True)
-    modify_syn_mech_param(cell, env, 'apical', context.NMDA_type, param_name='g_unit', value=x_dict['NMDA.g_unit'],
+    modify_syn_param(cell, env, 'apical', context.NMDA_type, param_name='g_unit', value=x_dict['NMDA.g_unit'],
                           update_targets=True)
 
 

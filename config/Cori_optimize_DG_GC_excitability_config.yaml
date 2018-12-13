@@ -159,11 +159,11 @@ kwargs:
   correct_for_spines: True
   verbose: 1
   daspk: False
-  configFile: Small_Scale_Control_LN_weights_Sat.yaml
-  templatePaths: ../DGC/Mateos-Aparicio2014:../dentate/templates
-  hoclibPath: ../dentate
-  configPrefix: ../dentate/config
-  datasetPrefix: /global/cscratch1/sd/aaronmil/dentate
+  config_file: Small_Scale_Control_LN_weights_Sat.yaml
+  template_paths: ../DGC/Mateos-Aparicio2014:../dentate/templates
+  hoc_lib_path: ../dentate
+  config_prefix: ../dentate/config
+  dataset_prefix: /global/cscratch1/sd/aaronmil/dentate
   resultsPath: /global/cscratch1/sd/aaronmil/optimize_cells
 objective_names:
 - dend R_inp

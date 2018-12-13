@@ -149,17 +149,17 @@ get_objectives:
   optimize_DG_GC_spiking: get_objectives_spiking
   optimize_DG_GC_iEPSP_propagation: get_objectives_iEPSP_propagation
 kwargs:
-  mech_file_path: mechanisms/20180605_DG_GC_excitability_mech.yaml
+  mech_file_path: mechanisms/20181205_DG_GC_excitability_mech.yaml
   gid: 0
   cell_type: GC
   correct_for_spines: True
   verbose: 2
   daspk: False
-  configFile: Small_Scale_Control_LN_weights.yaml
-  templatePaths: ../DGC/Mateos-Aparicio2014:../dentate/templates
-  hoclibPath: ../dentate
-  configPrefix: ../dentate/config
-  datasetPrefix: /oasis/scratch/comet/aaronmil/temp_project/dentate  
+  config_file: Small_Scale_Control_LN_weights.yaml
+  template_paths: ../DGC/Mateos-Aparicio2014:../dentate/templates
+  hoc_lib_path: ../dentate
+  config_prefix: ../dentate/config
+  dataset_prefix: /oasis/scratch/comet/aaronmil/temp_project/dentate
   # resultsPath: data
   resultsPath: /oasis/scratch/comet/aaronmil/temp_project/optimize_cells
 objective_names:

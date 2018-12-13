@@ -24,9 +24,9 @@ context = Context()
 @click.option("--output-dir", type=str, default='data')
 @click.option("--export-file-path", type=str, default=None)
 @click.option("--label", type=str, default=None)
-@click.option("--disp", is_flag=True)
-@click.option("--verbose", is_flag=True)
-def main(config_file_path, export, output_dir, export_file_path, label, disp, verbose):
+@click.option("--interactive", is_flag=True)
+@click.option("--verbose", type=int, default=2)
+def main(config_file_path, export, output_dir, export_file_path, label, interactive, verbose):
     """
 
     :param config_file_path: str (path)
@@ -34,19 +34,21 @@ def main(config_file_path, export, output_dir, export_file_path, label, disp, ve
     :param output_dir: str
     :param export_file_path: str
     :param label: str
-    :param disp: bool
-    :param verbose: bool
+    :param interactive: bool
+    :param verbose: int
     """
     # requires a global variable context: :class:'Context'
 
     context.update(locals())
-    group_size = 2
-    context.interface = ParallelContextInterface(procs_per_worker=group_size)
+    from mpi4py import MPI
+    from neuron import h
+    comm = MPI.COMM_WORLD
+    context.interface = ParallelContextInterface(procs_per_worker=comm.size)
     config_interactive(context, __file__, config_file_path=config_file_path, output_dir=output_dir,
                        export_file_path=export_file_path, label=label, verbose=verbose)
     context.interface.start()
-    num_params = 1
-    sequences = [[context.x0_array] * num_params] + [[context.export] * num_params]
+
+    sequences = [[context.x0_array]] + [[context.export]]
     primitives = context.interface.map(compute_features_simple_ring, *sequences)
     features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
     features, objectives = get_objectives_simple_ring(features)
@@ -56,7 +58,9 @@ def main(config_file_path, export, output_dir, export_file_path, label, disp, ve
     pprint.pprint(features)
     print 'objectives:'
     pprint.pprint(objectives)
-    context.interface.stop()
+    context.update(locals())
+    if not interactive:
+        context.interface.stop()
 
 
 def config_worker():
@@ -66,9 +70,7 @@ def config_worker():
     param_indexes = {param_name: i for i, param_name in enumerate(context.param_names)}
     context.update(locals())
     init_context()
-
-    pc = context.interface.pc
-    context.pc = pc
+    context.pc = h.ParallelContext()
     setup_network(**context.kwargs)
 
 
@@ -86,7 +88,7 @@ def report_pc_id():
     return {'pc.id_world': context.pc.id_world(), 'pc.id': context.pc.id()}
 
 
-def setup_network(verbose=False, cvode=False, daspk=False, **kwargs):
+def setup_network(verbose=2, **kwargs):
     """
 
     :param verbose: bool
@@ -114,8 +116,10 @@ def update_context_simple_ring(x, local_context=None):
 
 def compute_features_simple_ring(x, export=False):
     update_source_contexts(x, context)
-    results = runring(context.ring, context.pc, context.interface.comm)
+    results = runring(context.ring, context.pc, context.comm)
     if int(context.pc.id()) == 0:
+        if results is None:
+            return dict()
         max_ind = np.argmax(np.array(results['rec'][2]))
         min_ind = np.argmin(np.array(results['rec'][2]))
         equil_index = np.floor(0.05*len(results['rec'][2]))
@@ -123,18 +127,19 @@ def compute_features_simple_ring(x, export=False):
         processed_result = {'n2.EPSP': results['rec'][2][max_ind] - vm_baseline, 'peak_t': results['t'][2][max_ind],
                             'n2.IPSP': results['rec'][2][min_ind] - vm_baseline, 'min_t': results['t'][2][min_ind],
                             'PC id': context.pc.id_world()}
-    else:
-        processed_result = None
-    return processed_result
+    # else:
+    #    processed_result = None
+        return processed_result
 
 
 def get_objectives_simple_ring(features):
-    objectives = {}
-    for feature_name in ['n2.EPSP', 'n2.IPSP']:
-        objective_name = feature_name
-        objectives[objective_name] = ((context.target_val[objective_name] - features[feature_name]) /
-                                                  context.target_range[objective_name]) ** 2.
-    return features, objectives
+    if int(context.pc.id()) == 0:
+        objectives = {}
+        for feature_name in ['n2.EPSP', 'n2.IPSP']:
+            objective_name = feature_name
+            objectives[objective_name] = ((context.target_val[objective_name] - features[feature_name]) /
+                                                      context.target_range[objective_name]) ** 2.
+        return features, objectives
 
 
 """
@@ -147,4 +152,5 @@ def calc_spike_count(indiv, i):
 
 
 if __name__ == '__main__':
-    main(args=sys.argv[(list_find(lambda s: s.find(os.path.basename(__file__)) != -1, sys.argv) + 1):], standalone_mode=False)
+    main(args=sys.argv[(list_find(lambda s: s.find(os.path.basename(__file__)) != -1, sys.argv) + 1):],
+         standalone_mode=False)

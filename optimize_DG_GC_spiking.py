@@ -59,6 +59,7 @@ def unit_tests_spiking():
     """
     features = dict()
     # Stage 0: Get shape of single spike at rheobase in soma and axon
+    # Get value of holding current required to maintain target baseline membrane potential
     args = get_args_dynamic_i_holding(context.x0_array, features)
     group_size = len(args[0])
     sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
@@ -72,7 +73,7 @@ def unit_tests_spiking():
     group_size = len(args[0])
     sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
                 [[context.plot] * group_size]
-    primitives = map(compute_features_fI, *sequences)  # compute features for each sequence
+    primitives = map(compute_features_fI, *sequences)
     this_features = filter_features_fI(primitives, features, context.export)
     features.update(this_features)
     context.features = features
@@ -192,22 +193,6 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
     config_sim_env(context)
 
 
-def get_spike_adaptation_indexes(spike_times):
-    """
-    Spike rate adaptation refers to changes in inter-spike intervals during a spike train. Larger values indicate
-    larger increases in inter-spike intervals.
-    :param spike_times: list of float
-    :return: array
-    """
-    if len(spike_times) < 3:
-        return None
-    isi = np.diff(spike_times)
-    adi = []
-    for i in xrange(len(isi) - 1):
-        adi.append((isi[i + 1] - isi[i]) / (isi[i + 1] + isi[i]))
-    return np.array(adi)
-
-
 def config_sim_env(context):
     """
 
@@ -229,7 +214,7 @@ def config_sim_env(context):
     # if context.v_active not in context.i_th_history['soma']:
     #    context.i_th_history['soma'][context.v_active] = context.i_th_start
     if not sim.has_rec('dend'):
-        dend, dend_loc = get_DG_GC_thickest_dend_branch(context.cell, 100., terminal=False)
+        dend, dend_loc = get_thickest_dend_branch(context.cell, 100., terminal=False)
         sim.append_rec(cell, dend, name='dend', loc=dend_loc)
     if not sim.has_rec('ais'):
         sim.append_rec(cell, cell.ais[0], name='ais', loc=1.)
@@ -368,12 +353,14 @@ def compute_features_spike_shape(x, i_holding, export=False, plot=False):
     peak = spike_shape_dict['v_peak']
     threshold = spike_shape_dict['th_v']
     fAHP = spike_shape_dict['fAHP']
+    mAHP = spike_shape_dict['mAHP']
     ADP = spike_shape_dict['ADP']
     spike_detector_delay = spike_shape_dict['spike_detector_delay']
 
     result['soma_spike_amp'] = peak - threshold
     result['vm_th'] = threshold
     result['fAHP'] = fAHP
+    result['mAHP'] = mAHP
     result['ADP'] = ADP
     result['rheobase'] = i_th
     result['i_holding'] = context.i_holding
@@ -963,6 +950,8 @@ def add_diagnostic_recordings():
         sim.append_rec(cell, cell.hillock[0], name='gkm', param='_ref_g_DGC_KM', loc=0.5)
     if not sim.has_rec('cai'):
         sim.append_rec(cell, cell.tree.root, name='cai', param='_ref_cai', loc=0.5)
+    if not sim.has_rec('eca'):
+        sim.append_rec(cell, cell.tree.root, name='eca', param='_ref_eca', loc=0.5)
     #if not sim.has_rec('ina'):
     #    sim.append_rec(cell, cell.tree.root, name='ina', param='_ref_ina', loc=0.5)
     #if not sim.has_rec('axon_end'):

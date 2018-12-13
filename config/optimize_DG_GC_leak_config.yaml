@@ -28,17 +28,17 @@ get_features_stages:
 get_objectives:
   optimize_DG_GC_leak: get_objectives_leak
 kwargs:
-  mech_file_path: mechanisms/20180605_DG_GC_excitability_mech.yaml
+  mech_file_path: mechanisms/20181205_DG_GC_excitability_mech.yaml
   gid: 0
   cell_type: GC
   correct_for_spines: True
   verbose: 2
   daspk: False
-  configFile: Small_Scale_Control_LN_weights_Sat.yaml
-  templatePaths: ../DGC/Mateos-Aparicio2014:../dentate/templates
-  hoclibPath: ../dentate
-  configPrefix: ../dentate/config
-  datasetPrefix: ../dentate/datasets
+  config_file: Small_Scale_Control_LN_weights_Sat.yaml
+  template_paths: ../DGC/Mateos-Aparicio2014:../dentate/templates
+  hoc_lib_path: ../dentate
+  config_prefix: ../dentate/config
+  dataset_prefix: ../dentate/datasets
   resultsPath: data
 objective_names:
 - dend R_inp

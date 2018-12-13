@@ -510,27 +510,48 @@ def get_spike_shape(vm, spike_times, context=None):
     rising_x = np.where(dvdt[x_fAHP:ADP_window_end] > 0.)[0]
     if not rising_x.any():
         ADP = 0.
+        mAHP = 0.
     else:
         falling_x = np.where(dvdt[x_fAHP + rising_x[0]:ADP_window_end] < 0.)[0]
         if not falling_x.any():
             ADP = 0.
+            mAHP = 0.
         else:
             x_ADP = np.argmax(vm[x_fAHP + rising_x[0]:x_fAHP + rising_x[0] + falling_x[0]]) + x_fAHP + rising_x[0]
             if x_ADP - th_x < ADP_min_start_len:
                 ADP = 0.
+                mAHP = 0.
             else:
                 v_ADP = vm[x_ADP]
                 ADP = v_ADP - v_fAHP
+                mAHP = v_before - np.min(vm[x_ADP:window_end])
 
-    return {'v_peak': v_peak, 'th_v': th_v, 'fAHP': fAHP, 'ADP': ADP,
+    return {'v_peak': v_peak, 'th_v': th_v, 'fAHP': fAHP, 'ADP': ADP, 'mAHP': mAHP,
             'spike_detector_delay': spike_detector_delay}
 
 
-def get_DG_GC_thickest_dend_branch(cell, distance_target=None, distance_tolerance=50., terminal=False):
+def get_spike_adaptation_indexes(spike_times):
+    """
+    Spike rate adaptation refers to changes in inter-spike intervals during a spike train. Larger values indicate
+    larger increases in inter-spike intervals.
+    :param spike_times: list of float
+    :return: array
+    """
+    if len(spike_times) < 3:
+        return None
+    isi = np.diff(spike_times)
+    adi = []
+    for i in xrange(len(isi) - 1):
+        adi.append((isi[i + 1] - isi[i]) / (isi[i + 1] + isi[i]))
+    return np.array(adi)
+
+
+def get_thickest_dend_branch(cell, distance_target=None, sec_type='apical', distance_tolerance=50., terminal=False):
     """
     Get the thickest apical dendrite with a segment closest to a target distance from the soma.
     :param cell: "class:'BiophysCell'
     :param distance_target: float (um)
+    :param sec_type: str
     :param distance_tolerance: float (um)
     :param terminal: bool
     :return: node, loc: :class:'SHocNode', float
@@ -539,7 +560,10 @@ def get_DG_GC_thickest_dend_branch(cell, distance_target=None, distance_toleranc
     candidate_distances = []
     candidate_diams = []
     candidate_locs = []
-    for branch in cell.apical:
+    if sec_type not in cell.nodes:
+        raise RuntimeError('get_thickest_dend_branch: pid: %i; %s cell %i: cannot find branch to satisfy '
+                           'provided filter' % (os.getpid(), cell.pop_name, cell.gid))
+    for branch in cell.nodes[sec_type]:
         if terminal == is_terminal(branch):
             for seg in branch.sec:
                 loc = seg.x
@@ -550,29 +574,31 @@ def get_DG_GC_thickest_dend_branch(cell, distance_target=None, distance_toleranc
                     candidate_distances.append(distance)
                     candidate_diams.append(branch.sec(loc).diam)
                     candidate_locs.append(loc)
-    delta_distance = np.absolute(np.array(candidate_distances) - 250.)
-    indexes = range(len(delta_distance))
+    indexes = range(len(candidate_distances))
     if len(indexes) == 0:
-        raise RuntimeError('get_DG_GC_thickest_dend_branch: pid: %i; %s cell %i: cannot find branch to satisfy '
+        raise RuntimeError('get_thickest_dend_branch: pid: %i; %s cell %i: cannot find branch to satisfy '
                            'provided filter' % (os.getpid(), cell.pop_name, cell.gid))
     elif len(indexes) == 1:
         index = 0
     else:
-        diams = np.array(candidate_diams)[indexes]
-        index = indexes[np.argmax(diams)]
+        index = np.argmax(candidate_diams)
     return candidate_branches[index], candidate_locs[index]
 
 
-def get_DG_GC_distal_most_terminal_branch(cell, distance_target=None):
+def get_distal_most_terminal_branch(cell, distance_target=None, sec_type='apical'):
     """
     Get a terminal branch with a branch origin greater than a target distance from the soma.
     :param cell: "class:'BiophysCell'
     :param distance_target: float (um)
+    :param sec_type: str
     :return: node: :class:'SHocNode'
     """
     candidate_branches = []
     candidate_distances = []
-    for branch in cell.apical:
+    if sec_type not in cell.nodes:
+        raise RuntimeError('get_distal_most_terminal_branch: pid: %i; %s cell %i: cannot find branch to satisfy '
+                           'provided filter' % (os.getpid(), cell.pop_name, cell.gid))
+    for branch in cell.nodes[sec_type]:
         if is_terminal(branch):
             distance = get_distance_to_node(cell, cell.tree.root, branch, 0.)
             if distance_target is None or distance > distance_target:
@@ -580,12 +606,12 @@ def get_DG_GC_distal_most_terminal_branch(cell, distance_target=None):
                 candidate_distances.append(get_distance_to_node(cell, cell.tree.root, branch, 1.))
     indexes = range(len(candidate_distances))
     if len(indexes) == 0:
-        raise RuntimeError('get_DG_GC_distal_most_terminal_branch: pid: %i; %s cell %i: cannot find branch to satisfy '
+        raise RuntimeError('get_distal_most_terminal_branch: pid: %i; %s cell %i: cannot find branch to satisfy '
                            'provided filter' % (os.getpid(), cell.pop_name, cell.gid))
     elif len(indexes) == 1:
         index = 0
     else:
-        index = indexes[np.argmax(candidate_distances)]
+        index = np.argmax(candidate_distances)
     return candidate_branches[index]
 
 

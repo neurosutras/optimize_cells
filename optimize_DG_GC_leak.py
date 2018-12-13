@@ -132,12 +132,12 @@ def config_sim_env(context):
     if context.v_init not in context.i_holding['soma']:
         context.i_holding['soma'][context.v_init] = 0.
     if not sim.has_rec('dend'):
-        dend, dend_loc = get_DG_GC_thickest_dend_branch(context.cell, 100., terminal=False)
+        dend, dend_loc = get_thickest_dend_branch(context.cell, 100., terminal=False)
         sim.append_rec(cell, dend, name='dend', loc=dend_loc)
     if context.v_init not in context.i_holding['dend']:
         context.i_holding['dend'][context.v_init] = 0.
     if not sim.has_rec('term_dend'):
-        term_dend = get_DG_GC_distal_most_terminal_branch(context.cell, 250.)
+        term_dend = get_distal_most_terminal_branch(context.cell, 250.)
         sim.append_rec(cell, term_dend, name='term_dend', loc=1.)
     if context.v_init not in context.i_holding['term_dend']:
         context.i_holding['term_dend'][context.v_init] = 0.
