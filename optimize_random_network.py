@@ -35,13 +35,11 @@ def main(config_file_path, export, output_dir, export_file_path, label, disp, ve
 
     context.update(locals())
     group_size = 2
-    context.interface = ParallelContextInterface(procs_per_worker=group_size)
     config_interactive(context, __file__, config_file_path=config_file_path, output_dir=output_dir,
                        export_file_path=export_file_path, label=label, verbose=verbose)
-    context.interface.start()
     num_params = 1
     sequences = [[context.x0_array] * num_params] + [[context.export] * num_params]
-    primitives = context.interface.map(compute_features_simple_ring, *sequences)
+    primitives = map(compute_features_simple_ring, *sequences)
     features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
     features, objectives = get_objectives(features)
     print 'params:'
@@ -50,8 +48,7 @@ def main(config_file_path, export, output_dir, export_file_path, label, disp, ve
     pprint.pprint(features)
     print 'objectives:'
     pprint.pprint(objectives)
-    context.interface.stop()
-
+    context.update(locals())
 
 #keep
 def config_worker():
@@ -62,8 +59,7 @@ def config_worker():
     context.update(locals())
     init_context()
 
-    pc = context.interface.pc
-    context.pc = pc
+    context.pc = h.ParallelContext()
     setup_network(**context.kwargs)
 
 #keep
@@ -111,7 +107,7 @@ def compute_features(x, export=False):
     context.pc.gid_clear()
     context.network = Network(context.ncell, context.delay, context.pc,
                               e2e=context.e2e, e2i=context.e2i, i2i=context.i2i, i2e=context.i2e)
-    results = run_network(context.network, context.pc, context.interface.comm)
+    results = run_network(context.network, context.pc, context.comm)
     if int(context.pc.id()) == 0:
         processed_result = results
     else:
