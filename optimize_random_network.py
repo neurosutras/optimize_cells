@@ -33,8 +33,6 @@ def main(config_file_path, export, output_dir, export_file_path, label, interact
     # requires a global variable context: :class:'Context'
 
     context.update(locals())
-    from mpi4py import MPI
-    from neuron import h
     comm = MPI.COMM_WORLD
     context.interface = ParallelContextInterface(procs_per_worker=comm.size)
     config_interactive(context, __file__, config_file_path=config_file_path, output_dir=output_dir,
