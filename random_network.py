@@ -45,16 +45,18 @@ class Network(object):
       cell_type = 'FS'
       if i not in list(range(ncell* 2, ncell * 3)):
         cell_type = 'RS'
-      cell = IzhiCell(cell_type)
+      cell = Izhi2(cell_type)#IzhiCell(cell_type)
       self.cells.append(cell)
       self.gids.append(i)
       self.pc.set_gid2node(i, rank)
+      print "cell2: ",type(cell)
+      #nc = h.NetCon(cell.sec(.5)._ref_v, None, sec=cell.sec)
       nc = cell.connect2target(None)
+      print "pre cell: ", nc.precell()
       self.pc.cell(i, nc)
       test = self.pc.gid2cell(i)
-      print "mkcell :", type(test)
+      print "mkcell: ", i, type(test)
     # print self.gids
-
   def createpairs(self, prob, input_indices, output_indices):
     pair_list = []
     for i in input_indices:
@@ -83,7 +85,7 @@ class Network(object):
         target_gid = pair[1]
         if self.pc.gid_exists(target_gid):
           target = self.pc.gid2cell(target_gid)
-          if target.type == 'FS':  
+          if target.type == 'FS':
             syn = target.synlist[1]
           else:
             syn = target.synlist[0]
@@ -129,7 +131,7 @@ class Network(object):
       tvec = h.Vector()
       tvec.record(h._ref_t)  # dt is not accepted as an argument to this function in the PC environment -- may need to turn on cvode?
       rec = h.Vector()
-      rec.record(getattr(cell.sec(.5), '_ref_v'))  # dt is not accepted as an argument
+      rec.record(getattr(cell.soma(.5), '_ref_v'))  # dt is not accepted as an argument
       self.voltage_tvec[self.gids[i]] = tvec
       self.voltage_recvec[self.gids[i]] = rec
 
@@ -226,8 +228,109 @@ class IzhiCell(object):
 
       self.synlist = synlist
 
-    # also from Ball Stick
+    # also fllrom Ball Stick
     def connect2target(self, target):
-      nc = h.NetCon(self.sec(1)._ref_v, target, sec=self.sec)
+      print "connect: ", self.sec(.5)._ref_v, type(self)
+      nc = h.NetCon(self.sec(1)._ref_v, target, sec=self.sec)#, sec=self.sec)
+      print "precell: ", nc.precell()
       nc.threshold = 10
       return nc
+
+class Izhi2(object):
+  def __init__(self, cell_type='RS'):
+    #print 'construct ', self
+    self.topol()
+    self.subsets()
+    self.geom()
+    self.biophys()
+    self.geom_nseg()
+    self.izh = h.Izhi2007b(.5, sec=self.dend)
+    self.type = cell_type
+    
+    if cell_type == 'RS' : self.izh.a = .1
+    if cell_type=='FS' : self.izh.a = .02
+
+    self.synlist = []
+    self.synapses()
+    self.x = self.y = self.z = 0.
+
+  def __del__(self):
+    #print 'delete ', self
+    pass
+
+  def topol(self):
+    self.soma = h.Section(name='soma', cell=self)
+    self.dend = h.Section(name='dend', cell= self)
+    self.dend.connect(self.soma(1))
+    self.basic_shape()
+
+  def basic_shape(self):
+    self.soma.push()
+    h.pt3dclear()
+    h.pt3dadd(0, 0, 0, 1)
+    h.pt3dadd(15, 0, 0, 1)
+    h.pop_section()
+    self.dend.push()
+    h.pt3dclear()
+    h.pt3dadd(15, 0, 0, 1)
+    h.pt3dadd(105, 0, 0, 1)
+    h.pop_section()
+
+  def subsets(self):
+    self.all = h.SectionList()
+    self.all.append(sec=self.soma)
+    self.all.append(sec=self.dend)
+
+  def geom(self):
+    self.soma.L = self.soma.diam = 12.6157
+    self.dend.L = 200
+    self.dend.diam = 1
+
+  def geom_nseg(self):
+    for sec in self.all:
+      sec.nseg = int((sec.L/(0.1*h.lambda_f(100)) + .9)/2.)*2 + 1
+
+  def biophys(self):
+    for sec in self.all:
+      sec.Ra = 100
+      sec.cm = 1
+    self.soma.insert('hh')
+    self.soma.gnabar_hh = 0.12
+    self.soma.gkbar_hh = 0.036
+    self.soma.gl_hh = 0.0003
+    self.soma.el_hh = -54.3
+
+    self.dend.insert('pas')
+    self.dend.g_pas = 0.001
+    self.dend.e_pas = -65
+
+  def position(self, x, y, z):
+    self.soma.push()
+    for i in range(h.n3d()):
+      h.pt3dchange(i, x-self.x+h.x3d(i), y-self.y+h.y3d(i), z-self.z+h.z3d(i), h.diam3d(i))
+    self.x = x; self.y = y; self.z = z
+    h.pop_section()
+
+  def connect2target(self, target):
+    nc = h.NetCon(self.soma(1)._ref_v, target, sec = self.soma)
+    nc.threshold = 10
+    return nc
+
+  def synapses(self):
+    """s = h.Izhi2007a(self.dend(0.8))
+    s.a = .1
+    self.synlist.append(s)
+    s = h.Izhi2007a(self.dend(0.1))
+    s.a = .02
+    self.synlist.append(s)"""
+
+    s = h.ExpSyn(self.dend(0.8)) # E0
+    s.tau = 2
+    self.synlist.append(s)
+    s = h.ExpSyn(self.dend(0.1)) # I1
+    s.tau = 5
+    s.e = -80
+    self.synlist.append(s)
+
+  def is_art(self):
+    return 0
