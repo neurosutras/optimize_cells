@@ -3,7 +3,7 @@ import sys
 from neuron import h
 from ring_cell import BallStick
 
-# h.load_file('nrngui.hoc')
+# for h.stdinit
 h.load_file('stdrun.hoc')
 
 

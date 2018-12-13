@@ -12,15 +12,14 @@ context = Context()
 
 @click.command()
 @click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='optimize_random_network_config.yaml')
+              default='config/optimize_random_network_config.yaml')
 @click.option("--export", is_flag=True)
 @click.option("--output-dir", type=str, default='data')
 @click.option("--export-file-path", type=str, default=None)
 @click.option("--label", type=str, default=None)
-@click.option("--disp", is_flag=True)
-@click.option("--verbose", is_flag=True)
-#keep
-def main(config_file_path, export, output_dir, export_file_path, label, disp, verbose):
+@click.option("--interactive", is_flag=True)
+@click.option("--verbose", type=int, default=2)
+def main(config_file_path, export, output_dir, export_file_path, label, interactive, verbose):
     """
 
     :param config_file_path: str (path)
@@ -28,18 +27,22 @@ def main(config_file_path, export, output_dir, export_file_path, label, disp, ve
     :param output_dir: str
     :param export_file_path: str
     :param label: str
-    :param disp: bool
-    :param verbose: bool
+    :param interactive: bool
+    :param verbose: int
     """
     # requires a global variable context: :class:'Context'
 
     context.update(locals())
-    group_size = 2
+    from mpi4py import MPI
+    from neuron import h
+    comm = MPI.COMM_WORLD
+    context.interface = ParallelContextInterface(procs_per_worker=comm.size)
     config_interactive(context, __file__, config_file_path=config_file_path, output_dir=output_dir,
                        export_file_path=export_file_path, label=label, verbose=verbose)
-    num_params = 1
-    sequences = [[context.x0_array] * num_params] + [[context.export] * num_params]
-    primitives = map(compute_features_simple_ring, *sequences)
+    context.interface.start()
+
+    sequences = [[context.x0_array]] + [[context.export]]
+    primitives = context.interface.map(compute_features, *sequences)
     features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
     features, objectives = get_objectives(features)
     print 'params:'
@@ -49,20 +52,19 @@ def main(config_file_path, export, output_dir, export_file_path, label, disp, ve
     print 'objectives:'
     pprint.pprint(objectives)
     context.update(locals())
+    if not interactive:
+        context.interface.stop()
 
-#keep
+
 def config_worker():
     """
 
     """
-    param_indexes = {param_name: i for i, param_name in enumerate(context.param_names)}
-    context.update(locals())
     init_context()
-
     context.pc = h.ParallelContext()
-    setup_network(**context.kwargs)
+    # setup_network(**context.kwargs)
 
-#keep
+
 def init_context():
     """
 
@@ -71,20 +73,6 @@ def init_context():
     delay = 1
     tstop = 3000
     context.update(locals())
-
-#keep
-def report_pc_id():
-    return {'pc.id_world': context.pc.id_world(), 'pc.id': context.pc.id()}
-
-
-def setup_network(verbose=False, cvode=False, daspk=False, **kwargs):
-    """
-
-    :param verbose: bool
-    :param cvode: bool
-    :param daspk: bool
-    """
-    context.network = Network(context.ncell, context.delay, context.pc)
 
 
 def update_context(x, local_context=None):
@@ -95,11 +83,12 @@ def update_context(x, local_context=None):
     """
     if local_context is None:
         local_context = context
-    param_indexes = local_context.param_indexes
-    context.e2e = x[param_indexes['EE_connection_prob']]
-    context.e2i = x[param_indexes['EI_connection_prob']]
-    context.i2i = x[param_indexes['II_connection_prob']]
-    context.i2e = x[param_indexes['IE_connection_prob']]
+    x_dict = param_array_to_dict(x, context.param_names)
+    local_context.e2e = x_dict['EE_connection_prob']
+    local_context.e2i = x_dict['EI_connection_prob']
+    local_context.i2i = x_dict['II_connection_prob']
+    local_context.i2e = x_dict['IE_connection_prob']
+
 
 # magic nums
 def compute_features(x, export=False):
@@ -109,21 +98,21 @@ def compute_features(x, export=False):
                               e2e=context.e2e, e2i=context.e2i, i2i=context.i2i, i2e=context.i2e)
     results = run_network(context.network, context.pc, context.comm)
     if int(context.pc.id()) == 0:
-        processed_result = results
-    else:
-        processed_result = None
-    return processed_result
+        if results is None:
+            return dict()
+        return results
 
 
-# keep
 def get_objectives(features):
-    objectives = {}
-    for feature_name in ['E_peak_rate', 'I_peak_rate', 'E_mean_rate', 'I_mean_rate']:
-        objective_name = feature_name
-        objectives[objective_name] = ((context.target_val[objective_name] - features[feature_name]) /
-                                                  context.target_range[objective_name]) ** 2.
-    return features, objectives
+    if int(context.pc.id()) == 0:
+        objectives = {}
+        for feature_name in ['E_peak_rate', 'I_peak_rate', 'E_mean_rate', 'I_mean_rate']:
+            objective_name = feature_name
+            objectives[objective_name] = ((context.target_val[objective_name] - features[feature_name]) /
+                                                      context.target_range[objective_name]) ** 2.
+        return features, objectives
 
 
 if __name__ == '__main__':
-    main(args=sys.argv[(list_find(lambda s: s.find(os.path.basename(__file__)) != -1, sys.argv) + 1):], standalone_mode=False)
+    main(args=sys.argv[(list_find(lambda s: s.find(os.path.basename(__file__)) != -1, sys.argv) + 1):],
+         standalone_mode=False)

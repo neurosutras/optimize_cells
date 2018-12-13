@@ -67,8 +67,6 @@ def config_worker():
     """
 
     """
-    param_indexes = {param_name: i for i, param_name in enumerate(context.param_names)}
-    context.update(locals())
     init_context()
     context.pc = h.ParallelContext()
     setup_network(**context.kwargs)
@@ -92,11 +90,8 @@ def setup_network(verbose=2, **kwargs):
     """
 
     :param verbose: bool
-    :param cvode: bool
-    :param daspk: bool
     """
     context.ring = Ring(context.ncell, context.delay, context.pc)
-    # context.pc.set_maxstep(10)
 
 
 #Need to update this as well -- do we need both update functions?
@@ -108,10 +103,10 @@ def update_context_simple_ring(x, local_context=None):
     """
     if local_context is None:
         local_context = context
-    param_indexes = local_context.param_indexes
-    context.ring.update_syn_weight((0, 1), x[param_indexes['n0.syn_weight n1']])
-    context.ring.update_syn_weight((0, 2), x[param_indexes['n0.syn_weight n2']])
-    context.ring.update_syn_weight((1, 2), x[param_indexes['n1.syn_weight n2']])
+    x_dict = param_array_to_dict(x, context.param_names)
+    local_context.ring.update_syn_weight((0, 1), x_dict['n0.syn_weight n1'])
+    local_context.ring.update_syn_weight((0, 2), x_dict['n0.syn_weight n2'])
+    local_context.ring.update_syn_weight((1, 2), x_dict['n1.syn_weight n2'])
 
 
 def compute_features_simple_ring(x, export=False):
@@ -127,8 +122,6 @@ def compute_features_simple_ring(x, export=False):
         processed_result = {'n2.EPSP': results['rec'][2][max_ind] - vm_baseline, 'peak_t': results['t'][2][max_ind],
                             'n2.IPSP': results['rec'][2][min_ind] - vm_baseline, 'min_t': results['t'][2][min_ind],
                             'PC id': context.pc.id_world()}
-    # else:
-    #    processed_result = None
         return processed_result
 
 

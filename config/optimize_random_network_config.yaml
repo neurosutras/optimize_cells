@@ -25,7 +25,7 @@ get_features_stages:
 get_objectives:
   optimize_random_network: get_objectives
 kwargs:
-  verbose: True
+  verbose: 2
 objective_names:
 - E_peak_rate
 - I_peak_rate
