@@ -10,7 +10,6 @@ from nested.optimize_utils import *
 from optimize_cells_utils import *
 import click
 import uuid
-import glob
 
 
 context = Context()
@@ -25,8 +24,9 @@ context = Context()
 @click.option("--label", type=str, default=None)
 @click.option("--verbose", type=int, default=2)
 @click.option("--plot", is_flag=True)
+@click.option("--debug", is_flag=True)
 @click.option("--run-tests", is_flag=True)
-def main(config_file_path, output_dir, export, export_file_path, label, verbose, plot, run_tests):
+def main(config_file_path, output_dir, export, export_file_path, label, verbose, plot, debug, run_tests):
     """
 
     :param config_file_path: str (path)
@@ -36,6 +36,7 @@ def main(config_file_path, output_dir, export, export_file_path, label, verbose,
     :param label: str
     :param verbose: bool
     :param plot: bool
+    :param debug: bool
     :param run_tests: bool
     """
     # requires a global variable context: :class:'Context'
@@ -60,12 +61,12 @@ def unit_tests_synaptic_integration():
     group_size = len(args[0])
     sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
                 [[context.plot] * group_size]
-    primitives = map(compute_features_unitary_EPSP_amp, *sequences)
-    """
-    primitives = [compute_features_unitary_EPSP_amp(*zip(*sequences)[0]),
-                  compute_features_unitary_EPSP_amp(*zip(*sequences)[1]),
-                  compute_features_unitary_EPSP_amp(*zip(*sequences)[17])]
-    """
+    if context.debug:
+        primitives = [compute_features_unitary_EPSP_amp(*zip(*sequences)[0]),
+                      compute_features_unitary_EPSP_amp(*zip(*sequences)[1]),
+                      compute_features_unitary_EPSP_amp(*zip(*sequences)[17])]
+    else:
+        primitives = map(compute_features_unitary_EPSP_amp, *sequences)
     this_features = filter_features_unitary_EPSP_amp(primitives, features, context.export)
     features.update(this_features)
 
@@ -126,14 +127,18 @@ def init_context():
 
     local_random = random.Random()
 
-    # for clustered inputs, num_syns corresponds to number of clustered inputs per branch
+    syn_conditions = ['control', 'AP5']
     max_syns_per_random_branch = 5
     min_random_inter_syn_distance = 30.  # um
-    num_syns_per_clustered_branch = 20
-    syn_conditions = ['control', 'AP5']
 
     # number of branches to test temporal integration of clustered inputs
-    num_clustered_branches = 2
+    if 'debug' in context() and context.debug:
+        num_clustered_branches = 1
+        num_syns_per_clustered_branch = 5
+    else:
+        num_clustered_branches = 2
+        num_syns_per_clustered_branch = 20
+
     clustered_branch_names = ['clustered%i' % i for i in xrange(num_clustered_branches)]
 
     ISI = {'units': 200., 'clustered': 1.1}  # inter-stimulus interval for synaptic stim (ms)
@@ -172,9 +177,9 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
     context.spike_output_vec = h.Vector()
     cell.spike_detector.record(context.spike_output_vec)
     context.cell = cell
-    context.temp_traces_path = '%s/%s_temp_traces_%s.hdf5' % (context.output_dir,
-                                                      datetime.datetime.today().strftime('%Y%m%d_%H%M'),
-                                                      str(uuid.uuid1()))
+    context.temp_traces_path = '%s/%s_temp_traces_%s.hdf5' % \
+                               (context.output_dir, datetime.datetime.today().strftime('%Y%m%d_%H%M'),
+                                str(uuid.uuid1()))
     config_sim_env(context)
 
 
@@ -266,7 +271,7 @@ def config_sim_env(context):
 
         config_biophys_cell_syns(env=context.env, gid=context.cell.gid, postsyn_name=context.cell.pop_name,
                                  syn_ids=context.syn_id_list, insert=True, insert_netcons=True, insert_vecstims=True,
-                                 verbose=context.verbose > 1)
+                                 verbose=context.verbose > 1, throw_error=False)
 
     sim.parameters['duration'] = duration
     sim.parameters['equilibrate'] = equilibrate
@@ -292,21 +297,23 @@ def update_syn_mechanisms(x, context=None):
     env = context.env
     modify_syn_param(cell, env, 'apical', context.AMPA_type, param_name='g_unit', value=x_dict['AMPA.g0'],
                           filters={'syn_types': ['excitatory']}, origin='soma', slope=x_dict['AMPA.slope'],
-                          tau=x_dict['AMPA.tau'], update_targets=True)
+                          tau=x_dict['AMPA.tau'], update_targets=False)
     modify_syn_param(cell, env, 'apical', context.AMPA_type, param_name='g_unit',
                           filters={'syn_types': ['excitatory']}, origin='parent',
                           origin_filters={'syn_types': ['excitatory']},
-                          custom={'func': 'custom_filter_if_terminal'}, update_targets=True, append=True)
+                          custom={'func': 'custom_filter_if_terminal'}, update_targets=False, append=True)
     modify_syn_param(cell, env, 'apical', context.AMPA_type, param_name='g_unit',
                           filters={'syn_types': ['excitatory'], 'layers': ['OML']}, origin='apical',
-                          origin_filters={'syn_types': ['excitatory'], 'layers': ['MML']}, update_targets=True,
+                          origin_filters={'syn_types': ['excitatory'], 'layers': ['MML']}, update_targets=False,
                           append=True)
     modify_syn_param(cell, env, 'apical', context.NMDA_type, param_name='Kd', value=x_dict['NMDA.Kd'],
-                          update_targets=True)
+                          update_targets=False)
     modify_syn_param(cell, env, 'apical', context.NMDA_type, param_name='gamma', value=x_dict['NMDA.gamma'],
-                          update_targets=True)
+                          update_targets=False)
     modify_syn_param(cell, env, 'apical', context.NMDA_type, param_name='g_unit', value=x_dict['NMDA.g_unit'],
-                          update_targets=True)
+                          update_targets=False)
+    config_biophys_cell_syns(env=env, gid=cell.gid, postsyn_name=cell.pop_name, syn_ids=context.syn_id_list,
+                             verbose=context.verbose > 1, throw_error=True)
 
 
 def get_args_dynamic_unitary_EPSP_amp(x, features):
@@ -383,6 +390,7 @@ def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, mode
     context.sim.parameters['swc_types'] = []
     context.sim.parameters['syn_ids'] = syn_ids
     for i, syn_id in enumerate(syn_ids):
+        syn_id = int(syn_id)
         spike_time = context.equilibrate + i * ISI
         for syn_name in context.syn_mech_names:
             this_nc = syn_attrs.get_netcon(context.cell.gid, syn_id, syn_name)
@@ -390,9 +398,9 @@ def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, mode
             if syn_name == context.NMDA_type and syn_condition == 'AP5':
                 config_syn(syn_name=syn_name, rules=syn_attrs.syn_param_rules, mech_names=syn_attrs.syn_mech_names,
                            nc=this_nc, syn=this_nc.syn(), g_unit=0.)
-        syn_index = syn_attrs.syn_id_attr_index_map[context.cell.gid][syn_id]
-        node_index = syn_attrs.syn_id_attr_dict[context.cell.gid]['syn_secs'][syn_index]
-        node_type = syn_attrs.syn_id_attr_dict[context.cell.gid]['swc_types'][syn_index]
+        syn = syn_attrs.syn_id_attr_dict[context.cell.gid][syn_id]
+        node_index = syn.syn_section
+        node_type = syn.swc_type
         context.sim.parameters['syn_secs'].append(node_index)
         context.sim.parameters['swc_types'].append(node_type)
         if i == 0:
@@ -635,9 +643,9 @@ def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, mod
             if syn_name == context.NMDA_type and syn_condition == 'AP5':
                 config_syn(syn_name=syn_name, rules=syn_attrs.syn_param_rules, mech_names=syn_attrs.syn_mech_names,
                            nc=this_nc, syn=this_nc.syn(), g_unit=0.)
-        syn_index = syn_attrs.syn_id_attr_index_map[context.cell.gid][syn_id]
-        node_index = syn_attrs.syn_id_attr_dict[context.cell.gid]['syn_secs'][syn_index]
-        node_type = syn_attrs.syn_id_attr_dict[context.cell.gid]['swc_types'][syn_index]
+        syn = syn_attrs.syn_id_attr_dict[context.cell.gid][syn_id]
+        node_index = syn.syn_section
+        node_type = syn.swc_type
         context.sim.parameters['syn_secs'].append(node_index)
         context.sim.parameters['swc_types'].append(node_type)
         if i == 0:
