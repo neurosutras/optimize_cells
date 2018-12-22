@@ -31,7 +31,7 @@ class Network(object):
                            'i2i': ((ncell * 2, ncell * NUM_POP), (ncell * 2, ncell * NUM_POP)),
                            'i2e': ((ncell * 2, ncell * NUM_POP), (ncell, ncell * 2))}
         self.mknetwork(self.ncell)
-        self.mkstim(self.ncell)
+        #self.mkstim(self.ncell)
         self.voltage_record(dt)
         self.spike_record()
         self.pydicts = {}
@@ -46,10 +46,14 @@ class Network(object):
         self.cells = []
         self.gids = []
         for i in range(rank, ncell * NUM_POP, nhost):
-            cell_type = 'FS'
-            if i not in list(range(ncell * 2, ncell * 3)):
-                cell_type = 'RS'
-            cell = IzhiCell(cell_type)
+            if i < ncell:
+                cell = FFCell()
+            else: 
+                if i not in list(range(ncell * 2, ncell * 3)):
+                    cell_type = 'RS'
+                else:
+                    cell_type = 'FS'
+                cell = IzhiCell(cell_type)
             self.cells.append(cell)
             self.gids.append(i)
             self.pc.set_gid2node(i, rank)
@@ -65,9 +69,16 @@ class Network(object):
                     pair_list.append((i, o))
         for elem in pair_list:
             x, y = elem
-            if x == y:
-                pair_list.remove(elem)
+            if x == y: pair_list.remove(elem)
         return pair_list
+
+    def get_cell_type(self, gid):
+        if gid < self.ncell:
+            return None
+        elif gid < self.ncell * 2:
+            return 'FS'
+        else:
+            return 'RS'
 
     def connectcells(self, ncell):
         rank = int(self.pc.id())
@@ -85,14 +96,16 @@ class Network(object):
                 target_gid = pair[1]
                 if self.pc.gid_exists(target_gid):
                     target = self.pc.gid2cell(target_gid)
-                    if target.type == 'FS':
-                        syn = target.synlist[1]
-                    else:
+                    pre_type = self.get_cell_type(presyn_gid)
+                    if pre_type is None or pre_type == 'RS': #E
                         syn = target.synlist[0]
+                    else: #I
+                        syn = target.synlist[1]
                     nc = self.pc.gid_connect(presyn_gid, syn)
                     nc.delay = self.delay
                     nc.weight[0] = 0.8
                     self.ncdict[pair] = nc
+                    print presyn_gid
 
     # Instrumentation - stimulation and recording
     def mkstim(self, ncell):
@@ -127,6 +140,7 @@ class Network(object):
         else:
             self.dt = dt
         for i, cell in enumerate(self.cells):
+            if cell.is_art(): continue
             tvec = h.Vector()
             tvec.record(
                 h._ref_t)  # dt is not accepted as an argument to this function in the PC environment -- may need to turn on cvode?
