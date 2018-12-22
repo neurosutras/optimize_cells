@@ -56,8 +56,6 @@ class Network(object):
             nc = cell.connect2target(None)
             self.pc.cell(i, nc)
             test = self.pc.gid2cell(i)
-            print "mkcell :", type(test)
-        # print self.gids
 
     def createpairs(self, prob, input_indices, output_indices):
         pair_list = []
@@ -98,17 +96,17 @@ class Network(object):
 
     # Instrumentation - stimulation and recording
     def mkstim(self, ncell):
-        ns = h.NetStim()
-        ns.number = 10
-        ns.interval = 1
-        ns.start = 0
+        self.ns = h.NetStim()
+        self.ns.number = 100
+        self.ns.start = 0
         for i in range(ncell):
             if not self.pc.gid_exists(i):  # or random.random() >= .3:  # stimulate only 30% of FF
                 continue
-            nc = h.NetCon(ns, self.pc.gid2cell(i).synlist[0], 0, 1, 10)
-            nc.delay = 0
-            nc.weight[0] = 2
-            self.ncdict[('stim', i)] = nc
+            self.nc = h.NetCon(self.ns, self.pc.gid2cell(i).synlist[0])
+            self.nc.delay = 0
+            self.nc.weight[0] = 2
+            self.ncdict[('stim', i)] = self.nc
+            print self.ncdict
 
     def spike_record(self):
         self.spike_tvec = {}
@@ -117,8 +115,7 @@ class Network(object):
             tvec = h.Vector()
             idvec = h.Vector()
             nc = self.cells[i].connect2target(None)
-            self.pc.spike_record(nc.srcgid(), tvec, idvec)
-            # Alternatively, could use nc.record(tvec)
+            self.pc.spike_record(nc.srcgid(), tvec, idvec)# Alternatively, could use nc.record(tvec)
             self.spike_tvec[gid] = tvec
             self.spike_idvec[gid] = idvec
 
@@ -150,7 +147,7 @@ class Network(object):
         for key, vec in vecdict.iteritems():
             li = []
             for i, x in enumerate(vecdict[key]):
-                if i % 5000 == 0: li.append(x)
+                if i % 500 == 0: li.append(x)
             if key == 0: print li
             isivec = h.Vector()
             isivec.deriv(vec, 1, 1)
@@ -167,7 +164,7 @@ class Network(object):
         self.connectcells(self.ncell)
 
 
-def run_network(network, pc, comm, tstop=3000):
+def run_network(network, pc, comm, tstop=300):
     pc.set_maxstep(10)
     h.stdinit()
     pc.psolve(tstop)
@@ -225,7 +222,7 @@ class IzhiCell(object):
     # from Ball_Stick
     def synapses(self):
         synlist = []
-        s = h.ExpSyn(self.sec(0.8))  # E0
+        s = h.ExpSyn(self.sec(0.8))  # E
         s.tau = 2
         synlist.append(s)
         s = h.ExpSyn(self.sec(0.1))  # I1
@@ -241,102 +238,17 @@ class IzhiCell(object):
         nc.threshold = 10
         return nc
 
+    def is_art(self):
+        return 0
 
-class Izhi2(object):
-  def __init__(self, cell_type='RS'):
-    #print 'construct ', self
-    self.topol()
-    self.subsets()
-    self.geom()
-    self.biophys()
-    self.geom_nseg()
-    self.izh = h.Izhi2007b(.5, sec=self.dend)
-    self.type = cell_type
+class FFCell(object):
+    def __init__(self):
+        self.pp = h.VecStim()
 
-    if cell_type == 'RS' : self.izh.a = .1
-    if cell_type=='FS' : self.izh.a = .02
+    def connect2target(self):
+        nc = h.NetCon(self.pp, target)
+        return nc
 
-    self.synlist = []
-    self.synapses()
-    self.x = self.y = self.z = 0.
+    def is_art(self):
+        return 1
 
-  def __del__(self):
-    #print 'delete ', self
-    pass
-
-  def topol(self):
-    self.soma = h.Section(name='soma', cell=self)
-    self.dend = h.Section(name='dend', cell= self)
-    self.dend.connect(self.soma(1))
-    self.basic_shape()
-
-  def basic_shape(self):
-    self.soma.push()
-    h.pt3dclear()
-    h.pt3dadd(0, 0, 0, 1)
-    h.pt3dadd(15, 0, 0, 1)
-    h.pop_section()
-    self.dend.push()
-    h.pt3dclear()
-    h.pt3dadd(15, 0, 0, 1)
-    h.pt3dadd(105, 0, 0, 1)
-    h.pop_section()
-
-  def subsets(self):
-    self.all = h.SectionList()
-    self.all.append(sec=self.soma)
-    self.all.append(sec=self.dend)
-
-  def geom(self):
-    self.soma.L = self.soma.diam = 12.6157
-    self.dend.L = 200
-    self.dend.diam = 1
-
-  def geom_nseg(self):
-    for sec in self.all:
-      sec.nseg = int((sec.L/(0.1*h.lambda_f(100)) + .9)/2.)*2 + 1
-
-  def biophys(self):
-    for sec in self.all:
-      sec.Ra = 100
-      sec.cm = 1
-    self.soma.insert('hh')
-    self.soma.gnabar_hh = 0.12
-    self.soma.gkbar_hh = 0.036
-    self.soma.gl_hh = 0.0003
-    self.soma.el_hh = -54.3
-
-    self.dend.insert('pas')
-    self.dend.g_pas = 0.001
-    self.dend.e_pas = -65
-
-  def position(self, x, y, z):
-    self.soma.push()
-    for i in range(h.n3d()):
-      h.pt3dchange(i, x-self.x+h.x3d(i), y-self.y+h.y3d(i), z-self.z+h.z3d(i), h.diam3d(i))
-    self.x = x; self.y = y; self.z = z
-    h.pop_section()
-
-  def connect2target(self, target):
-    nc = h.NetCon(self.soma(1)._ref_v, target, sec = self.soma)
-    nc.threshold = 10
-    return nc
-
-  def synapses(self):
-    """s = h.Izhi2007a(self.dend(0.8))
-    s.a = .1
-    self.synlist.append(s)
-    s = h.Izhi2007a(self.dend(0.1))
-    s.a = .02
-    self.synlist.append(s)"""
-
-    s = h.ExpSyn(self.dend(0.8)) # E0
-    s.tau = 2
-    self.synlist.append(s)
-    s = h.ExpSyn(self.dend(0.1)) # I1
-    s.tau = 5
-    s.e = -80
-    self.synlist.append(s)
-
-  def is_art(self):
-    return 0
