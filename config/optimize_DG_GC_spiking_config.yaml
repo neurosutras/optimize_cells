@@ -133,7 +133,7 @@ kwargs:
   hoc_lib_path: ../dentate
   config_prefix: ../dentate/config
   dataset_prefix: ../dentate/datasets
-  resultsPath: data
+  results_path: data
 objective_names:
 - vm_th
 - ADP

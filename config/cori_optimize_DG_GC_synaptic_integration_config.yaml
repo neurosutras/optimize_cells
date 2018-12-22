@@ -53,7 +53,7 @@ kwargs:
   hoc_lib_path: ../dentate
   config_prefix: ../dentate/config
   dataset_prefix: /global/cscratch1/sd/aaronmil/dentate
-  resultsPath: /global/cscratch1/sd/aaronmil/optimize_cells
+  results_path: /global/cscratch1/sd/aaronmil/optimize_cells
 objective_names:
 - mean_unitary_EPSP_amp_residuals
 - mean_NMDA_contribution_residuals

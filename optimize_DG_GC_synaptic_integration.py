@@ -134,7 +134,7 @@ def init_context():
     # number of branches to test temporal integration of clustered inputs
     if 'debug' in context() and context.debug:
         num_clustered_branches = 1
-        num_syns_per_clustered_branch = 5
+        num_syns_per_clustered_branch = 20
     else:
         num_clustered_branches = 2
         num_syns_per_clustered_branch = 20
@@ -449,7 +449,7 @@ def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, mode
             syn_key = str(syn_id)
             this_group = data_group[syn_group][syn_condition].create_group(syn_key)
             for rec_name in traces_dict[syn_id]:
-                this_group.create_dataset(rec_name, compression='gzip', data=traces_dict[syn_id][rec_name])
+                this_group.create_dataset(rec_name, data=traces_dict[syn_id][rec_name])
 
     result = {'syn_group': syn_group, 'syn_condition': syn_condition, 'soma_unitary_EPSP_amp': soma_EPSP_amp_dict,
               'temp_traces_path': context.temp_traces_path, 'model_key': model_key}
@@ -544,7 +544,7 @@ def filter_features_unitary_EPSP_amp(primitives, current_features, export=False)
                                 this_array = source_group[syn_key][rec_name][:]
                                 unitary_EPSP_traces_dict[syn_group][syn_condition][rec_name].append(this_array)
                                 target_group[syn_group][syn_condition][syn_key].create_dataset(
-                                    rec_name, compression='gzip', data=this_array)
+                                    rec_name, data=this_array)
 
     features['merged_temp_traces_path'] = merged_temp_traces_path
 
@@ -684,7 +684,7 @@ def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, mod
         key = str(len(syn_ids))
         this_group = data_group[syn_group][syn_condition].create_group(key)
         for rec_name in traces_dict:
-            this_group.create_dataset(rec_name, compression='gzip', data=traces_dict[rec_name])
+            this_group.create_dataset(rec_name, data=traces_dict[rec_name])
 
     result = {'syn_group': syn_group, 'syn_condition': syn_condition, 'syn_ids': syn_ids,
               'temp_traces_path': context.temp_traces_path, 'model_key': model_key}

@@ -56,10 +56,6 @@ rel_bounds:
   - '>='
   - 1.0
   - soma.gkdrbar
-- - dend.gkdrbar
-  - '<'
-  - 1.0
-  - soma.gkdrbar
 feature_names:
 - vm_th
 - ADP
@@ -102,7 +98,7 @@ kwargs:
   hoc_lib_path: ../dentate
   config_prefix: ../dentate/config
   dataset_prefix: ../dentate/datasets
-  resultsPath: data
+  results_path: data
 objective_names:
 - vm_th
 - ADP
@@ -157,7 +153,7 @@ x0:
   ais.gbar_nax: 2.101566E-01
   soma.gkabar: 2.547421E-02
   soma.gkdrbar: 1.587365E-02
-  axon.gkabar: 5.253822E-02
+  axon.gkabar: 2.447421E-02
   axon.gkdrbar: 2.081830E-02
   soma.sh_nas/x: 5.704921E+00
   ais.sha_nax: -2.792502E+00

@@ -124,7 +124,7 @@ def init_context():
     # MC experimental f-I and ISI data from:
     # Howard, A.L., Neu, A., Morgan, R.J., Echegoyen, J.C., & Soltesz, I.(2007). Opposing modifications in intrinsic
     # currents and synaptic inputs in post - traumatic mossy cells: evidence for single - cell homeostasis in a
-    # hyperexcitable network.Journal of Neurophysiology, 97(3), 2394–2409. http://doi.org/10.1152/jn.00509.2006
+    # hyperexcitable network. Journal of Neurophysiology, 97(3), 2394-2409. http://doi.org/10.1152/jn.00509.2006
     i_inj_increment_f_I = 0.05
     num_increments_f_I = 6
     rate_at_rheobase = 2.  # Hz, corresponds to 1 spike in a 200 ms current injection
@@ -169,7 +169,7 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
     init_context()
     context.env = Env(comm=context.comm, verbose=verbose > 1, **kwargs)
     configure_hoc_env(context.env)
-    cell = get_biophys_cell(context.env, gid=context.gid, pop_name=context.cell_type)
+    cell = get_biophys_cell(context.env, gid=context.gid, pop_name=context.cell_type, load_edges=False)
     init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path,
                     correct_cm=context.correct_for_spines, correct_g_pas=context.correct_for_spines, env=context.env)
     context.sim = QuickSim(context.duration, cvode=cvode, daspk=daspk, dt=context.dt, verbose=verbose>1)
@@ -203,8 +203,6 @@ def config_sim_env(context):
     init_context()
     if 'i_holding' not in context():
         context.i_holding = defaultdict(dict)
-    # if 'i_th_history' not in context():
-    #    context.i_th_history = defaultdict(dict)
     cell = context.cell
     sim = context.sim
     if not sim.has_rec('soma'):
@@ -671,15 +669,14 @@ def update_mechanisms_spiking(x, context=None):
     modify_mech_param(cell, 'soma', 'Ca', 'gcamult', x_dict['soma.gCa factor'])
     modify_mech_param(cell, 'soma', 'CadepK', 'gcakmult', x_dict['soma.gCadepK factor'])
     modify_mech_param(cell, 'soma', 'Cacum', 'tau', x_dict['soma.tau_Cacum'])
-    modify_mech_param(cell, 'soma', 'km3', 'gkmbar', x_dict['soma.gkmbar'])
-    modify_mech_param(cell, 'ais', 'km3', 'gkmbar', x_dict['ais.gkmbar'])
-    modify_mech_param(cell, 'hillock', 'km3', 'gkmbar', origin='soma')
-    modify_mech_param(cell, 'axon', 'km3', 'gkmbar', origin='ais')
+    modify_mech_param(cell, 'ais', 'DGC_KM', 'gbar', x_dict['ais.gkmbar'])
+    modify_mech_param(cell, 'hillock', 'DGC_KM', 'gbar', x_dict['ais.gkmbar'])
+    modify_mech_param(cell, 'axon', 'DGC_KM', 'gbar', origin='ais')
     modify_mech_param(cell, 'ais', 'nax', 'sha', x_dict['ais.sha_nax'])
     modify_mech_param(cell, 'ais', 'nax', 'gbar', x_dict['ais.gbar_nax'])
 
 
-def add_diagnostic_recordings(context):
+def add_diagnostic_recordings():
     """
 
     :param context: :class:'Context'

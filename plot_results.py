@@ -587,30 +587,34 @@ def plot_exported_DG_GC_synaptic_integration_features(file_path):
         if group_name not in f:
             raise AttributeError('plot_exported_DG_GC_synaptic_integration_features: provided file path: %s does not '
                                  'contain a required group: %s' % (file_path, group_name))
-        group = f[group_name]
-        syn_conditions = f[group_name]['data'].keys()
-        ordered_syn_conditions = ['control'] + [syn_condition for syn_condition in syn_conditions
-                                                if syn_condition not in ['control']]
-        rec_names = f[group_name]['data'].itervalues().next().keys()
-        if 'soma' in rec_names:
-            ordered_rec_names = ['soma'] + [rec_name for rec_name in rec_names if rec_name not in ['soma']]
-        else:
-            ordered_rec_names = rec_names
-        t = group['time'][:]
-        fig, axes = plt.subplots(1, len(rec_names), sharey=True)
-        colors = list(cm.Paired(np.linspace(0, 1, len(syn_conditions))))
-        if len(rec_names) == 1:
-            axes = [axes]
-        for i, rec_name in enumerate(ordered_rec_names):
-            for j, syn_condition in enumerate(ordered_syn_conditions):
-                axes[i].plot(t, f[group_name]['data'][syn_condition][rec_name][:], label=syn_condition, color=colors[j])
-            axes[i].set_title(rec_name + ' Vm', fontsize=mpl.rcParams['font.size'])
-            axes[i].set_xlabel('Time (ms)')
-        axes[0].set_ylabel('Unitary EPSP amplitude (mV)')
-        axes[0].legend(loc='best', frameon=False, framealpha=0.5)
-        clean_axes(axes)
-        fig.tight_layout()
-        fig.show()
+        t = f[group_name]['time'][:]
+        data_group = f[group_name]['data']
+
+        for syn_group in data_group:
+            syn_conditions = data_group[syn_group].keys()
+            ordered_syn_conditions = ['control'] + [syn_condition for syn_condition in syn_conditions
+                                                    if syn_condition not in ['control']]
+            rec_names = data_group[syn_group]['control'].keys()
+            if 'soma' in rec_names:
+                ordered_rec_names = ['soma'] + [rec_name for rec_name in rec_names if rec_name not in ['soma']]
+            else:
+                ordered_rec_names = rec_names
+
+            fig, axes = plt.subplots(1, len(rec_names), sharey=True)
+            colors = list(cm.Paired(np.linspace(0, 1, len(syn_conditions))))
+            if len(rec_names) == 1:
+                axes = [axes]
+            for i, rec_name in enumerate(ordered_rec_names):
+                for j, syn_condition in enumerate(ordered_syn_conditions):
+                    axes[i].plot(t, data_group[syn_group][syn_condition][rec_name][:], label=syn_condition,
+                                 color=colors[j])
+                axes[i].set_title(rec_name + ' Vm', fontsize=mpl.rcParams['font.size'])
+                axes[i].set_xlabel('Time (ms)')
+            axes[0].set_ylabel('Unitary EPSP amplitude (mV)')
+            axes[0].legend(loc='best', frameon=False, framealpha=0.5)
+            clean_axes(axes)
+            fig.tight_layout()
+            fig.show()
 
         group_name = 'compound_EPSP_summary'
         if group_name not in f:
@@ -638,19 +642,20 @@ def plot_exported_DG_GC_synaptic_integration_features(file_path):
                 fig.subplots_adjust(top=0.85)
                 fig.show()
 
-        branch_names = group['amp'].keys()
+        data_group = group['soma_compound_EPSP_amp']
+        branch_names = data_group.keys()
         fig, axes = plt.subplots(1, len(branch_names), sharey=True)
         if len(branch_names) == 1:
             axes = [axes]
-        diagonal = np.linspace(0., np.max(group['amp'].itervalues().next()['expected'][:]), 10)
-        syn_conditions = group['amp'].itervalues().next().keys()
+        diagonal = np.linspace(0., np.max(data_group.itervalues().next()['expected'][:]), 10)
+        syn_conditions = data_group.itervalues().next().keys()
         ordered_syn_conditions = ['control'] + [syn_condition for syn_condition in
                                                 syn_conditions if syn_condition not in ['expected', 'control']]
         colors = list(cm.Paired(np.linspace(0, 1, len(syn_conditions))))
         rec_name = 'soma'
         for i, branch_name in enumerate(branch_names):
             for j, syn_condition in enumerate(ordered_syn_conditions):
-                axes[i].plot(group['amp'][branch_name]['expected'][:], group['amp'][branch_name][syn_condition][:],
+                axes[i].plot(data_group[branch_name]['expected'][:], data_group[branch_name][syn_condition][:],
                              c=colors[j], label=syn_condition)
             axes[i].set_title('Branch: %s\nRecording loc: %s' % (branch_name, rec_name),
                               fontsize=mpl.rcParams['font.size'])
@@ -729,3 +734,25 @@ def plot_na_gradient_params(x_dict):
     plt.close()
     mpl.rcParams['font.size'] = orig_fontsize
 
+
+def plot_NMDAR_g_V(Kd=9.98, gamma=0.101, mg=1., axes=None, show=True):
+    """
+
+    :param Kd: float
+    :param gamma: float
+    :param mg:  float
+    """
+    v = np.arange(-100., 50., 1.)
+    B = 1. / (1. + np.exp(gamma * (-v)) * (mg / Kd))
+    B /= np.max(B)
+    if axes is None:
+        fig, axes = plt.subplots(1)
+    axes.plot(v, B)
+    axes.set_ylabel('Normalized conductance')
+    axes.set_xlabel('Voltage (mV)')
+    axes.set_title('NMDAR g-V')
+    clean_axes(axes)
+    if show:
+        plt.show()
+    else:
+        return axes

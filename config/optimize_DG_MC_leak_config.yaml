@@ -39,7 +39,7 @@ kwargs:
   hoc_lib_path: ../dentate
   config_prefix: ../dentate/config
   dataset_prefix: ../dentate/datasets
-  resultsPath: data
+  results_path: data
 objective_names:
 - dend R_inp
 - term_dend R_inp
