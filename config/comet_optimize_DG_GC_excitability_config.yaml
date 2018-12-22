@@ -160,8 +160,8 @@ kwargs:
   hoc_lib_path: ../dentate
   config_prefix: ../dentate/config
   dataset_prefix: /oasis/scratch/comet/aaronmil/temp_project/dentate
-  # resultsPath: data
-  resultsPath: /oasis/scratch/comet/aaronmil/temp_project/optimize_cells
+  # results_path: data
+  results_path: /oasis/scratch/comet/aaronmil/temp_project/optimize_cells
 objective_names:
 - dend R_inp
 - term_dend R_inp

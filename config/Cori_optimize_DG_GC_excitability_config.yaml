@@ -104,6 +104,7 @@ feature_names:
 - vm_th
 - ADP
 - fAHP
+- mAHP
 - rebound_firing
 - vm_stability
 - ais_delay
@@ -164,7 +165,7 @@ kwargs:
   hoc_lib_path: ../dentate
   config_prefix: ../dentate/config
   dataset_prefix: /global/cscratch1/sd/aaronmil/dentate
-  resultsPath: /global/cscratch1/sd/aaronmil/optimize_cells
+  results_path: /global/cscratch1/sd/aaronmil/optimize_cells
 objective_names:
 - dend R_inp
 - term_dend R_inp
