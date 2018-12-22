@@ -244,9 +244,13 @@ class IzhiCell(object):
 class FFCell(object):
     def __init__(self):
         self.pp = h.VecStim()
+        #stim is currently hard-coded
+        vec = h.Vector([5, 300])
+        self.pp.play(vec)
 
-    def connect2target(self):
+    def connect2target(self, target):
         nc = h.NetCon(self.pp, target)
+        nc.weight[0] = 2 #also hard-coded
         return nc
 
     def is_art(self):
