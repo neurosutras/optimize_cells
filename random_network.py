@@ -19,12 +19,16 @@ NUM_POP = 3
 # =================== network class
 class Network(object):
 
-    def __init__(self, ncell, delay, pc, dt=None, ff=1., e2e=.05, e2i=.05, i2i=.05, i2e=.05):
+    def __init__(self, ncell, delay, pc, dt=None, ff_prob=1., e2e_prob=.05, e2i_prob=.05, \
+                 i2i_prob=.05, i2e_prob=.05, ff_weight=2., e2e_weight = 1., e2i_weight= 1., i2i_weight = .5, \
+                 i2e_weight = .5):
         # spiking script uses dt = 0.02
         self.pc = pc
         self.delay = delay
         self.ncell = int(ncell)
-        self.prob_dict = {'ff': ff, 'e2e': e2e, 'e2i': e2i, 'i2i': i2i, 'i2e': i2e}
+        self.prob_dict = {'ff': ff_prob, 'e2e': e2e_prob, 'e2i': e2i_prob, 'i2i': i2i_prob, 'i2e': i2e_prob}
+        self.weight_dict = {'ff' : ff_weight, 'e2e' : e2e_weight, 'e2i' : e2i_weight, 'i2i' : i2i_weight, \
+                             'i2e' : i2e_weight}
         self.index_dict = {'ff': ((0, ncell), (ncell, ncell * NUM_POP)),  # exclusive [x, y)
                            'e2e': ((ncell, ncell * 2), (ncell, ncell * 2)),
                            'e2i': ((ncell, ncell * 2), (ncell * 2, ncell * NUM_POP)),
@@ -103,13 +107,26 @@ class Network(object):
                 if self.pc.gid_exists(target_gid):
                     target = self.pc.gid2cell(target_gid)
                     pre_type = self.get_cell_type(presyn_gid)
-                    if pre_type is None or pre_type == 'RS': #E
+                    target_type = self.get_cell_type(target_gid)
+                    if pre_type is None: #E
                         syn = target.synlist[0]
+                        weight = self.weight_dict['ff']
+                    elif pre_type == 'RS': #E
+                        syn = target.synlist[0]
+                        if target_type == 'RS':
+                            weight = self.weight_dict['e2e']
+                        else:
+                            weight = self.weight_dict['e2i']
                     else: #I
                         syn = target.synlist[1]
+                        if target_type == 'RS':
+                            weight = self.weight_dict['i2e']
+                        else:
+                            weight = self.weight_dict['i2i']
+
                     nc = self.pc.gid_connect(presyn_gid, syn)
                     nc.delay = self.delay
-                    nc.weight[0] = 0.8
+                    nc.weight[0] = weight
                     self.ncdict[pair] = nc
 
     # Instrumentation - stimulation and recording

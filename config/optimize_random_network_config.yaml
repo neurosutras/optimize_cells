@@ -11,6 +11,21 @@ bounds:
   II_connection_prob: !!python/tuple
   - 1.0E-4
   - .8
+  FF_connection_weight: !!python/tuple
+  - 0.
+  - 20.
+  EE_connection_weight: !!python/tuple
+  - 0.
+  - 5.
+  EI_connection_weight: !!python/tuple
+  - 0.
+  - 5.
+  II_connection_weight: !!python/tuple
+  - 0.
+  - 5.
+  IE_connection_weight: !!python/tuple
+  - 0.
+  - 5.
 feature_names:
 - E_peak_rate
 - I_peak_rate
@@ -25,7 +40,7 @@ get_features_stages:
 get_objectives:
   optimize_random_network: get_objectives
 kwargs:
-  verbose: 2
+  verbose: True
 objective_names:
 - E_peak_rate
 - I_peak_rate
@@ -38,6 +53,11 @@ param_names:
 - EI_connection_prob
 - II_connection_prob
 - IE_connection_prob
+- FF_connection_weight
+- EE_connection_weight
+- EI_connection_weight
+- II_connection_weight
+- IE_connection_weight
 target_range:
   E_peak_rate: 5.
   I_peak_rate: 10.
@@ -53,3 +73,8 @@ x0:
   EI_connection_prob: 0.1
   IE_connection_prob: 0.1
   II_connection_prob: 0.1
+  FF_connection_weight: 2.
+  EE_connection_weight: 2.
+  EI_connection_weight: 2.
+  IE_connection_weight: .5
+  II_connection_weight: .5
