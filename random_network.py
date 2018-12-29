@@ -19,19 +19,24 @@ NUM_POP = 3
 # =================== network class
 class Network(object):
 
-    def __init__(self, ncell, delay, pc, dt=None, ff=1., e2e=.05, e2i=.05, i2i=.05, i2e=.05):
+    def __init__(self, ncell, delay, pc, dt=None, ff_prob=1., e2e_prob=.05, e2i_prob=.05, \
+                 i2i_prob=.05, i2e_prob=.05, ff_weight=2., e2e_weight = 1., e2i_weight= 1., i2i_weight = .5, \
+                 i2e_weight = .5):
         # spiking script uses dt = 0.02
         self.pc = pc
         self.delay = delay
         self.ncell = int(ncell)
-        self.prob_dict = {'ff': ff, 'e2e': e2e, 'e2i': e2i, 'i2i': i2i, 'i2e': i2e}
+        self.prob_dict = {'ff': ff_prob, 'e2e': e2e_prob, 'e2i': e2i_prob, 'i2i': i2i_prob, 'i2e': i2e_prob}
+        self.weight_dict = {'ff' : ff_weight, 'e2e' : e2e_weight, 'e2i' : e2i_weight, 'i2i' : i2i_weight, \
+                             'i2e' : i2e_weight}
         self.index_dict = {'ff': ((0, ncell), (ncell, ncell * NUM_POP)),  # exclusive [x, y)
                            'e2e': ((ncell, ncell * 2), (ncell, ncell * 2)),
                            'e2i': ((ncell, ncell * 2), (ncell * 2, ncell * NUM_POP)),
                            'i2i': ((ncell * 2, ncell * NUM_POP), (ncell * 2, ncell * NUM_POP)),
                            'i2e': ((ncell * 2, ncell * NUM_POP), (ncell, ncell * 2))}
+        self.event_rec = {}
         self.mknetwork(self.ncell)
-        self.mkstim(self.ncell)
+        #self.mkstim(self.ncell)
         self.voltage_record(dt)
         self.spike_record()
         self.pydicts = {}
@@ -46,16 +51,25 @@ class Network(object):
         self.cells = []
         self.gids = []
         for i in range(rank, ncell * NUM_POP, nhost):
-            cell_type = 'FS'
-            if i not in list(range(ncell * 2, ncell * 3)):
-                cell_type = 'RS'
-            cell = IzhiCell(cell_type)
+            if i < ncell:
+                cell = FFCell()
+            else: 
+                if i not in list(range(ncell * 2, ncell * 3)):
+                    cell_type = 'RS'
+                else:
+                    cell_type = 'FS'
+                cell = IzhiCell(cell_type)
             self.cells.append(cell)
             self.gids.append(i)
             self.pc.set_gid2node(i, rank)
             nc = cell.connect2target(None)
             self.pc.cell(i, nc)
             test = self.pc.gid2cell(i)
+            if not cell.is_art():
+                rec = h.Vector()
+                nc.record(rec)
+                self.event_rec[i] = rec
+
 
     def createpairs(self, prob, input_indices, output_indices):
         pair_list = []
@@ -65,9 +79,16 @@ class Network(object):
                     pair_list.append((i, o))
         for elem in pair_list:
             x, y = elem
-            if x == y:
-                pair_list.remove(elem)
+            if x == y: pair_list.remove(elem)
         return pair_list
+
+    def get_cell_type(self, gid):
+        if gid < self.ncell:
+            return None
+        elif gid < self.ncell * 2:
+            return 'FS'
+        else:
+            return 'RS'
 
     def connectcells(self, ncell):
         rank = int(self.pc.id())
@@ -85,13 +106,27 @@ class Network(object):
                 target_gid = pair[1]
                 if self.pc.gid_exists(target_gid):
                     target = self.pc.gid2cell(target_gid)
-                    if target.type == 'FS':
-                        syn = target.synlist[1]
-                    else:
+                    pre_type = self.get_cell_type(presyn_gid)
+                    target_type = self.get_cell_type(target_gid)
+                    if pre_type is None: #E
                         syn = target.synlist[0]
+                        weight = self.weight_dict['ff']
+                    elif pre_type == 'RS': #E
+                        syn = target.synlist[0]
+                        if target_type == 'RS':
+                            weight = self.weight_dict['e2e']
+                        else:
+                            weight = self.weight_dict['e2i']
+                    else: #I
+                        syn = target.synlist[1]
+                        if target_type == 'RS':
+                            weight = self.weight_dict['i2e']
+                        else:
+                            weight = self.weight_dict['i2i']
+
                     nc = self.pc.gid_connect(presyn_gid, syn)
                     nc.delay = self.delay
-                    nc.weight[0] = 0.8
+                    nc.weight[0] = weight
                     self.ncdict[pair] = nc
 
     # Instrumentation - stimulation and recording
@@ -119,6 +154,11 @@ class Network(object):
             self.spike_tvec[gid] = tvec
             self.spike_idvec[gid] = idvec
 
+    def event_record(self):
+        self.event = {}
+        for i, cell in enumerate(self.cells):
+            if cell.is_art(): continue
+            
     def voltage_record(self, dt=None):
         self.voltage_tvec = {}
         self.voltage_recvec = {}
@@ -127,6 +167,7 @@ class Network(object):
         else:
             self.dt = dt
         for i, cell in enumerate(self.cells):
+            if cell.is_art(): continue
             tvec = h.Vector()
             tvec.record(
                 h._ref_t)  # dt is not accepted as an argument to this function in the PC environment -- may need to turn on cvode?
@@ -150,10 +191,13 @@ class Network(object):
                 if i % 500 == 0: li.append(x)
             if key == 0: print li
             isivec = h.Vector()
-            isivec.deriv(vec, 1, 1)
-            rate = 1. / (isivec.mean() * 1000)
-            self.ratedict[key] = rate
-            self.peakdict[key] = 1. / (isivec.min() * 1000)
+            try: 
+                isivec.deriv(vec, 1, 1)
+                rate = 1. / (isivec.mean() * 1000)
+                self.ratedict[key] = rate
+                self.peakdict[key] = 1. / (isivec.min() * 1000)
+            except:
+                continue
 
     def remake_syn(self):
         if int(self.pc.id() == 0):
@@ -169,7 +213,7 @@ def run_network(network, pc, comm, tstop=300):
     h.stdinit()
     pc.psolve(tstop)
     nhost = int(pc.nhost())
-    network.compute_isi(network.voltage_recvec)
+    network.compute_isi(network.event_rec)
     # Use MPI Gather instead:
     rate_dicts = pc.py_alltoall([network.ratedict for i in range(nhost)])
     peak_dicts = pc.py_alltoall([network.peakdict for i in range(nhost)])
@@ -181,16 +225,30 @@ def run_network(network, pc, comm, tstop=300):
     if int(pc.id()) == 0:
         rec = {key: val for dict in test for key, val in dict['rec'].iteritems()}
         # print "pydict", rec[0]
-        E_mean = 0;
-        I_mean = 0;
-        I_max = 0;
+        E_mean = 0
+        I_mean = 0
+        I_max = 0
         E_max = 0
+        uncounted = 0
         for i in range(network.ncell, network.ncell * 2):
-            E_mean += processed_rd[i] / float(network.ncell)
-            E_max += processed_p[i] / float(network.ncell)
+            if i not in processed_rd: 
+                uncounted += 1
+                continue
+            E_mean += processed_rd[i]
+            E_max += processed_p[i]
+        if network.ncell - uncounted != 0:
+            E_max = E_mean / float(network.ncell - uncounted)
+            E_max = E_max / float(network.ncell - uncounted)
+        uncounted = 0
         for i in range(network.ncell * 2, network.ncell * 3):
-            I_mean += processed_rd[i] / float(network.ncell)
-            I_max += processed_p[i] / float(network.ncell)
+            if i not in processed_rd: 
+                uncounted = 0 
+                continue
+            I_mean += processed_rd[i] 
+            I_max += processed_p[i]
+        if network.ncell - uncounted != 0:
+            I_mean = I_mean / float(network.ncell - uncounted)
+            I_max = I_max / float(network.ncell - uncounted)
 
         # t = {key: value for dict in all_dicts for key, value in dict['t'].iteritems()}
         # rec = {key: value for dict in all_dicts for key, value in dict['rec'].iteritems()}
@@ -244,9 +302,13 @@ class IzhiCell(object):
 class FFCell(object):
     def __init__(self):
         self.pp = h.VecStim()
+        #stim is currently hard-coded
+        vec = h.Vector([5, 200])
+        self.pp.play(vec)
 
-    def connect2target(self):
+    def connect2target(self, target):
         nc = h.NetCon(self.pp, target)
+        nc.weight[0] = 2 #also hard-coded
         return nc
 
     def is_art(self):

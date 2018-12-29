@@ -3,7 +3,7 @@ from nested.parallel import *
 from random_network import *
 import collections
 import click
-
+import random
 
 script_filename='optimize_random_network.py'
 
@@ -32,6 +32,7 @@ def main(config_file_path, export, output_dir, export_file_path, label, interact
     """
     # requires a global variable context: :class:'Context'
 
+    random.seed(137)
     context.update(locals())
     comm = MPI.COMM_WORLD
     context.interface = ParallelContextInterface(procs_per_worker=comm.size)
@@ -67,9 +68,9 @@ def init_context():
     """
 
     """
-    ncell = 1
+    ncell = 3
     delay = 1
-    tstop = 3000
+    tstop = 300
     context.update(locals())
 
 
@@ -82,18 +83,25 @@ def update_context(x, local_context=None):
     if local_context is None:
         local_context = context
     x_dict = param_array_to_dict(x, context.param_names)
-    local_context.e2e = x_dict['EE_connection_prob']
-    local_context.e2i = x_dict['EI_connection_prob']
-    local_context.i2i = x_dict['II_connection_prob']
-    local_context.i2e = x_dict['IE_connection_prob']
+    local_context.e2e_prob = x_dict['EE_connection_prob']
+    local_context.e2i_prob = x_dict['EI_connection_prob']
+    local_context.i2i_prob = x_dict['II_connection_prob']
+    local_context.i2e_prob = x_dict['IE_connection_prob']
+    local_context.ff_weight = x_dict['FF_connection_weight']
+    local_context.e2e_weight = x_dict['EE_connection_weight']
+    local_context.e2i_weight = x_dict['EI_connection_weight']
+    local_context.i2i_weight = x_dict['II_connection_weight']
+    local_context.i2e_weight = x_dict['IE_connection_weight']
 
 
 # magic nums
 def compute_features(x, export=False):
     update_source_contexts(x, context)
     context.pc.gid_clear()
-    context.network = Network(context.ncell, context.delay, context.pc,
-                              e2e=context.e2e, e2i=context.e2i, i2i=context.i2i, i2e=context.i2e)
+    context.network = Network(context.ncell, context.delay, context.pc, e2e_prob=context.e2e_prob, \
+                              e2i_prob=context.e2i_prob, i2i_prob=context.i2i_prob, i2e_prob=context.i2e_prob, \
+                              ff_weight=context.ff_weight, e2e_weight=context.e2e_weight, e2i_weight=\
+                              context.e2i_weight, i2i_weight=context.i2i_weight, i2e_weight=context.i2e_weight)
     results = run_network(context.network, context.pc, context.comm)
     if int(context.pc.id()) == 0:
         if results is None:
