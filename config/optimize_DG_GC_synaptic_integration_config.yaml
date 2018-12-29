@@ -9,14 +9,17 @@ bounds:
   - 1.0e-4
   - 0.001
   NMDA.g_unit: !!python/tuple
-  - 1.0e-3
+  - 1.0e-4
   - 5.0e-2
   NMDA.gamma: !!python/tuple
-  - 0.05
+  - 0.01
   - 0.12
   NMDA.Kd: !!python/tuple
   - 3.
-  - 10.
+  - 12.
+  NMDA.vshift: !!python/tuple
+    - -15.
+    - 0.
 feature_names:
 - mean_unitary_EPSP_amp
 - mean_NMDA_contribution
@@ -54,6 +57,7 @@ kwargs:
   config_prefix: ../dentate/config
   dataset_prefix: ../dentate/datasets
   results_path: data
+  cache_queries: True
   debug: True
 objective_names:
 - mean_unitary_EPSP_amp_residuals
@@ -71,6 +75,7 @@ param_names:
 - NMDA.g_unit
 - NMDA.gamma
 - NMDA.Kd
+- NMDA.vshift
 target_range:
   mean_unitary_EPSP_amp: 0.005
   mean_NMDA_contribution: 0.001
@@ -92,9 +97,10 @@ x0:
 #  NMDA.Kd: 6.9342349
 #  NMDA.gamma: 0.107891902
 #  NMDA.g_unit: 0.0209192397
-  NMDA.gamma: 1.181691E-01
+  NMDA.gamma: 0.05
   NMDA.Kd: 6.471973E+00
-  NMDA.g_unit: 8.150545E-03
+  NMDA.g_unit: 1.0545E-04
   AMPA.slope: 5.093128E-06
-  AMPA.g0: 4.682046E-04
+  AMPA.g0: 2.082046E-04
   AMPA.tau: 5.970824E+01
+  NMDA.vshift: -10.
