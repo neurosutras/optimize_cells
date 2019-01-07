@@ -83,6 +83,7 @@ def unit_tests_synaptic_integration():
     
     features, objectives = get_objectives_synaptic_integration(features)
 
+    reset_worker()
     context.update(locals())
     print 'params:'
     pprint.pprint(context.x0_dict)
@@ -520,55 +521,7 @@ def filter_features_unitary_EPSP_amp(primitives, current_features, export=False)
     features['mean_unitary_EPSP_amp_residuals'] = mean_unitary_EPSP_amp_residuals
     features['mean_NMDA_contribution_residuals'] = mean_NMDA_contribution_residuals
     features['model_key'] = model_key
-
-    merged_temp_traces_path = '%s/%s_merged_temp_traces_%s.hdf5' % (context.output_dir,
-                                                      datetime.datetime.today().strftime('%Y%m%d_%H%M'),
-                                                      model_key)
-
-    unitary_EPSP_traces_dict = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
-    description = 'unitary_EPSP_traces'
-    with h5py.File(merged_temp_traces_path, 'a') as f:
-        if description not in f:
-            f.create_group(description)
-            f[description].attrs['enumerated'] = False
-        target_group = f[description]
-        for temp_traces_path in temp_traces_path_set:
-            with h5py.File(temp_traces_path, 'r') as g:
-                for syn_group in g[description][model_key]:
-                    if syn_group not in target_group:
-                        target_group.create_group(syn_group)
-                    for syn_condition in g[description][model_key][syn_group]:
-                        if syn_condition not in target_group[syn_group]:
-                            target_group[syn_group].create_group(syn_condition)
-                        source_group = g[description][model_key][syn_group][syn_condition]
-                        for syn_key in source_group:
-                            if syn_key not in target_group[syn_group][syn_condition]:
-                                target_group[syn_group][syn_condition].create_group(syn_key)
-                            for rec_name in source_group[syn_key]:
-                                this_array = source_group[syn_key][rec_name][:]
-                                unitary_EPSP_traces_dict[syn_group][syn_condition][rec_name].append(this_array)
-                                target_group[syn_group][syn_condition][syn_key].create_dataset(
-                                    rec_name, data=this_array)
-
-    features['merged_temp_traces_path'] = merged_temp_traces_path
-
-    if export:
-        with h5py.File(context.export_file_path, 'a') as f:
-            description = 'mean_unitary_EPSP_traces'
-            if description not in f:
-                f.create_group(description)
-                f[description].attrs['enumerated'] = False
-            group = f[description]
-            t = np.arange(-context.trace_baseline, context.ISI['units'], context.dt)
-            group.create_dataset('time', compression='gzip', data=t)
-            data_group = group.create_group('data')
-            for syn_group in unitary_EPSP_traces_dict:
-                data_group.create_group(syn_group)
-                for syn_condition in unitary_EPSP_traces_dict[syn_group]:
-                    this_group = data_group[syn_group].create_group(syn_condition)
-                    for rec_name in unitary_EPSP_traces_dict[syn_group][syn_condition]:
-                        this_group.create_dataset(rec_name, compression='gzip', data=np.mean(
-                            unitary_EPSP_traces_dict[syn_group][syn_condition][rec_name], axis=0))
+    features['unitary_EPSP_temp_traces_path_set'] = temp_traces_path_set
 
     return features
 
@@ -758,24 +711,24 @@ def filter_features_compound_EPSP_amp(primitives, current_features, export=False
         syn_ids = this_feature_dict['syn_ids']
         num_syns = len(syn_ids)
         syn_ids_dict[syn_group][syn_condition][num_syns] = syn_ids
-    temp_traces_path_set = set(temp_traces_path_list)
+    compound_EPSP_temp_traces_path_set = set(temp_traces_path_list)
 
+    unitary_EPSP_temp_traces_path_set = current_features['unitary_EPSP_temp_traces_path_set']
     unitary_EPSP_traces_dict = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
-    merged_temp_traces_path = current_features['merged_temp_traces_path']
-    with h5py.File(merged_temp_traces_path, 'r') as f:
-        description = 'unitary_EPSP_traces'
-        for syn_group in f[description]:
-            for syn_condition in f[description][syn_group]:
-                this_group = f[description][syn_group][syn_condition]
-                for syn_id_key in this_group:
-                    syn_id = int(syn_id_key)
-                    for rec_name in this_group[syn_id_key]:
-                        unitary_EPSP_traces_dict[syn_group][syn_condition][syn_id][rec_name] = \
-                            this_group[syn_id_key][rec_name][:]
-    os.remove(merged_temp_traces_path)
+    description = 'unitary_EPSP_traces'
+    for temp_traces_path in unitary_EPSP_temp_traces_path_set:
+        with h5py.File(temp_traces_path, 'r') as g:
+            for syn_group in g[description][model_key]:
+                for syn_condition in g[description][model_key][syn_group]:
+                    this_group = g[description][model_key][syn_group][syn_condition]
+                    for syn_id_key in this_group:
+                        syn_id = int(syn_id_key)
+                        for rec_name in this_group[syn_id_key]:
+                            unitary_EPSP_traces_dict[syn_group][syn_condition][syn_id][rec_name] = \
+                                this_group[syn_id_key][rec_name][:]
 
     compound_EPSP_traces_dict = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
-    for temp_traces_path in temp_traces_path_set:
+    for temp_traces_path in compound_EPSP_temp_traces_path_set:
         with h5py.File(temp_traces_path, 'r') as f:
             description = 'compound_EPSP_traces'
             if description in f:
@@ -841,8 +794,28 @@ def filter_features_compound_EPSP_amp(primitives, current_features, export=False
         fig.show()
 
     if export:
-        description = 'compound_EPSP_summary'
         with h5py.File(context.export_file_path, 'a') as f:
+            description = 'mean_unitary_EPSP_traces'
+            if description not in f:
+                f.create_group(description)
+                f[description].attrs['enumerated'] = False
+            group = f[description]
+            t = np.arange(-context.trace_baseline, context.ISI['units'], context.dt)
+            group.create_dataset('time', compression='gzip', data=t)
+            data_group = group.create_group('data')
+            for syn_group in unitary_EPSP_traces_dict:
+                data_group.create_group(syn_group)
+                for syn_condition in unitary_EPSP_traces_dict[syn_group]:
+                    this_group = data_group[syn_group].create_group(syn_condition)
+                    for rec_name in unitary_EPSP_traces_dict[syn_group][syn_condition].itervalues().next():
+                        this_condition_array_list = []
+                        for syn_id in unitary_EPSP_traces_dict[syn_group][syn_condition]:
+                            this_condition_array_list.append(
+                                unitary_EPSP_traces_dict[syn_group][syn_condition][syn_id][rec_name])
+                        this_group.create_dataset(rec_name, compression='gzip',
+                                                  data=np.mean(this_condition_array_list, axis=0))
+
+            description = 'compound_EPSP_summary'
             if description not in f:
                 f.create_group(description)
                 f[description].attrs['enumerated'] = False
