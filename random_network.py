@@ -19,9 +19,9 @@ NUM_POP = 3
 # =================== network class
 class Network(object):
 
-    def __init__(self, ncell, delay, pc, dt=None, ff_prob=1., e2e_prob=.05, e2i_prob=.05, \
-                 i2i_prob=.05, i2e_prob=.05, ff_weight=2., e2e_weight = 1., e2i_weight= 1., i2i_weight = .5, \
-                 i2e_weight = .5):
+    def __init__(self, ncell, delay, pc, tstop, dt=None, ff_prob=1., e2e_prob=.05, e2i_prob=.05, \
+                 i2i_prob=.05, i2e_prob=.05, ff_weight=2., e2e_weight=1., e2i_weight=1., i2i_weight=.5, \
+                 i2e_weight=.5, ff_meanfreq=100):
         # spiking script uses dt = 0.02
         self.pc = pc
         self.delay = delay
@@ -34,6 +34,8 @@ class Network(object):
                            'e2i': ((ncell, ncell * 2), (ncell * 2, ncell * NUM_POP)),
                            'i2i': ((ncell * 2, ncell * NUM_POP), (ncell * 2, ncell * NUM_POP)),
                            'i2e': ((ncell * 2, ncell * NUM_POP), (ncell, ncell * 2))}
+        self.tstop = tstop
+        self.ff_meanfreq = ff_meanfreq
         self.event_rec = {}
         self.mknetwork(self.ncell)
         #self.mkstim(self.ncell)
@@ -52,7 +54,7 @@ class Network(object):
         self.gids = []
         for i in range(rank, ncell * NUM_POP, nhost):
             if i < ncell:
-                cell = FFCell()
+                cell = FFCell(self.tstop, self.ff_meanfreq)
             else: 
                 if i not in list(range(ncell * 2, ncell * 3)):
                     cell_type = 'RS'
@@ -300,15 +302,17 @@ class IzhiCell(object):
         return 0
 
 class FFCell(object):
-    def __init__(self):
+    def __init__(self, tstop, mean_freq):
         self.pp = h.VecStim()
-        #stim is currently hard-coded
-        vec = h.Vector([5, 200])
+        #tstop in ms and mean_rate in s
+        n_spikes = tstop * mean_freq / 1000.
+        length = int(tstop / n_spikes)
+        spikes = [x * float(tstop) / length for x in range(length)]
+        vec = h.Vector(spikes)
         self.pp.play(vec)
 
     def connect2target(self, target):
         nc = h.NetCon(self.pp, target)
-        nc.weight[0] = 2 #also hard-coded
         return nc
 
     def is_art(self):
