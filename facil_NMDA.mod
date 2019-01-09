@@ -19,7 +19,7 @@ ENDCOMMENT
 
 NEURON {
 	POINT_PROCESS FacilNMDA
-	RANGE g, i, dur_onset, tau_offset, e, sat, g_inf
+	RANGE g, i, dur_onset, tau_offset, e, sat, g_inf, vshift
 	RANGE f_inc, f_max, f_tau
  	RANGE B, mg, gamma, Kd
 	NONSPECIFIC_CURRENT i
@@ -42,6 +42,7 @@ PARAMETER {
  	Kd          	= 9.98 	(mM) 	: modulate Mg concentration dependence
     gamma       	= 0.101 (/mV)	: modulate slope of Mg sensitivity
     mg          	= 1.0 	(mM) 	: extracellular Mg concentration
+	vshift 			= 0. 	(mV) 	: modulate vhalf of activation
 }
 
 
@@ -68,11 +69,11 @@ INITIAL {
 	alpha = 1. / tau_onset - beta
  	g_inf = alpha / (alpha + beta)
 	syn_onset = 0.
- 	mgblock(v)
+ 	mgblock(v, vshift)
 }
 
 BREAKPOINT {
-	mgblock(v)
+	mgblock(v, vshift)
 	SOLVE release METHOD cnexp
 	g = B * (g_onset + g_offset) / sat / g_inf
 	i = g * (v - e)
@@ -83,9 +84,9 @@ DERIVATIVE release {
 	g_offset' = -g_offset / tau_offset
 }
 
-PROCEDURE mgblock(v(mV)) {
+PROCEDURE mgblock(v(mV), vshift(mV)) {
 	: from Jahr & Stevens
-    B = 1. / (1. + exp(gamma * (-v)) * (mg / Kd))
+    B = 1. / (1. + exp(gamma * (-(v - vshift))) * (mg / Kd))
 }
 
 : following supports both saturation from single input and

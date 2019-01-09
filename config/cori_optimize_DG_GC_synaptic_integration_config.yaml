@@ -9,14 +9,17 @@ bounds:
   - 1.0e-4
   - 0.001
   NMDA.g_unit: !!python/tuple
-  - 1.0e-3
+  - 1.0e-4
   - 5.0e-2
   NMDA.gamma: !!python/tuple
-  - 0.05
+  - 0.01
   - 0.12
   NMDA.Kd: !!python/tuple
   - 3.
-  - 10.
+  - 12.
+  NMDA.vshift: !!python/tuple
+    - -15.
+    - 0.
 feature_names:
 - mean_unitary_EPSP_amp
 - mean_NMDA_contribution
@@ -54,6 +57,7 @@ kwargs:
   config_prefix: ../dentate/config
   dataset_prefix: /global/cscratch1/sd/aaronmil/dentate
   results_path: /global/cscratch1/sd/aaronmil/optimize_cells
+  cache_queries: True
 objective_names:
 - mean_unitary_EPSP_amp_residuals
 - mean_NMDA_contribution_residuals
@@ -70,6 +74,7 @@ param_names:
 - NMDA.g_unit
 - NMDA.gamma
 - NMDA.Kd
+- NMDA.vshift
 target_range:
   mean_unitary_EPSP_amp: 0.005
   mean_NMDA_contribution: 0.001
@@ -85,9 +90,16 @@ target_val:
   initial_gain_control: 1.
   initial_gain_AP5: 1.
 x0:
-  AMPA.g0: 0.000531417018
-  AMPA.slope: 6.43144631e-06
-  AMPA.tau: 51.8492464
-  NMDA.Kd: 6.9342349
-  NMDA.gamma: 0.107891902
-  NMDA.g_unit: 0.0209192397
+#  AMPA.g0: 0.000531417018
+#  AMPA.slope: 6.43144631e-06
+#  AMPA.tau: 51.8492464
+#  NMDA.Kd: 6.9342349
+#  NMDA.gamma: 0.107891902
+#  NMDA.g_unit: 0.0209192397
+  NMDA.gamma: 0.05
+  NMDA.Kd: 6.471973E+00
+  NMDA.g_unit: 1.0545E-04
+  AMPA.slope: 5.093128E-06
+  AMPA.g0: 2.082046E-04
+  AMPA.tau: 5.970824E+01
+  NMDA.vshift: -10.

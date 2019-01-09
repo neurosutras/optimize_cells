@@ -613,7 +613,9 @@ def plot_exported_DG_GC_synaptic_integration_features(file_path):
             axes[0].set_ylabel('Unitary EPSP amplitude (mV)')
             axes[0].legend(loc='best', frameon=False, framealpha=0.5)
             clean_axes(axes)
+            fig.suptitle('Branch: %s' % syn_group, fontsize=mpl.rcParams['font.size'])
             fig.tight_layout()
+            fig.subplots_adjust(top=0.875)
             fig.show()
 
         group_name = 'compound_EPSP_summary'
@@ -623,9 +625,11 @@ def plot_exported_DG_GC_synaptic_integration_features(file_path):
         group = f[group_name]
         t = group['time'][:]
         syn_conditions = group['traces'].itervalues().next().keys()
-        ordered_syn_conditions = ['expected', 'control'] + [syn_condition for syn_condition in
-                                                            syn_conditions if
-                                                            syn_condition not in ['expected', 'control']]
+        ordered_syn_conditions = ['expected_control', 'control']
+        for syn_condition in [syn_condition for syn_condition in syn_conditions
+                              if syn_condition != 'control' and 'expected' not in syn_condition]:
+            ordered_syn_conditions.extend(['expected_' + syn_condition, syn_condition])
+
         for branch_name in group['traces']:
             for rec_name in rec_names:
                 fig, axes = plt.subplots(1, len(syn_conditions), sharey=True)
@@ -644,28 +648,30 @@ def plot_exported_DG_GC_synaptic_integration_features(file_path):
 
         data_group = group['soma_compound_EPSP_amp']
         branch_names = data_group.keys()
-        fig, axes = plt.subplots(1, len(branch_names), sharey=True)
+        fig, axes = plt.subplots(1, len(branch_names), sharey=True, sharex=True)
         if len(branch_names) == 1:
             axes = [axes]
-        diagonal = np.linspace(0., np.max(data_group.itervalues().next()['expected'][:]), 10)
         syn_conditions = data_group.itervalues().next().keys()
-        ordered_syn_conditions = ['control'] + [syn_condition for syn_condition in
-                                                syn_conditions if syn_condition not in ['expected', 'control']]
+        ordered_syn_conditions = ['control'] + [syn_condition for syn_condition in syn_conditions
+                                                if syn_condition != 'control' and 'expected' not in syn_condition]
         colors = list(cm.Paired(np.linspace(0, 1, len(syn_conditions))))
         rec_name = 'soma'
         for i, branch_name in enumerate(branch_names):
+            expected_max = 0.
             for j, syn_condition in enumerate(ordered_syn_conditions):
-                axes[i].plot(data_group[branch_name]['expected'][:], data_group[branch_name][syn_condition][:],
+                expected_key = 'expected_' + syn_condition
+                expected_max = max(expected_max, np.max(data_group[branch_name][expected_key][:]))
+                axes[i].plot(data_group[branch_name][expected_key][:], data_group[branch_name][syn_condition][:],
                              c=colors[j], label=syn_condition)
             axes[i].set_title('Branch: %s\nRecording loc: %s' % (branch_name, rec_name),
                               fontsize=mpl.rcParams['font.size'])
             axes[i].set_xlabel('Expected EPSP amp (mV)')
+            diagonal = np.linspace(0., expected_max, 10)
             axes[i].plot(diagonal, diagonal, c='lightgrey', linestyle='--')
         axes[0].set_ylabel('Actual EPSP amp (mV)')
         axes[0].legend(loc='best', frameon=False, framealpha=0.5)
         clean_axes(axes)
         fig.tight_layout()
-        fig.subplots_adjust(top=0.85)
         fig.show()
     mpl.rcParams['font.size'] = orig_fontsize
 
@@ -735,24 +741,29 @@ def plot_na_gradient_params(x_dict):
     mpl.rcParams['font.size'] = orig_fontsize
 
 
-def plot_NMDAR_g_V(Kd=9.98, gamma=0.101, mg=1., axes=None, show=True):
+def plot_NMDAR_g_V(Kd=9.98, gamma=0.101, mg=1., vshift=0., label='original', axes=None, show=True):
     """
 
     :param Kd: float
     :param gamma: float
     :param mg:  float
+    :param vshift: float
+    :param label: str
+    :param axes: :class:'Axes'
+    :param show: bool
     """
     v = np.arange(-100., 50., 1.)
-    B = 1. / (1. + np.exp(gamma * (-v)) * (mg / Kd))
-    B /= np.max(B)
+    B = 1. / (1. + np.exp(gamma * (-(v-vshift))) * (mg / Kd))
+    # B /= np.max(B)
     if axes is None:
         fig, axes = plt.subplots(1)
-    axes.plot(v, B)
+    axes.plot(v, B, label=label)
     axes.set_ylabel('Normalized conductance')
     axes.set_xlabel('Voltage (mV)')
     axes.set_title('NMDAR g-V')
     clean_axes(axes)
     if show:
+        plt.legend(loc='best', frameon=False, framealpha=0.5)
         plt.show()
     else:
         return axes
