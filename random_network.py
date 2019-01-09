@@ -77,7 +77,7 @@ class Network(object):
         pair_list = []
         for i in input_indices:
             for o in output_indices:
-                if random.random() >= prob:
+                if random.random() <= prob:
                     pair_list.append((i, o))
         for elem in pair_list:
             x, y = elem
@@ -125,7 +125,6 @@ class Network(object):
                             weight = self.weight_dict['i2e']
                         else:
                             weight = self.weight_dict['i2i']
-
                     nc = self.pc.gid_connect(presyn_gid, syn)
                     nc.delay = self.delay
                     nc.weight[0] = weight
@@ -188,10 +187,6 @@ class Network(object):
         self.ratedict = {}
         self.peakdict = {}
         for key, vec in vecdict.iteritems():
-            li = []
-            for i, x in enumerate(vecdict[key]):
-                if i % 500 == 0: li.append(x)
-            if key == 0: print li
             isivec = h.Vector()
             try: 
                 isivec.deriv(vec, 1, 1)
@@ -227,6 +222,13 @@ def run_network(network, pc, comm, tstop=300):
     if int(pc.id()) == 0:
         rec = {key: val for dict in test for key, val in dict['rec'].iteritems()}
         # print "pydict", rec[0]
+        #print list(rec.keys())
+        if 3 in list(rec.keys()):
+            li = []
+            for i, x in enumerate(rec[3]):
+                if i % 500 == 0 and x > 0: li.append(x)
+            print li
+
         E_mean = 0
         I_mean = 0
         I_max = 0
@@ -309,6 +311,7 @@ class FFCell(object):
         length = int(tstop / n_spikes)
         spikes = [x * float(tstop) / length for x in range(length)]
         vec = h.Vector(spikes)
+        #vec = h.Vector([5, 200])
         self.pp.play(vec)
 
     def connect2target(self, target):
