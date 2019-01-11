@@ -194,9 +194,9 @@ class Network(object):
             isivec = h.Vector()
             if len(vec) > 1: 
                 isivec.deriv(vec, 1, 1)
-                rate = 1. / (isivec.mean() * 1000)
+                rate = 1. / (isivec.mean() / 1000)
                 self.ratedict[key] = rate
-                self.peakdict[key] = 1. / (isivec.min() * 1000)
+                self.peakdict[key] = 1. / (isivec.min() / 1000)
 
     def remake_syn(self):
         if int(self.pc.id() == 0):
