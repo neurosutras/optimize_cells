@@ -240,6 +240,7 @@ def run_network(network, pc, comm, tstop=600):
         I_max = 0
         E_max = 0
         uncounted = 0
+
         for i in range(network.ncell, network.ncell * 2):
             if i not in processed_rd: 
                 uncounted += 1
@@ -247,7 +248,7 @@ def run_network(network, pc, comm, tstop=600):
             E_mean += processed_rd[i]
             E_max += processed_p[i]
         if network.ncell - uncounted != 0:
-            E_max = E_mean / float(network.ncell - uncounted)
+            E_mean = E_mean / float(network.ncell - uncounted)
             E_max = E_max / float(network.ncell - uncounted)
         uncounted = 0
         for i in range(network.ncell * 2, network.ncell * 3):
