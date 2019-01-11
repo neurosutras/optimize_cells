@@ -70,7 +70,7 @@ def init_context():
     """
     ncell = 3
     delay = 1
-    tstop = 300
+    tstop = 600
     context.update(locals())
 
 
@@ -108,6 +108,8 @@ def compute_features(x, export=False):
     if int(context.pc.id()) == 0:
         if results is None:
             return dict()
+        context.peak_voltage = results['peak']
+        results.pop('peak', None)
         return results
 
 
@@ -116,7 +118,11 @@ def get_objectives(features):
         objectives = {}
         for feature_name in ['E_peak_rate', 'I_peak_rate', 'E_mean_rate', 'I_mean_rate']:
             objective_name = feature_name
-            objectives[objective_name] = ((context.target_val[objective_name] - features[feature_name]) /
+            if features[feature_name] == 0.:
+                objectives[objective_name] = (context.peak_voltage - 45.) ** 2
+                print "peak: ", context.peak_voltage, "obj : ", objectives[objective_name]
+            else:
+                objectives[objective_name] = ((context.target_val[objective_name] - features[feature_name]) /
                                                       context.target_range[objective_name]) ** 2.
         return features, objectives
 

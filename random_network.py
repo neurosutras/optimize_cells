@@ -155,10 +155,14 @@ class Network(object):
             self.spike_tvec[gid] = tvec
             self.spike_idvec[gid] = idvec
 
-    def event_record(self):
-        self.event = {}
-        for i, cell in enumerate(self.cells):
+    def event_record(self, dt = None):
+        for i, cell in enumerate(self. cells):
             if cell.is_art(): continue
+            nc = h.NetCon(cell.sec(.5)._ref_v, None)
+            rec = h.Vector()
+            nc.record(rec)
+            self.event_rec[i] = rec
+
             
     def voltage_record(self, dt=None):
         self.voltage_tvec = {}
@@ -188,13 +192,11 @@ class Network(object):
         self.peakdict = {}
         for key, vec in vecdict.iteritems():
             isivec = h.Vector()
-            try: 
+            if len(vec) > 1: 
                 isivec.deriv(vec, 1, 1)
                 rate = 1. / (isivec.mean() * 1000)
                 self.ratedict[key] = rate
                 self.peakdict[key] = 1. / (isivec.min() * 1000)
-            except:
-                continue
 
     def remake_syn(self):
         if int(self.pc.id() == 0):
@@ -205,15 +207,17 @@ class Network(object):
         self.connectcells(self.ncell)
 
 
-def run_network(network, pc, comm, tstop=300):
+def run_network(network, pc, comm, tstop=600):
     pc.set_maxstep(10)
     h.stdinit()
     pc.psolve(tstop)
     nhost = int(pc.nhost())
-    network.compute_isi(network.event_rec)
+    all_events = pc.py_alltoall([network.spike_tvec for _ in range(nhost)]) # list
+    all_events = {key : val for dict in all_events for key, val in dict.iteritems()} #collapse list into dict
+    network.compute_isi(all_events)
     # Use MPI Gather instead:
-    rate_dicts = pc.py_alltoall([network.ratedict for i in range(nhost)])
-    peak_dicts = pc.py_alltoall([network.peakdict for i in range(nhost)])
+    rate_dicts = pc.py_alltoall([network.ratedict for _ in range(nhost)])
+    peak_dicts = pc.py_alltoall([network.peakdict for _ in range(nhost)])
     processed_rd = {key: val for dict in rate_dicts for key, val in dict.iteritems()}
     processed_p = {key: val for dict in peak_dicts for key, val in dict.iteritems()}
     # all_dicts = pc.py_alltoall([network.voltage_recvec for i in range(nhost)])
@@ -221,13 +225,15 @@ def run_network(network, pc, comm, tstop=300):
     test = pc.py_alltoall([network.pydicts for i in range(nhost)])
     if int(pc.id()) == 0:
         rec = {key: val for dict in test for key, val in dict['rec'].iteritems()}
-        # print "pydict", rec[0]
-        #print list(rec.keys())
-        if 3 in list(rec.keys()):
+        
+        peak_voltage = float("-inf") #print list(rec.keys())
+        if network.ncell in list(rec.keys()):
             li = []
-            for i, x in enumerate(rec[3]):
-                if i % 500 == 0 and x > 0: li.append(x)
-            print li
+            for i, x in enumerate(rec[network.ncell]):
+                if i % 500 == 0: 
+                    li.append(x)
+                    peak_voltage = max(peak_voltage, x)
+            #print li
 
         E_mean = 0
         I_mean = 0
@@ -256,7 +262,8 @@ def run_network(network, pc, comm, tstop=300):
 
         # t = {key: value for dict in all_dicts for key, value in dict['t'].iteritems()}
         # rec = {key: value for dict in all_dicts for key, value in dict['rec'].iteritems()}
-        return {'E_mean_rate': E_mean, 'E_peak_rate': E_max, 'I_mean_rate': I_mean, "I_peak_rate": I_max}
+        return {'E_mean_rate': E_mean, 'E_peak_rate': E_max, 'I_mean_rate': I_mean, "I_peak_rate": I_max, \
+                'peak' : peak_voltage}
 
 
 # ==================== cell class                                                                                                                                                                                                                                                                                                                                                        # single cell
