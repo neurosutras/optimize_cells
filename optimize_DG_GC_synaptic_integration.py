@@ -99,6 +99,8 @@ def config_worker():
     """
     if 'plot' not in context():
         context.plot = False
+    if 'debug' not in context():
+        context.debug = False
     if not context_has_sim_env(context):
         build_sim_env(context, **context.kwargs)
 
