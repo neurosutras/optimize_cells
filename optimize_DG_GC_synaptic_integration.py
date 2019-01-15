@@ -83,7 +83,7 @@ def unit_tests_synaptic_integration():
     
     features, objectives = get_objectives_synaptic_integration(features)
 
-    reset_worker()
+    shutdown_worker()
     context.update(locals())
     print 'params:'
     pprint.pprint(context.x0_dict)
@@ -107,7 +107,15 @@ def reset_worker():
     """
 
     """
-    if 'temp_traces_path' in context() and os.path.isfile(context.temp_traces_path):
+    with h5py.File(context.temp_traces_path, 'w') as f:
+        f.flush()
+
+
+def shutdown_worker():
+    """
+
+    """
+    if os.path.isfile(context.temp_traces_path):
         os.remove(context.temp_traces_path)
 
 
@@ -141,9 +149,9 @@ def init_context():
     else:
         max_syns_per_random_branch = 5
         num_clustered_branches = 2
-        num_syns_per_clustered_branch = 20
+        num_syns_per_clustered_branch = 30
 
-    max_compound_EPSP_amp = 12.  # mV
+    min_expected_compound_EPSP_amp, max_expected_compound_EPSP_amp = 6., 12.  # mV
 
     clustered_branch_names = ['clustered%i' % i for i in xrange(num_clustered_branches)]
 
@@ -243,7 +251,7 @@ def config_sim_env(context):
         # NMDAR-R properties to match target features for spatiotemporal integration
         candidate_branches = [branch for branch in cell.apical if
                               50. < get_distance_to_node(cell, cell.tree.root, branch) < 150. and
-                              branch.sec.L > 80.]
+                              90. < branch.sec.L < 120.]
         context.local_random.shuffle(candidate_branches)
 
         parents = []
@@ -285,9 +293,9 @@ def config_sim_env(context):
     if context.plot:
         from dentate.plot import plot_synaptic_attribute_distribution
         plot_synaptic_attribute_distribution(cell, env, context.NMDA_type, 'g_unit', from_mech_attrs=True,
-                                                          from_target_attrs=True, show=True)
+                                             from_target_attrs=True, show=True)
         plot_synaptic_attribute_distribution(cell, env, context.AMPA_type, 'g_unit', from_mech_attrs=True,
-                                                          from_target_attrs=True, show=True)
+                                             from_target_attrs=True, show=True)
 
 
 def update_syn_mechanisms(x, context=None):
@@ -399,6 +407,7 @@ def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, mode
         spike_time = context.equilibrate + i * ISI
         for syn_name in context.syn_mech_names:
             this_nc = syn_attrs.get_netcon(context.cell.gid, syn_id, syn_name)
+            this_nc.delay = 0.
             this_nc.pre().play(h.Vector([spike_time]))
             if syn_name == context.NMDA_type and syn_condition == 'AP5':
                 config_syn(syn_name=syn_name, rules=syn_attrs.syn_param_rules, mech_names=syn_attrs.syn_mech_names,
@@ -596,6 +605,7 @@ def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, mod
         spike_time = context.equilibrate + i * ISI
         for syn_name in context.syn_mech_names:
             this_nc = syn_attrs.get_netcon(context.cell.gid, syn_id, syn_name)
+            this_nc.delay = 0.
             this_nc.pre().play(h.Vector([spike_time]))
             if syn_name == context.NMDA_type and syn_condition == 'AP5':
                 config_syn(syn_name=syn_name, rules=syn_attrs.syn_param_rules, mech_names=syn_attrs.syn_mech_names,
@@ -612,15 +622,15 @@ def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, mod
     sim.run(context.v_active)
 
     traces_dict = {}
-    for i, syn_id in enumerate(syn_ids):
-        start = int(equilibrate / dt)
-        trace_start = start - int(trace_baseline / dt)
-        baseline_start, baseline_end = int(start - 3. / dt), int(start - 1. / dt)
-        for rec_name in context.sim.recs:
-            this_vm = np.array(context.sim.recs[rec_name]['vec'])
-            baseline = np.mean(this_vm[baseline_start:baseline_end])
-            this_vm = this_vm[trace_start:] - baseline
-            traces_dict[rec_name] = np.array(this_vm)
+    start = int(equilibrate / dt)
+    trace_start = start - int(trace_baseline / dt)
+    baseline_start, baseline_end = int(start - 3. / dt), int(start - 1. / dt)
+    for rec_name in context.sim.recs:
+        this_vm = np.array(context.sim.recs[rec_name]['vec'])
+        baseline = np.mean(this_vm[baseline_start:baseline_end])
+        this_vm = this_vm[trace_start:] - baseline
+        traces_dict[rec_name] = np.array(this_vm)
+    for syn_id in syn_ids:
         for syn_name in context.syn_mech_names:
             this_nc = syn_attrs.get_netcon(context.cell.gid, syn_id, syn_name)
             this_nc.pre().play(h.Vector())
@@ -761,11 +771,15 @@ def filter_features_compound_EPSP_amp(primitives, current_features, export=False
             expected_key = 'expected_' + syn_condition
             this_actual = np.array(soma_compound_EPSP_amp[syn_group][syn_condition])
             this_expected = np.array(soma_compound_EPSP_amp[syn_group][expected_key])
-            this_ratio = np.divide(this_actual, this_expected)
+            this_initial_gain = (this_actual[1] - this_actual[0]) / (this_expected[1] - this_expected[0])
             # Integration should be close to linear without gain for the first few synapses.
-            initial_gain[syn_condition].append(np.mean(this_ratio[:2]))
-            indexes = np.where(this_expected <= context.max_compound_EPSP_amp)[0]
-            if not np.any(indexes):
+            initial_gain[syn_condition].append(this_initial_gain)
+            indexes = np.where(this_expected <= context.max_expected_compound_EPSP_amp)[0]
+            if not np.any(indexes) or (not context.debug and syn_condition == 'control' and
+                                       max(this_expected) < context.min_expected_compound_EPSP_amp):
+                if context.verbose > 0:
+                    print 'filter_features_compound_EPSP_amp: pid: %i; aborting - expected compound EPSP amplitude ' \
+                          'below criterion' % os.getpid()
                 return dict()
             slope, intercept, r_value, p_value, std_err = stats.linregress(this_expected[indexes], this_actual[indexes])
             integration_gain[syn_condition].append(slope)
