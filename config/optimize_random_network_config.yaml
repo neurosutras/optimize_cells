@@ -26,6 +26,9 @@ bounds:
   IE_connection_weight: !!python/tuple
   - 0.
   - 5.
+  FF_mean_freq: !!python/tuple
+  - .15
+  - 200.
 feature_names:
 - E_peak_rate
 - I_peak_rate
@@ -58,6 +61,7 @@ param_names:
 - EI_connection_weight
 - II_connection_weight
 - IE_connection_weight
+- FF_mean_freq
 target_range:
   E_peak_rate: 5.
   I_peak_rate: 10.
@@ -78,3 +82,4 @@ x0:
   EI_connection_weight: 2.
   IE_connection_weight: .5
   II_connection_weight: .5
+  FF_mean_freq: 100

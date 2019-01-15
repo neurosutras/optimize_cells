@@ -70,7 +70,7 @@ def init_context():
     """
     ncell = 3
     delay = 1
-    tstop = 300
+    tstop = 600
     context.update(locals())
 
 
@@ -92,6 +92,7 @@ def update_context(x, local_context=None):
     local_context.e2i_weight = x_dict['EI_connection_weight']
     local_context.i2i_weight = x_dict['II_connection_weight']
     local_context.i2e_weight = x_dict['IE_connection_weight']
+    local_context.ff_meanfreq = x_dict['FF_mean_freq']
 
 
 # magic nums
@@ -101,11 +102,14 @@ def compute_features(x, export=False):
     context.network = Network(context.ncell, context.delay, context.pc, e2e_prob=context.e2e_prob, \
                               e2i_prob=context.e2i_prob, i2i_prob=context.i2i_prob, i2e_prob=context.i2e_prob, \
                               ff_weight=context.ff_weight, e2e_weight=context.e2e_weight, e2i_weight=\
-                              context.e2i_weight, i2i_weight=context.i2i_weight, i2e_weight=context.i2e_weight)
+                              context.e2i_weight, i2i_weight=context.i2i_weight, i2e_weight=context.i2e_weight, \
+                              ff_meanfreq=context.ff_meanfreq, tstop=context.tstop)
     results = run_network(context.network, context.pc, context.comm)
     if int(context.pc.id()) == 0:
         if results is None:
             return dict()
+        context.peak_voltage = results['peak']
+        results.pop('peak', None)
         return results
 
 
@@ -114,7 +118,11 @@ def get_objectives(features):
         objectives = {}
         for feature_name in ['E_peak_rate', 'I_peak_rate', 'E_mean_rate', 'I_mean_rate']:
             objective_name = feature_name
-            objectives[objective_name] = ((context.target_val[objective_name] - features[feature_name]) /
+            if features[feature_name] == 0.:
+                objectives[objective_name] = (context.peak_voltage - 45.) ** 2
+                print "peak: ", context.peak_voltage, "obj : ", objectives[objective_name]
+            else:
+                objectives[objective_name] = ((context.target_val[objective_name] - features[feature_name]) /
                                                       context.target_range[objective_name]) ** 2.
         return features, objectives
 
