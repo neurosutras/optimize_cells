@@ -58,7 +58,7 @@ kwargs:
   dataset_prefix: ../dentate/datasets
   results_path: data
   cache_queries: True
-  debug: True
+  debug: False  # True
 objective_names:
 - mean_unitary_EPSP_amp_residuals
 - mean_NMDA_contribution_residuals
@@ -84,7 +84,7 @@ target_range:
   initial_gain_control: 0.005
   initial_gain_AP5: 0.005
 target_val:
-  mean_unitary_EPSP_amp: 0.5
+  mean_unitary_EPSP_amp: 0.6
   mean_NMDA_contribution: 0.2
   integration_gain_control: 1.38
   integration_gain_AP5: 0.8
