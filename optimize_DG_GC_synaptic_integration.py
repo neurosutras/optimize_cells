@@ -185,7 +185,7 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
     init_context()
     context.env = Env(comm=context.comm, verbose=verbose > 1, **kwargs)
     configure_hoc_env(context.env)
-    cell = get_biophys_cell(context.env, gid=context.gid, pop_name=context.cell_type)
+    cell = get_biophys_cell(context.env, gid=context.gid, pop_name=context.cell_type, set_edge_delays=False)
     init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path,
                     correct_cm=context.correct_for_spines, correct_g_pas=context.correct_for_spines, env=context.env,
                     verbose=verbose > 1)
@@ -303,8 +303,8 @@ def config_sim_env(context):
 def update_syn_mechanisms(x, context=None):
     """
 
-    :param x:
-    :param context:
+    :param x: array
+    :param context: :class:'Context'
     """
     if context is None:
         raise RuntimeError('update_syn_mechanisms: missing required Context object')
@@ -312,22 +312,21 @@ def update_syn_mechanisms(x, context=None):
     cell = context.cell
     env = context.env
     modify_syn_param(cell, env, 'apical', context.AMPA_type, param_name='g_unit', value=x_dict['AMPA.g0'],
-                          filters={'syn_types': ['excitatory']}, origin='soma', slope=x_dict['AMPA.slope'],
-                          tau=x_dict['AMPA.tau'], update_targets=False)
+                     filters={'syn_types': ['excitatory']}, origin='soma', slope=x_dict['AMPA.slope'],
+                     tau=x_dict['AMPA.tau'], update_targets=False)
     modify_syn_param(cell, env, 'apical', context.AMPA_type, param_name='g_unit',
-                          filters={'syn_types': ['excitatory']}, origin='parent',
-                          origin_filters={'syn_types': ['excitatory']},
-                          custom={'func': 'custom_filter_if_terminal'}, update_targets=False, append=True)
+                     filters={'syn_types': ['excitatory']}, origin='parent',
+                     origin_filters={'syn_types': ['excitatory']},
+                     custom={'func': 'custom_filter_if_terminal'}, update_targets=False, append=True)
     modify_syn_param(cell, env, 'apical', context.AMPA_type, param_name='g_unit',
-                          filters={'syn_types': ['excitatory'], 'layers': ['OML']}, origin='apical',
-                          origin_filters={'syn_types': ['excitatory'], 'layers': ['MML']}, update_targets=False,
-                          append=True)
+                     filters={'syn_types': ['excitatory'], 'layers': ['OML']}, origin='apical',
+                     origin_filters={'syn_types': ['excitatory'], 'layers': ['MML']}, update_targets=False, append=True)
     modify_syn_param(cell, env, 'apical', context.NMDA_type, param_name='Kd', value=x_dict['NMDA.Kd'],
-                          update_targets=False)
+                     update_targets=False)
     modify_syn_param(cell, env, 'apical', context.NMDA_type, param_name='gamma', value=x_dict['NMDA.gamma'],
-                          update_targets=False)
+                     update_targets=False)
     modify_syn_param(cell, env, 'apical', context.NMDA_type, param_name='g_unit', value=x_dict['NMDA.g_unit'],
-                          update_targets=False)
+                     update_targets=False)
     modify_syn_param(cell, env, 'apical', context.NMDA_type, param_name='vshift', value=x_dict['NMDA.vshift'],
                      update_targets=False)
     config_biophys_cell_syns(env=env, gid=cell.gid, postsyn_name=cell.pop_name, syn_ids=context.syn_id_list,
