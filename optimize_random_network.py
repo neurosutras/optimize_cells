@@ -93,6 +93,7 @@ def update_context(x, local_context=None):
     local_context.i2i_weight = x_dict['II_connection_weight']
     local_context.i2e_weight = x_dict['IE_connection_weight']
     local_context.ff_meanfreq = x_dict['FF_mean_freq']
+    local_context.ff_frac_active = x_dict['FF_frac_active']
 
 
 # magic nums
@@ -103,7 +104,8 @@ def compute_features(x, export=False):
                               e2i_prob=context.e2i_prob, i2i_prob=context.i2i_prob, i2e_prob=context.i2e_prob, \
                               ff_weight=context.ff_weight, e2e_weight=context.e2e_weight, e2i_weight=\
                               context.e2i_weight, i2i_weight=context.i2i_weight, i2e_weight=context.i2e_weight, \
-                              ff_meanfreq=context.ff_meanfreq, tstop=context.tstop)
+                              ff_meanfreq=context.ff_meanfreq, tstop=context.tstop,
+                              ff_frac_active=context.ff_frac_active)
     results = run_network(context.network, context.pc, context.comm)
     if int(context.pc.id()) == 0:
         if results is None:

@@ -21,11 +21,12 @@ class Network(object):
 
     def __init__(self, ncell, delay, pc, tstop, dt=None, ff_prob=1., e2e_prob=.05, e2i_prob=.05, \
                  i2i_prob=.05, i2e_prob=.05, ff_weight=2., e2e_weight=1., e2i_weight=1., i2i_weight=.5, \
-                 i2e_weight=.5, ff_meanfreq=100):
+                 i2e_weight=.5, ff_meanfreq=100, ff_frac_active=.8):
         # spiking script uses dt = 0.02
         self.pc = pc
         self.delay = delay
         self.ncell = int(ncell)
+        self.ff_frac_active = ff_frac_active
         self.prob_dict = {'ff': ff_prob, 'e2e': e2e_prob, 'e2i': e2i_prob, 'i2i': i2i_prob, 'i2e': i2e_prob}
         self.weight_dict = {'ff' : ff_weight, 'e2e' : e2e_weight, 'e2i' : e2i_weight, 'i2i' : i2i_weight, \
                              'i2e' : i2e_weight}
@@ -54,7 +55,7 @@ class Network(object):
         self.gids = []
         for i in range(rank, ncell * NUM_POP, nhost):
             if i < ncell:
-                cell = FFCell(self.tstop, self.ff_meanfreq)
+                cell = FFCell(self.tstop, self.ff_meanfreq, self.ff_frac_active)
             else: 
                 if i not in list(range(ncell * 2, ncell * 3)):
                     cell_type = 'RS'
@@ -206,7 +207,7 @@ class Network(object):
             binned = vec.histogram(0, self.tstop, 1)
             if cell_type == 'RS':  # E
                 self.osc_E.add(binned)
-            elif cell_type == 'FS':  # F
+            elif cell_type == 'FS':  #F
                 self.osc_I.add(binned)
 
     def compute_peak_osc_freq(self, osc):
@@ -339,15 +340,15 @@ class IzhiCell(object):
         return 0
 
 class FFCell(object):
-    def __init__(self, tstop, mean_freq):
+    def __init__(self, tstop, mean_freq, frac_active):
         self.pp = h.VecStim()
         #tstop in ms and mean_rate in s
         n_spikes = tstop * mean_freq / 1000.
         length = int(tstop / n_spikes)
         spikes = [x * float(tstop) / length for x in range(length)]
         vec = h.Vector(spikes)
-        #vec = h.Vector([5, 200])
-        self.pp.play(vec)
+        if random.random() <= frac_active:  # vec = h.Vector([5, 200])
+            self.pp.play(vec)
 
     def connect2target(self, target):
         nc = h.NetCon(self.pp, target)

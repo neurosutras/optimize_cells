@@ -29,6 +29,9 @@ bounds:
   FF_mean_freq: !!python/tuple
   - .15
   - 200.
+  FF_frac_active: !!python/tuple
+  - 0.
+  - 1.
 feature_names:
 - E_peak_rate
 - I_peak_rate
@@ -66,6 +69,7 @@ param_names:
 - II_connection_weight
 - IE_connection_weight
 - FF_mean_freq
+- FF_frac_active
 target_range:
   E_peak_rate: 5.
   I_peak_rate: 10.
@@ -91,3 +95,4 @@ x0:
   IE_connection_weight: .2
   II_connection_weight: .5
   FF_mean_freq: 20
+  FF_frac_active: .8
