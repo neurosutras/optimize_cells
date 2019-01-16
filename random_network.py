@@ -21,11 +21,12 @@ class Network(object):
 
     def __init__(self, ncell, delay, pc, tstop, dt=None, ff_prob=1., e2e_prob=.05, e2i_prob=.05, \
                  i2i_prob=.05, i2e_prob=.05, ff_weight=2., e2e_weight=1., e2i_weight=1., i2i_weight=.5, \
-                 i2e_weight=.5, ff_meanfreq=100):
+                 i2e_weight=.5, ff_meanfreq=100, ff_frac_active=.8):
         # spiking script uses dt = 0.02
         self.pc = pc
         self.delay = delay
         self.ncell = int(ncell)
+        self.ff_frac_active = ff_frac_active
         self.prob_dict = {'ff': ff_prob, 'e2e': e2e_prob, 'e2i': e2i_prob, 'i2i': i2i_prob, 'i2e': i2e_prob}
         self.weight_dict = {'ff' : ff_weight, 'e2e' : e2e_weight, 'e2i' : e2i_weight, 'i2i' : i2i_weight, \
                              'i2e' : i2e_weight}
@@ -54,7 +55,7 @@ class Network(object):
         self.gids = []
         for i in range(rank, ncell * NUM_POP, nhost):
             if i < ncell:
-                cell = FFCell(self.tstop, self.ff_meanfreq)
+                cell = FFCell(self.tstop, self.ff_meanfreq, self.ff_frac_active)
             else: 
                 if i not in list(range(ncell * 2, ncell * 3)):
                     cell_type = 'RS'
@@ -198,6 +199,32 @@ class Network(object):
                 self.ratedict[key] = rate
                 self.peakdict[key] = 1. / (isivec.min() / 1000)
 
+    def summation(self, vecdict):
+        self.osc_E = h.Vector(self.tstop + 2)
+        self.osc_I = h.Vector(self.tstop + 2)
+        for key, vec in vecdict.iteritems():
+            cell_type = self.get_cell_type(key)
+            binned = vec.histogram(0, self.tstop, 1)
+            if cell_type == 'RS':  # E
+                self.osc_E.add(binned)
+            elif cell_type == 'FS':  #F
+                self.osc_I.add(binned)
+
+    def compute_peak_osc_freq(self, osc):
+        sparse_t = []
+        peak_sum = osc.max()
+        for i, v in enumerate(osc):
+            if v >= peak_sum * .8:
+                sparse_t.append(i)
+        tmp = h.Vector()
+        if len(sparse_t) > 1:
+            tmp.deriv(h.Vector(sparse_t), 1, 1)
+            peak = 1 / (tmp.min() / 1000)
+        else:
+            peak = -1
+        return peak
+
+    
     def remake_syn(self):
         if int(self.pc.id() == 0):
             for pair, nc in self.ncdict.iteritems():
@@ -224,14 +251,15 @@ def run_network(network, pc, comm, tstop=600):
     network.vecdict_to_pydict(network.voltage_recvec, 'rec')
     test = pc.py_alltoall([network.pydicts for i in range(nhost)])
     if int(pc.id()) == 0:
+        network.summation(all_events)
+        osc_E = network.compute_peak_osc_freq(network.osc_E)
+        osc_I = network.compute_peak_osc_freq(network.osc_I)
         rec = {key: val for dict in test for key, val in dict['rec'].iteritems()}
         
         peak_voltage = float("-inf") #print list(rec.keys())
         if network.ncell in list(rec.keys()):
-            li = []
             for i, x in enumerate(rec[network.ncell]):
                 if i % 500 == 0: 
-                    li.append(x)
                     peak_voltage = max(peak_voltage, x)
             #print li
 
@@ -264,7 +292,7 @@ def run_network(network, pc, comm, tstop=600):
         # t = {key: value for dict in all_dicts for key, value in dict['t'].iteritems()}
         # rec = {key: value for dict in all_dicts for key, value in dict['rec'].iteritems()}
         return {'E_mean_rate': E_mean, 'E_peak_rate': E_max, 'I_mean_rate': I_mean, "I_peak_rate": I_max, \
-                'peak' : peak_voltage}
+                'peak': peak_voltage, 'peak_osc_freq_I': osc_I, 'peak_osc_freq_E': osc_E}
 
 
 # ==================== cell class                                                                                                                                                                                                                                                                                                                                                        # single cell
@@ -312,15 +340,15 @@ class IzhiCell(object):
         return 0
 
 class FFCell(object):
-    def __init__(self, tstop, mean_freq):
+    def __init__(self, tstop, mean_freq, frac_active):
         self.pp = h.VecStim()
         #tstop in ms and mean_rate in s
         n_spikes = tstop * mean_freq / 1000.
         length = int(tstop / n_spikes)
         spikes = [x * float(tstop) / length for x in range(length)]
         vec = h.Vector(spikes)
-        #vec = h.Vector([5, 200])
-        self.pp.play(vec)
+        if random.random() <= frac_active:  # vec = h.Vector([5, 200])
+            self.pp.play(vec)
 
     def connect2target(self, target):
         nc = h.NetCon(self.pp, target)
