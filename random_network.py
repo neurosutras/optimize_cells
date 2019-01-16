@@ -198,6 +198,32 @@ class Network(object):
                 self.ratedict[key] = rate
                 self.peakdict[key] = 1. / (isivec.min() / 1000)
 
+    def summation(self, vecdict):
+        self.osc_E = h.Vector(self.tstop + 2)
+        self.osc_I = h.Vector(self.tstop + 2)
+        for key, vec in vecdict.iteritems():
+            cell_type = self.get_cell_type(key)
+            binned = vec.histogram(0, self.tstop, 1)
+            if cell_type == 'RS':  # E
+                self.osc_E.add(binned)
+            elif cell_type == 'FS':  # F
+                self.osc_I.add(binned)
+
+    def compute_peak_osc_freq(self, osc):
+        sparse_t = []
+        peak_sum = osc.max()
+        for i, v in enumerate(osc):
+            if v >= peak_sum * .8:
+                sparse_t.append(i)
+        tmp = h.Vector()
+        if len(sparse_t) > 1:
+            tmp.deriv(h.Vector(sparse_t), 1, 1)
+            peak = 1 / (tmp.min() / 1000)
+        else:
+            peak = -1
+        return peak
+
+    
     def remake_syn(self):
         if int(self.pc.id() == 0):
             for pair, nc in self.ncdict.iteritems():
@@ -224,14 +250,15 @@ def run_network(network, pc, comm, tstop=600):
     network.vecdict_to_pydict(network.voltage_recvec, 'rec')
     test = pc.py_alltoall([network.pydicts for i in range(nhost)])
     if int(pc.id()) == 0:
+        network.summation(all_events)
+        osc_E = network.compute_peak_osc_freq(network.osc_E)
+        osc_I = network.compute_peak_osc_freq(network.osc_I)
         rec = {key: val for dict in test for key, val in dict['rec'].iteritems()}
         
         peak_voltage = float("-inf") #print list(rec.keys())
         if network.ncell in list(rec.keys()):
-            li = []
             for i, x in enumerate(rec[network.ncell]):
                 if i % 500 == 0: 
-                    li.append(x)
                     peak_voltage = max(peak_voltage, x)
             #print li
 
@@ -264,7 +291,7 @@ def run_network(network, pc, comm, tstop=600):
         # t = {key: value for dict in all_dicts for key, value in dict['t'].iteritems()}
         # rec = {key: value for dict in all_dicts for key, value in dict['rec'].iteritems()}
         return {'E_mean_rate': E_mean, 'E_peak_rate': E_max, 'I_mean_rate': I_mean, "I_peak_rate": I_max, \
-                'peak' : peak_voltage}
+                'peak': peak_voltage, 'peak_osc_freq_I': osc_I, 'peak_osc_freq_E': osc_E}
 
 
 # ==================== cell class                                                                                                                                                                                                                                                                                                                                                        # single cell

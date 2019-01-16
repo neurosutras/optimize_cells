@@ -116,11 +116,11 @@ def compute_features(x, export=False):
 def get_objectives(features):
     if int(context.pc.id()) == 0:
         objectives = {}
-        for feature_name in ['E_peak_rate', 'I_peak_rate', 'E_mean_rate', 'I_mean_rate']:
+        for feature_name in ['E_peak_rate', 'I_peak_rate', 'E_mean_rate', 'I_mean_rate', 'peak_osc_freq_E', \
+                             'peak_osc_freq_I']:
             objective_name = feature_name
             if features[feature_name] == 0.:
                 objectives[objective_name] = (context.peak_voltage - 45.) ** 2
-                print "peak: ", context.peak_voltage, "obj : ", objectives[objective_name]
             else:
                 objectives[objective_name] = ((context.target_val[objective_name] - features[feature_name]) /
                                                       context.target_range[objective_name]) ** 2.

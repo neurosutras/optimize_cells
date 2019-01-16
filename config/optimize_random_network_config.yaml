@@ -13,7 +13,7 @@ bounds:
   - .8
   FF_connection_weight: !!python/tuple
   - 0.
-  - 20.
+  - 200.
   EE_connection_weight: !!python/tuple
   - 0.
   - 5.
@@ -34,6 +34,8 @@ feature_names:
 - I_peak_rate
 - E_mean_rate
 - I_mean_rate
+- peak_osc_freq_E
+- peak_osc_freq_I
 update_context:
 - - optimize_random_network
   - update_context
@@ -49,6 +51,8 @@ objective_names:
 - I_peak_rate
 - E_mean_rate
 - I_mean_rate
+- peak_osc_freq_E
+- peak_osc_freq_I
 optimization_title: random_network
 param_gen: PopulationAnnealing
 param_names:
@@ -67,19 +71,23 @@ target_range:
   I_peak_rate: 10.
   E_mean_rate: 2.
   I_mean_rate: 11.
+  peak_osc_freq_E: 5.
+  peak_osc_freq_I: 5.
 target_val:
   E_peak_rate: 10.
   I_peak_rate: 30.
   E_mean_rate: 3.
   I_mean_rate: 3.5
+  peak_osc_freq_E: 10.
+  peak_osc_freq_I: 10.
 x0:
-  EE_connection_prob: 0.1
+  EE_connection_prob: 0.8
   EI_connection_prob: 0.1
   IE_connection_prob: 0.1
   II_connection_prob: 0.1
   FF_connection_weight: 2.
   EE_connection_weight: 2.
   EI_connection_weight: 2.
-  IE_connection_weight: .5
+  IE_connection_weight: .2
   II_connection_weight: .5
-  FF_mean_freq: 100
+  FF_mean_freq: 20
