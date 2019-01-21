@@ -39,7 +39,7 @@ def main(config_file_path, output_dir, export, export_file_path, label, verbose,
     # requires a global variable context: :class:'Context'
     context.update(locals())
     disp = verbose > 0
-    config_interactive(context, __file__, config_file_path=config_file_path, output_dir=output_dir, export=export,
+    config_optimize_interactive(__file__, config_file_path=config_file_path, output_dir=output_dir, export=export,
                        export_file_path=export_file_path, label=label, disp=disp)
 
     if run_tests:

@@ -36,7 +36,7 @@ def main(config_file_path, export, output_dir, export_file_path, label, interact
     context.update(locals())
     comm = MPI.COMM_WORLD
     context.interface = ParallelContextInterface(procs_per_worker=comm.size)
-    config_interactive(context, __file__, config_file_path=config_file_path, output_dir=output_dir,
+    config_optimize_interactive(__file__, config_file_path=config_file_path, output_dir=output_dir,
                        export_file_path=export_file_path, label=label, verbose=verbose)
     context.interface.start()
 
