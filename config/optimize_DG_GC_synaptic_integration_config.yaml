@@ -59,7 +59,7 @@ kwargs:
   dataset_prefix: ../dentate/datasets
   results_path: data
   cache_queries: True
-  debug: True  # False  # True
+  debug: False  # True
 objective_names:
 - mean_unitary_EPSP_amp_residuals
 - mean_NMDA_contribution_residuals
