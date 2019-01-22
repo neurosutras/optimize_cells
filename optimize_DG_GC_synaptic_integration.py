@@ -339,8 +339,8 @@ def update_syn_mechanisms(x, context=None):
 
 def sort_temp_data_files():
     """
-    Temporary data has been stored in one file per worker. This method uses one worker to re-sort the data into one file
-    per model.
+    Temporary data for each model is stored across multiple files (one file per worker). This method uses one worker to
+    re-sort the data into one file per model.
     """
     start_time = time.time()
     if context.interface.global_comm.rank == 0:
@@ -727,6 +727,8 @@ def filter_features_compound_EPSP_amp(primitives, current_features, export=False
         if this_model_key != model_key:
             raise KeyError('filter_features_compound_EPSP_amp: mismatched model keys')
 
+    features['model_key'] = model_key
+
     return features
 
 
@@ -820,7 +822,9 @@ def get_objectives_synaptic_integration(features, export=False):
 
     soma_compound_EPSP_amp = defaultdict(lambda: defaultdict(list))
     initial_gain = defaultdict(list)
+    initial_gain_residuals = defaultdict(list)
     integration_gain = defaultdict(list)
+    integration_gain_residuals = defaultdict(list)
     for syn_group in compound_EPSP_traces_dict:
         for syn_condition in compound_EPSP_traces_dict[syn_group]:
             max_num_syns = max(compound_EPSP_traces_dict[syn_group][syn_condition].keys())
@@ -834,24 +838,38 @@ def get_objectives_synaptic_integration(features, export=False):
             this_initial_gain = (this_actual[1] - this_actual[0]) / (this_expected[1] - this_expected[0])
             # Integration should be close to linear without gain for the first few synapses.
             initial_gain[syn_condition].append(this_initial_gain)
+            feature_key = 'initial_gain_%s' % syn_condition
+            this_initial_gain_residuals = ((this_initial_gain - context.target_val[feature_key]) /
+                                           context.target_range[feature_key]) ** 2.
+            initial_gain_residuals[syn_condition].append(this_initial_gain_residuals)
             indexes = np.where(this_expected <= context.max_expected_compound_EPSP_amp)[0]
             if not np.any(indexes) or (not context.debug and syn_condition == 'control' and
                                        max(this_expected) < context.min_expected_compound_EPSP_amp):
                 if context.verbose > 0:
                     print 'optimize_DG_GC_synaptic_integration: get_objectives: pid: %i; aborting - expected ' \
                           'compound EPSP amplitude below criterion' % os.getpid()
-                return dict()
+                return dict(), dict()
             slope, intercept, r_value, p_value, std_err = stats.linregress(this_expected[indexes], this_actual[indexes])
             integration_gain[syn_condition].append(slope)
+            feature_key = 'integration_gain_%s' % syn_condition
+            this_target = context.target_val[feature_key] * this_expected[indexes] + intercept
+            this_integration_gain_residuals = 0.
+            for target_val, actual_val in zip(this_target, this_actual[indexes]):
+                this_integration_gain_residuals += ((actual_val - target_val) /
+                                                    context.target_range['mean_unitary_EPSP_amp']) ** 2.
+            this_integration_gain_residuals /= float(len(indexes))
+            integration_gain_residuals[syn_condition].append(this_integration_gain_residuals)
 
     for feature_name, feature_dict in zip(['initial_gain', 'integration_gain'], [initial_gain, integration_gain]):
-        for syn_condition in feature_dict:
+        for syn_condition in context.syn_conditions:
             feature_key = '%s_%s' % (feature_name, syn_condition)
-            residuals_key = '%s_residuals' % feature_key
             features[feature_key] = np.mean(feature_dict[syn_condition])
-            objectives[residuals_key] = \
-                np.mean(((np.array(feature_dict[syn_condition]) - context.target_val[feature_key]) /
-                         context.target_range[feature_key]) ** 2.)
+
+    for feature_name, feature_dict in zip(['initial_gain', 'integration_gain'],
+                                          [initial_gain_residuals, integration_gain_residuals]):
+        for syn_condition in context.syn_conditions:
+            residuals_key = '%s_%s_residuals' % (feature_name, syn_condition)
+            objectives[residuals_key] = np.mean(feature_dict[syn_condition])
 
     if export:
         with h5py.File(context.export_file_path, 'a') as f:
