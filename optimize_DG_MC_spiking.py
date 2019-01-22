@@ -76,7 +76,7 @@ def unit_tests_spiking():
     this_features = filter_features_fI(primitives, features, context.export)
     features.update(this_features)
 
-    features, objectives = get_objectives_spiking(features)
+    features, objectives = get_objectives_spiking(features, context.export)
     print 'params:'
     pprint.pprint(context.x0_dict)
     print 'features:'
@@ -582,10 +582,11 @@ def filter_features_fI(primitives, current_features, export=False):
     return new_features
 
 
-def get_objectives_spiking(features):
+def get_objectives_spiking(features, export=False):
     """
 
     :param features: dict
+    :param export: bool
     :return: tuple of dict
     """
 

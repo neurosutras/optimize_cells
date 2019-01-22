@@ -68,7 +68,7 @@ def unit_tests_iEPSP():
     this_features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
     features.update(this_features)
 
-    features, objectives = get_objectives_iEPSP_propagation(features)
+    features, objectives = get_objectives_iEPSP_propagation(features, context.export)
     print 'params:'
     pprint.pprint(context.x0_dict)
     print 'features:'
@@ -360,10 +360,11 @@ def compute_features_iEPSP_attenuation(x, i_holding, ISI_key, i_EPSC, export=Fal
     return result
 
 
-def get_objectives_iEPSP_propagation(features):
+def get_objectives_iEPSP_propagation(features, export=False):
     """
 
     :param features: dict
+    :param export: bool
     :return: tuple of dict
     """
     objectives = dict()

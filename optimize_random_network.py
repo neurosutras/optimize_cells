@@ -43,7 +43,7 @@ def main(config_file_path, export, output_dir, export_file_path, label, interact
     sequences = [[context.x0_array]] + [[context.export]]
     primitives = context.interface.map(compute_features, *sequences)
     features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
-    features, objectives = get_objectives(features)
+    features, objectives = get_objectives(features, context.export)
     print 'params:'
     pprint.pprint(context.x0_dict)
     print 'features:'
@@ -115,7 +115,13 @@ def compute_features(x, export=False):
         return results
 
 
-def get_objectives(features):
+def get_objectives(features, export=False):
+    """
+
+    :param features: dict
+    :param export: bool
+    :return: tuple of dict
+    """
     if int(context.pc.id()) == 0:
         objectives = {}
         for feature_name in ['E_peak_rate', 'I_peak_rate', 'E_mean_rate', 'I_mean_rate', 'peak_osc_freq_E', \

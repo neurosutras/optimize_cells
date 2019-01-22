@@ -52,7 +52,7 @@ def main(config_file_path, export, output_dir, export_file_path, label, disp, ve
     sequences = [[context.x0_array] * num_params] + [[context.export] * num_params]
     primitives = context.interface.map(compute_features_simple_ring, *sequences)
     features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
-    features, objectives = get_objectives_simple_ring(features)
+    features, objectives = get_objectives_simple_ring(features, context.export)
     print 'params:'
     pprint.pprint(context.x0_dict)
     print 'features:'
@@ -155,7 +155,13 @@ def compute_features_simple_ring(x, export=False):
     return processed_result
 
 
-def get_objectives_simple_ring(features):
+def get_objectives_simple_ring(features, export=False):
+    """
+
+    :param features: dict
+    :param export: bool
+    :return: tuple of dict
+    """
     objectives = {}
     for feature_name in ['n2.EPSP', 'n2.IPSP']:
         objective_name = feature_name

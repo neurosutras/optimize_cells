@@ -37,12 +37,11 @@ get_features_stages:
   get_args_dynamic: get_args_dynamic_unitary_EPSP_amp
   compute_features: compute_features_unitary_EPSP_amp
   filter_features: filter_features_unitary_EPSP_amp
-  synchronize: export_unitary_EPSP_traces
 - source: optimize_DG_GC_synaptic_integration
   get_args_dynamic: get_args_dynamic_compound_EPSP_amp
   compute_features: compute_features_compound_EPSP_amp
   filter_features: filter_features_compound_EPSP_amp
-  synchronize: export_compound_EPSP_traces
+  synchronize: sort_temp_data_files
 get_objectives:
   optimize_DG_GC_synaptic_integration: get_objectives_synaptic_integration
 kwargs:
@@ -60,7 +59,7 @@ kwargs:
   dataset_prefix: ../dentate/datasets
   results_path: data
   cache_queries: True
-  debug: False  # True
+  debug: True  # False  # True
 objective_names:
 - mean_unitary_EPSP_amp_residuals
 - mean_NMDA_contribution_residuals
