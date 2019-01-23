@@ -1,5 +1,4 @@
 from nested.optimize_utils import *
-from nested.parallel import *
 from random_network import *
 import collections
 import click
@@ -36,10 +35,14 @@ def main(config_file_path, export, output_dir, export_file_path, label, interact
     random.seed(137)
     context.update(locals())
     comm = MPI.COMM_WORLD
-    context.interface = ParallelContextInterface(procs_per_worker=comm.size)
-    config_interactive(context, __file__, config_file_path=config_file_path, output_dir=output_dir,
-                       export_file_path=export_file_path, label=label, verbose=verbose)
-    context.interface.start()
+
+    from nested.parallel import ParallelContextInterface
+    context.interface = ParallelContextInterface()
+    context.interface.apply(config_optimize_interactive, __file__, config_file_path=config_file_path,
+                            output_dir=output_dir, export=export, export_file_path=export_file_path, label=label,
+                            disp=verbose > 0, verbose=verbose)
+    context.interface.start(disp=True)
+    context.interface.ensure_controller()
 
     sequences = [[context.x0_array]] + [[context.export]]
     primitives = context.interface.map(compute_features, *sequences)
@@ -131,7 +134,13 @@ def compute_features(x, export=False):
         return results
 
 
-def get_objectives(features):
+def get_objectives(features, export=False):
+    """
+
+    :param features: dict
+    :param export: bool
+    :return: tuple of dict
+    """
     if int(context.pc.id()) == 0:
         objectives = {}
         for feature_name in ['E_peak_rate', 'I_peak_rate', 'E_mean_rate', 'I_mean_rate', 'peak_theta_osc_E', \
