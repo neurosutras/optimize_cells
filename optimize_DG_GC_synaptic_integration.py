@@ -65,7 +65,7 @@ def unit_tests_synaptic_integration():
     objectives = dict()
 
     # Stage 0:
-    args = get_args_static_unitary_EPSP_amp()
+    args = get_args_dynamic_unitary_EPSP_amp(context.x0_array, features)
     group_size = len(args[0])
     sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
                 [[context.plot] * group_size]
@@ -73,14 +73,18 @@ def unit_tests_synaptic_integration():
     this_features = filter_features_unitary_EPSP_amp(primitives, features, context.export)
     features.update(this_features)
 
+    context.interface.apply(export_unitary_EPSP_traces)
+
     # Stage 1:
-    args = get_args_static_compound_EPSP_amp()
+    args = get_args_dynamic_compound_EPSP_amp(context.x0_array, features)
     group_size = len(args[0])
     sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
                 [[context.plot] * group_size]
     primitives = context.interface.map(compute_features_compound_EPSP_amp, *sequences)
     this_features = filter_features_compound_EPSP_amp(primitives, features, context.export)
     features.update(this_features)
+    
+    context.interface.apply(export_compound_EPSP_traces)
 
     features, objectives = get_objectives_synaptic_integration(features, context.export)
 
@@ -178,6 +182,7 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
     context.spike_output_vec = h.Vector()
     cell.spike_detector.record(context.spike_output_vec)
     context.cell = cell
+    context.temp_model_data = dict()
     config_sim_env(context)
 
 
@@ -314,15 +319,141 @@ def update_syn_mechanisms(x, context=None):
                              verbose=context.verbose > 1, throw_error=True)
 
 
-def get_args_static_unitary_EPSP_amp():
+def export_unitary_EPSP_traces():
     """
-    A nested map operation is required to compute unitary EPSP amplitude features. The arguments to be mapped are the
-    same (static) for each set of parameters.
+    Data from model simulations is temporarily stored locally on each worker. This method uses collective operations to
+    export the data to disk, with one file per model.
+    """
+    start_time = time.time()
+    description = 'unitary_EPSP_traces'
+    trace_len = int((context.ISI['units'] + context.trace_baseline) / context.dt)
+
+    if context.interface.global_comm.rank == 0:
+        context.interface.pc.post('merge', context.temp_model_data)
+        print 'master done with send'
+    elif context.interface.global_comm.rank == 1:
+        context.interface.pc.take('merge')
+        temp_model_data_from_master = context.interface.pc.upkpyobj()
+        dict_merge(context.temp_model_data, temp_model_data_from_master)
+        print 'rank 1 done with receive and merge'
+    if context.interface.global_comm.rank > 0:
+        model_keys = context.temp_model_data.keys()
+        model_keys = context.interface.worker_comm.gather(model_keys, root=0)
+        if context.interface.worker_comm.rank == 0:
+            model_keys = list(set([key for key_list in model_keys for key in key_list]))
+            model_keys = [model_keys] * context.interface.worker_comm.size
+        else:
+            model_keys = None
+        model_keys = context.interface.worker_comm.scatter(model_keys, root=0)
+        for model_key in model_keys:
+            model_data_path = '%s/temp_model_data_%s.hdf5' % (context.output_dir, model_key)
+            with h5py.File(model_data_path, 'w', driver='mpio', comm=context.interface.worker_comm) as f:
+                f.create_group(description)
+                for syn_group in context.syn_id_dict:
+                    f[description].create_group(syn_group)
+                    this_syn_id_list = context.syn_id_dict[syn_group]
+                    for syn_condition in context.syn_conditions:
+                        f[description][syn_group].create_group(syn_condition)
+                        for syn_id in this_syn_id_list:
+                            syn_id_key = str(syn_id)
+                            f[description][syn_group][syn_condition].create_group(syn_id_key)
+                            for rec_name in context.sim.recs:
+                                f[description][syn_group][syn_condition][syn_id_key].create_dataset(
+                                    rec_name, (trace_len,))
+                if model_key in context.temp_model_data:
+                    if description in context.temp_model_data[model_key]:
+                        for syn_group in context.temp_model_data[model_key][description]:
+                            for syn_condition in context.temp_model_data[model_key][description][syn_group]:
+                                this_dict = context.temp_model_data[model_key][description][syn_group][syn_condition]
+                                for syn_id_key in this_dict:
+                                    for rec_name in this_dict[syn_id_key]:
+                                        f[description][syn_group][syn_condition][syn_id_key][rec_name][:] = \
+                                            this_dict[syn_id_key][rec_name]
+    del context.temp_model_data
+    context.temp_model_data = dict()
+
+    if context.interface.global_comm.rank == 1 and context.disp:
+        print 'optimize_DG_GC_synaptic_integration: export_unitary_EPSP_traces took %.2f s' % (time.time() - start_time)
+
+
+def export_compound_EPSP_traces():
+    """
+    Data from model simulations is temporarily stored locally on each worker. This method uses collective operations to
+    export the data to disk, with one file per model.
+    """
+    start_time = time.time()
+    description = 'compound_EPSP_traces'
+    trace_len = int((context.sim_duration['clustered'] - context.equilibrate + context.trace_baseline) / context.dt)
+
+    if context.interface.global_comm.rank == 0:
+        context.interface.pc.post('merge', context.temp_model_data)
+        print 'master done with send'
+    elif context.interface.global_comm.rank == 1:
+        context.interface.pc.take('merge')
+        temp_model_data_from_master = context.interface.pc.upkpyobj()
+        dict_merge(context.temp_model_data, temp_model_data_from_master)
+        print 'rank 1 done with receive and merge'
+    if context.interface.global_comm.rank > 0:
+        model_keys = context.temp_model_data.keys()
+        model_keys = context.interface.worker_comm.gather(model_keys, root=0)
+        if context.interface.worker_comm.rank == 0:
+            model_keys = list(set([key for key_list in model_keys for key in key_list]))
+            model_keys = [model_keys] * context.interface.worker_comm.size
+        else:
+            model_keys = None
+        model_keys = context.interface.worker_comm.scatter(model_keys, root=0)
+        for model_key in model_keys:
+            model_data_path = '%s/temp_model_data_%s.hdf5' % (context.output_dir, model_key)
+            with h5py.File(model_data_path, 'a', driver='mpio', comm=context.interface.worker_comm) as f:
+                f.create_group(description)
+                for syn_group in context.clustered_branch_names:
+                    f[description].create_group(syn_group)
+                    this_syn_id_list = context.syn_id_dict[syn_group]
+                    for syn_condition in context.syn_conditions:
+                        f[description][syn_group].create_group(syn_condition)
+                        for i in xrange(1, len(this_syn_id_list) + 1):
+                            num_syns_key = str(i)
+                            f[description][syn_group][syn_condition].create_group(num_syns_key)
+                            f[description][syn_group][syn_condition][num_syns_key].create_dataset('syn_ids', (i,))
+                            f[description][syn_group][syn_condition][num_syns_key].create_group('recs')
+                            for rec_name in context.sim.recs:
+                                f[description][syn_group][syn_condition][num_syns_key]['recs'].create_dataset(
+                                    rec_name, (trace_len,))
+                if model_key in context.temp_model_data:
+                    if description in context.temp_model_data[model_key]:
+                        for syn_group in context.temp_model_data[model_key][description]:
+                            for syn_condition in context.temp_model_data[model_key][description][syn_group]:
+                                this_dict = context.temp_model_data[model_key][description][syn_group][syn_condition]
+                                for num_syns_key in this_dict:
+                                    f[description][syn_group][syn_condition][num_syns_key]['syn_ids'][:] = \
+                                        this_dict[num_syns_key]['syn_ids']
+                                    for rec_name in this_dict[num_syns_key]['recs']:
+                                        f[description][syn_group][syn_condition][num_syns_key]['recs'][rec_name][:] = \
+                                            this_dict[num_syns_key]['recs'][rec_name]
+
+    del context.temp_model_data
+    context.temp_model_data = dict()
+
+    if context.interface.global_comm.rank == 1 and context.disp:
+        print 'optimize_DG_GC_synaptic_integration: export_compound_EPSP_traces took %.2f s' % \
+              (time.time() - start_time)
+
+
+def get_args_dynamic_unitary_EPSP_amp(x, features):
+    """
+    A nested map operation is required to compute unitary EPSP amplitude features. The arguments to be mapped include
+    a unique string key for each set of model parameters that will be used to identify temporarily stored simulation
+    output.
+    :param x: array
+    :param features: dict
     :return: list of list
     """
+    model_key = str(uuid.uuid1())
+
     syn_group_list = []
     syn_id_lists = []
     syn_condition_list = []
+    model_key_list = []
 
     for syn_group in context.syn_id_dict:
         this_syn_id_chunk = context.syn_id_dict[syn_group]
@@ -336,17 +467,19 @@ def get_args_static_unitary_EPSP_amp():
             syn_id_lists.extend(this_syn_id_lists)
             syn_group_list.extend([syn_group] * num_sims)
             syn_condition_list.extend([syn_condition] * num_sims)
+            model_key_list.extend([model_key] * num_sims)
 
-    return [syn_id_lists, syn_condition_list, syn_group_list]
+    return [syn_id_lists, syn_condition_list, syn_group_list, model_key_list]
 
 
-def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, export=False, plot=False):
+def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, model_key, export=False, plot=False):
     """
 
     :param x: array
     :param syn_ids: list of int
     :param syn_condition: str
     :param syn_group: str
+    :param model_key: str
     :param export: bool
     :param plot: bool
     :return: dict
@@ -417,7 +550,11 @@ def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, expo
             this_nc = syn_attrs.get_netcon(context.cell.gid, syn_id, syn_name)
             this_nc.pre().play(h.Vector())
 
-    result = {'syn_group': syn_group, 'syn_condition': syn_condition, 'unitary_EPSP_traces': traces_dict}
+    new_model_data = {model_key: {'unitary_EPSP_traces': {syn_group: {syn_condition: traces_dict}}}}
+
+    dict_merge(context.temp_model_data, new_model_data)
+    
+    result = {'model_key': model_key}
 
     title = 'unitary_EPSP_amp'
     description = 'condition: %s, group: %s, num_syns: %i, first syn_id: %i' % \
@@ -447,50 +584,33 @@ def filter_features_unitary_EPSP_amp(primitives, current_features, export=False)
     """
     features = {}
 
-    temp_traces_path = '%s/%s_temp_traces_%s.hdf5' % (context.output_dir,
-                                                     datetime.datetime.today().strftime('%Y%m%d_%H%M'),
-                                                     str(uuid.uuid1()))
-    features['temp_traces_path'] = temp_traces_path
-
-    unitary_EPSP_traces = dict()
+    model_key = None
     for this_feature_dict in primitives:
-        syn_group = this_feature_dict['syn_group']
-        syn_condition = this_feature_dict['syn_condition']
-        if syn_group not in unitary_EPSP_traces:
-            unitary_EPSP_traces[syn_group] = {}
-        if syn_condition not in unitary_EPSP_traces[syn_group]:
-            unitary_EPSP_traces[syn_group][syn_condition] = {}
-        unitary_EPSP_traces[syn_group][syn_condition].update(this_feature_dict['unitary_EPSP_traces'])
+        this_model_key = this_feature_dict['model_key']
+        if model_key is None:
+            model_key = this_model_key
+        if this_model_key != model_key:
+            raise KeyError('filter_features_unitary_EPSP_amp: mismatched model keys')
 
-    description = 'unitary_EPSP_traces'
-    with h5py.File(temp_traces_path, 'w') as f:
-        data_group = f.create_group(description)
-        for syn_group in unitary_EPSP_traces:
-            if syn_group not in data_group:
-                data_group.create_group(syn_group)
-            for syn_condition in unitary_EPSP_traces[syn_group]:
-                if syn_condition not in data_group[syn_group]:
-                    data_group[syn_group].create_group(syn_condition)
-                for syn_id_key in unitary_EPSP_traces[syn_group][syn_condition]:
-                    this_group = data_group[syn_group][syn_condition].create_group(syn_id_key)
-                    for rec_name in unitary_EPSP_traces[syn_group][syn_condition][syn_id_key]:
-                        this_group.create_dataset(
-                            rec_name, data=unitary_EPSP_traces[syn_group][syn_condition][syn_id_key][rec_name])
-        f.flush()
+    features['model_key'] = model_key
 
     return features
 
 
-def get_args_static_compound_EPSP_amp():
+def get_args_dynamic_compound_EPSP_amp(x, features):
     """
-    A nested map operation is required to compute compound EPSP amplitude features. The arguments to be mapped are the
-    same (static) for each set of parameters.
+    A nested map operation is required to compute compound EPSP amplitude features. The arguments to be mapped include
+    a unique string key for each set of model parameters that will be used to identify temporarily stored simulation
+    output.
+    :param x: array
+    :param features: dict
     :return: list of list
     """
     syn_group_list = []
     syn_id_lists = []
     syn_condition_list = []
-
+    model_key = features['model_key']
+    model_key_list = []
     for syn_group in context.clustered_branch_names:
         this_syn_id_group = context.syn_id_dict[syn_group]
         this_syn_id_lists = []
@@ -501,17 +621,19 @@ def get_args_static_compound_EPSP_amp():
             syn_id_lists.extend(this_syn_id_lists)
             syn_group_list.extend([syn_group] * num_sims)
             syn_condition_list.extend([syn_condition] * num_sims)
+            model_key_list.extend([model_key] * num_sims)
 
-    return [syn_id_lists, syn_condition_list, syn_group_list]
+    return [syn_id_lists, syn_condition_list, syn_group_list, model_key_list]
 
 
-def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, export=False, plot=False):
+def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, model_key, export=False, plot=False):
     """
 
     :param x: array
     :param syn_ids: list of int
     :param syn_condition: str
     :param syn_group: str
+    :param model_key: str
     :param export: bool
     :param plot: bool
     :return: dict
@@ -575,8 +697,16 @@ def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, exp
             this_nc = syn_attrs.get_netcon(context.cell.gid, syn_id, syn_name)
             this_nc.pre().play(h.Vector())
 
-    result = {'syn_group': syn_group, 'syn_condition': syn_condition, 'syn_ids': syn_ids,
-              'compound_EPSP_traces': traces_dict}
+    num_syns_key = str(len(syn_ids))
+    new_model_data = {model_key:
+                          {'compound_EPSP_traces':
+                               {syn_group:
+                                    {syn_condition:
+                                         {num_syns_key: {'syn_ids': np.array(syn_ids), 'recs': traces_dict}}}}}}
+
+    dict_merge(context.temp_model_data, new_model_data)
+
+    result = {'model_key': model_key}
 
     title = 'compound_EPSP_amp'
     description = 'condition: %s, group: %s, num_syns: %i, first syn_id: %i' % \
@@ -605,43 +735,13 @@ def filter_features_compound_EPSP_amp(primitives, current_features, export=False
     :return: dict
     """
     features = {}
-    temp_traces_path = current_features['temp_traces_path']
-    features['temp_traces_path'] = temp_traces_path
-
-    compound_EPSP_traces = dict()
-    syn_ids_dict = dict()
+    model_key = current_features['model_key']
     for this_feature_dict in primitives:
-        syn_group = this_feature_dict['syn_group']
-        syn_condition = this_feature_dict['syn_condition']
-        syn_ids = this_feature_dict['syn_ids']
-        num_syns_key = str(len(syn_ids))
-        if syn_group not in compound_EPSP_traces:
-            compound_EPSP_traces[syn_group] = {}
-            syn_ids_dict[syn_group] = {}
-        if syn_condition not in compound_EPSP_traces[syn_group]:
-            compound_EPSP_traces[syn_group][syn_condition] = {}
-            syn_ids_dict[syn_group][syn_condition] = {}
-        compound_EPSP_traces[syn_group][syn_condition][num_syns_key] = dict(this_feature_dict['compound_EPSP_traces'])
-        syn_ids_dict[syn_group][syn_condition][num_syns_key] = np.array(syn_ids)
+        this_model_key = this_feature_dict['model_key']
+        if this_model_key != model_key:
+            raise KeyError('filter_features_compound_EPSP_amp: mismatched model keys')
 
-    description = 'compound_EPSP_traces'
-    with h5py.File(temp_traces_path, 'a') as f:
-        data_group = f.create_group(description)
-        for syn_group in compound_EPSP_traces:
-            if syn_group not in data_group:
-                data_group.create_group(syn_group)
-            for syn_condition in compound_EPSP_traces[syn_group]:
-                if syn_condition not in data_group[syn_group]:
-                    data_group[syn_group].create_group(syn_condition)
-                for num_syns_key in compound_EPSP_traces[syn_group][syn_condition]:
-                    data_group[syn_group][syn_condition].create_group(num_syns_key)
-                    data_group[syn_group][syn_condition][num_syns_key].create_dataset(
-                        'syn_ids', data=syn_ids_dict[syn_group][syn_condition][num_syns_key])
-                    this_group = data_group[syn_group][syn_condition][num_syns_key].create_group('recs')
-                    for rec_name in compound_EPSP_traces[syn_group][syn_condition][num_syns_key]:
-                        this_group.create_dataset(
-                            rec_name, data=compound_EPSP_traces[syn_group][syn_condition][num_syns_key][rec_name])
-        f.flush()
+    features['model_key'] = model_key
 
     return features
 
@@ -677,12 +777,13 @@ def get_objectives_synaptic_integration(features, export=False):
     :return: tuple of dict
     """
     objectives = dict()
-    temp_traces_path = features['temp_traces_path']
+    model_key = features['model_key']
+    model_data_path = '%s/temp_model_data_%s.hdf5' % (context.output_dir, model_key)
 
     unitary_EPSP_traces_dict = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
     compound_EPSP_traces_dict = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
     syn_ids_dict = defaultdict(lambda: defaultdict(dict))
-    with h5py.File(temp_traces_path, 'r') as f:
+    with h5py.File(model_data_path, 'r') as f:
         description = 'unitary_EPSP_traces'
         for syn_group in f[description]:
             for syn_condition in f[description][syn_group]:
@@ -830,7 +931,7 @@ def get_objectives_synaptic_integration(features, export=False):
                     this_group.create_dataset(syn_condition, compression='gzip',
                                               data=soma_compound_EPSP_amp[syn_group][syn_condition])
 
-    os.remove(temp_traces_path)
+    os.remove(model_data_path)
 
     return features, objectives
 
