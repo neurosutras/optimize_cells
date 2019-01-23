@@ -2,6 +2,7 @@ from mpi4py import MPI
 from neuron import h
 import numpy as np
 import random
+import scipy.signal as signal
 
 # for h.lambda_f
 h.load_file('stdlib.hoc')
@@ -143,7 +144,7 @@ class Network(object):
             self.nc.delay = 0
             self.nc.weight[0] = 2
             self.ncdict[('stim', i)] = self.nc
-            print self.ncdict
+            # print self.ncdict
 
     def spike_record(self):
         self.spike_tvec = {}
@@ -188,7 +189,7 @@ class Network(object):
             self.pydicts[name][key] = value.to_python()
             # Alternatively, could use nc.record(tvec)
 
-    def compute_isi(self, vecdict):
+    def compute_isi(self, vecdict):  #vecdict is an event dict
         self.ratedict = {}
         self.peakdict = {}
         for key, vec in vecdict.iteritems():
@@ -197,29 +198,35 @@ class Network(object):
                 isivec.deriv(vec, 1, 1)
                 rate = 1. / (isivec.mean() / 1000)
                 self.ratedict[key] = rate
-                self.peakdict[key] = 1. / (isivec.min() / 1000)
+                if isivec.min() > 0:
+                    self.peakdict[key] = 1. / (isivec.min() / 1000)
 
-    def summation(self, vecdict):
-        self.osc_E = h.Vector(self.tstop + 2)
-        self.osc_I = h.Vector(self.tstop + 2)
+    def summation(self, vecdict, dt=.025):
+        size = self.tstop * (1 / dt) + 1
+        self.osc_E = h.Vector(size)
+        self.osc_I = h.Vector(size)
         for key, vec in vecdict.iteritems():
             cell_type = self.get_cell_type(key)
-            binned = vec.histogram(0, self.tstop, 1)
+            # binned = vec.histogram(0, self.tstop, 1)
             if cell_type == 'RS':  # E
-                self.osc_E.add(binned)
-            elif cell_type == 'FS':  #F
-                self.osc_I.add(binned)
+                self.osc_E.add(vec)
+            elif cell_type == 'FS':  # F
+                self.osc_I.add(vec)
 
     def compute_peak_osc_freq(self, osc):
         sparse_t = []
-        peak_sum = osc.max()
-        for i, v in enumerate(osc):
+        sub_osc = osc[int(len(osc) / 6):]
+        peak_sum = sub_osc.max()
+        """for i, v in enumerate(sub_osc):
             if v >= peak_sum * .8:
                 sparse_t.append(i)
+        print "sparse", sparse_t"""
+        peak_loc = signal.find_peaks_cwt(sub_osc, np.arange(1, self.tstop / 10))
+        print peak_loc
         tmp = h.Vector()
-        if len(sparse_t) > 1:
-            tmp.deriv(h.Vector(sparse_t), 1, 1)
-            peak = 1 / (tmp.min() / 1000)
+        if len(sub_osc) > 1:
+            tmp.deriv(h.Vector(peak_loc), 1, 1)
+            peak = 1 / (tmp.min() / 1000.)
         else:
             peak = -1
         return peak
@@ -230,11 +237,11 @@ class Network(object):
             for pair, nc in self.ncdict.iteritems():
                 nc.weight[0] = 0.
                 self.ncdict.pop(pair)
-                print pair
+                #print pair
         self.connectcells(self.ncell)
 
 
-def run_network(network, pc, comm, tstop=600):
+def run_network(network, pc, comm, tstop, dt=.025):
     pc.set_maxstep(10)
     h.stdinit()
     pc.psolve(tstop)
@@ -250,18 +257,22 @@ def run_network(network, pc, comm, tstop=600):
     # all_dicts = pc.py_alltoall([network.voltage_recvec for i in range(nhost)])
     network.vecdict_to_pydict(network.voltage_recvec, 'rec')
     test = pc.py_alltoall([network.pydicts for i in range(nhost)])
+    tmp = pc.py_alltoall([network.voltage_recvec for i in range(nhost)])
     if int(pc.id()) == 0:
-        network.summation(all_events)
-        osc_E = network.compute_peak_osc_freq(network.osc_E)
-        osc_I = network.compute_peak_osc_freq(network.osc_I)
         rec = {key: val for dict in test for key, val in dict['rec'].iteritems()}
-        
+        tmp2 = {}
+        for elem in tmp:
+            for key, val in elem.iteritems():
+                tmp2[key] = val
+        network.summation(tmp2)
+        """osc_E = network.compute_peak_osc_freq(network.osc_E)
+        osc_I = network.compute_peak_osc_freq(network.osc_I)"""
+
         peak_voltage = float("-inf") #print list(rec.keys())
         if network.ncell in list(rec.keys()):
             for i, x in enumerate(rec[network.ncell]):
                 if i % 500 == 0: 
                     peak_voltage = max(peak_voltage, x)
-            #print li
 
         E_mean = 0
         I_mean = 0
@@ -270,7 +281,7 @@ def run_network(network, pc, comm, tstop=600):
         uncounted = 0
 
         for i in range(network.ncell, network.ncell * 2):
-            if i not in processed_rd: 
+            if i not in processed_p: 
                 uncounted += 1
                 continue
             E_mean += processed_rd[i]
@@ -280,7 +291,7 @@ def run_network(network, pc, comm, tstop=600):
             E_max = E_max / float(network.ncell - uncounted)
         uncounted = 0
         for i in range(network.ncell * 2, network.ncell * 3):
-            if i not in processed_rd: 
+            if i not in processed_p: 
                 uncounted = 0 
                 continue
             I_mean += processed_rd[i] 
@@ -290,9 +301,42 @@ def run_network(network, pc, comm, tstop=600):
             I_max = I_max / float(network.ncell - uncounted)
 
         # t = {key: value for dict in all_dicts for key, value in dict['t'].iteritems()}
+
+        import matplotlib.pyplot as plt
+        down_dt = .5
+        sz = int(network.tstop * (1 / dt)) + 1
+        down_t = np.arange(0., tstop, .5)
+        x_vec = [x * dt for x in range(sz)]
+        down_sampled_E = np.interp(down_t, x_vec, network.osc_E)
+        down_sampled_I = np.interp(down_t, x_vec, network.osc_I)
+        # 2000 ms Hamming window, ~3 Hz low-pass for ramp, ~5 - 10 Hz bandpass for theta
+        window_len = min(int(2000. / down_dt), len(down_t) - 1)
+        theta_filter = signal.firwin(window_len, [5., 10.], nyq=1000. / 2. / down_dt, pass_zero=False)
+        theta_E = signal.filtfilt(theta_filter, [1.], down_sampled_E, padtype='even', padlen=window_len)
+        theta_I = signal.filtfilt(theta_filter, [1.], down_sampled_I, padtype='even', padlen=window_len)
+        plt.plot([i for i in range(len(theta_E))], theta_E)
+        plt.title('theta')
+        plt.show()
+
+        window_len = min(int(100. / down_dt), len(down_t) - 1)
+        gamma_filter = signal.firwin(window_len, [30., 100.], nyq=1000. / 2. / down_dt, pass_zero=False)
+        gamma_E = signal.filtfilt(gamma_filter, [1.], down_sampled_E, padtype='even', padlen=window_len)
+        gamma_I = signal.filtfilt(gamma_filter, [1.], down_sampled_I, padtype='even', padlen=window_len)
+        plt.plot([i for i in range(len(gamma_E))], gamma_E)
+        plt.title('gamma')
+        plt.show()
+
+        peak_theta_osc_E = network.compute_peak_osc_freq(theta_E)
+        peak_theta_osc_I = network.compute_peak_osc_freq(theta_I)
+        peak_gamma_osc_E = network.compute_peak_osc_freq(gamma_E)
+        peak_gamma_osc_I = network.compute_peak_osc_freq(gamma_I)
+
+
         # rec = {key: value for dict in all_dicts for key, value in dict['rec'].iteritems()}
         return {'E_mean_rate': E_mean, 'E_peak_rate': E_max, 'I_mean_rate': I_mean, "I_peak_rate": I_max, \
-                'peak': peak_voltage, 'peak_osc_freq_I': osc_I, 'peak_osc_freq_E': osc_E}
+                'peak': peak_voltage, 'peak_theta_osc_E': peak_theta_osc_E, 'peak_theta_osc_I': \
+                    peak_theta_osc_I, 'peak_gamma_osc_E': peak_gamma_osc_E, 'peak_gamma_osc_I': peak_gamma_osc_I, \
+                "event": all_events, 'osc_E': network.osc_E}
 
 
 # ==================== cell class                                                                                                                                                                                                                                                                                                                                                        # single cell
@@ -345,9 +389,17 @@ class FFCell(object):
         #tstop in ms and mean_rate in s
         n_spikes = tstop * mean_freq / 1000.
         length = int(tstop / n_spikes)
-        spikes = [x * float(tstop) / length for x in range(length)]
+        sample = np.random.poisson(float(tstop) / length, length * 10)
+        spikes = []
+        for i, t in enumerate(sample):
+            if i == 0:
+                spikes.append(float(t))
+            else:
+                if spikes[i - 1] + t > tstop: break
+                spikes.append(spikes[i - 1] + float(t))
+        #spikes = [x * float(tstop) / length for x in range(length)]
         vec = h.Vector(spikes)
-        if random.random() <= frac_active:  # vec = h.Vector([5, 200])
+        if random.random() <= frac_active:  #vec = h.Vector([5, 200])
             self.pp.play(vec)
 
     def connect2target(self, target):
