@@ -37,7 +37,7 @@ def main(config_file_path, export, output_dir, export_file_path, label, interact
     comm = MPI.COMM_WORLD
 
     from nested.parallel import ParallelContextInterface
-    context.interface = ParallelContextInterface()
+    context.interface = ParallelContextInterface(procs_per_worker=comm.size)
     context.interface.apply(config_optimize_interactive, __file__, config_file_path=config_file_path,
                             output_dir=output_dir, export=export, export_file_path=export_file_path, label=label,
                             disp=verbose > 0, verbose=verbose)
@@ -48,8 +48,9 @@ def main(config_file_path, export, output_dir, export_file_path, label, interact
     primitives = context.interface.map(compute_features, *sequences)
     features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
     features, objectives = get_objectives(features)
-    plt.plot([i for i in range(len(context.osc.E))], context.osc_E)
-    plt.show()
+
+    #plt.plot([i for i in range(len(context.osc.E))], context.osc_E)
+    #plt.show()
     print 'params:'
     pprint.pprint(context.x0_dict)
     print 'features:'
