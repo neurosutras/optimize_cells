@@ -34,14 +34,13 @@ update_context:
   - update_syn_mechanisms
 get_features_stages:
 - source: optimize_DG_GC_synaptic_integration
-  get_args_dynamic: get_args_dynamic_unitary_EPSP_amp
+  get_args_static: get_args_static_unitary_EPSP_amp
   compute_features: compute_features_unitary_EPSP_amp
   filter_features: filter_features_unitary_EPSP_amp
 - source: optimize_DG_GC_synaptic_integration
-  get_args_dynamic: get_args_dynamic_compound_EPSP_amp
+  get_args_static: get_args_static_compound_EPSP_amp
   compute_features: compute_features_compound_EPSP_amp
   filter_features: filter_features_compound_EPSP_amp
-  synchronize: sort_temp_data_files
 get_objectives:
   optimize_DG_GC_synaptic_integration: get_objectives_synaptic_integration
 kwargs:
