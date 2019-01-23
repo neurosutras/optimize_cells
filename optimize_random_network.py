@@ -4,7 +4,6 @@ from random_network import *
 import collections
 import click
 import random
-import matplotlib.pyplot as plt
 
 script_filename='optimize_random_network.py'
 
@@ -45,8 +44,6 @@ def main(config_file_path, export, output_dir, export_file_path, label, interact
     primitives = context.interface.map(compute_features, *sequences)
     features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
     features, objectives = get_objectives(features)
-    plt.plot([i for i in range(len(context.osc.E))], context.osc_E)
-    plt.show()
     print 'params:'
     pprint.pprint(context.x0_dict)
     print 'features:'
@@ -54,7 +51,6 @@ def main(config_file_path, export, output_dir, export_file_path, label, interact
     print 'objectives:'
     pprint.pprint(objectives)
     context.update(locals())
-
     if not interactive:
         context.interface.stop()
 
@@ -72,9 +68,9 @@ def init_context():
     """
 
     """
-    ncell = 5
+    ncell = 3
     delay = 1
-    tstop = 3000
+    tstop = 600
     context.update(locals())
 
 
@@ -110,32 +106,20 @@ def compute_features(x, export=False):
                               context.e2i_weight, i2i_weight=context.i2i_weight, i2e_weight=context.i2e_weight, \
                               ff_meanfreq=context.ff_meanfreq, tstop=context.tstop,
                               ff_frac_active=context.ff_frac_active)
-    results = run_network(context.network, context.pc, context.comm, context.tstop)
+    results = run_network(context.network, context.pc, context.comm)
     if int(context.pc.id()) == 0:
         if results is None:
             return dict()
         context.peak_voltage = results['peak']
-        print context.peak_voltage
-        """context.event = results['event']
-        li = []
-        for i in range(context.ncell * 3):
-            li.append([j for j in context.event[i]])
-        plt.eventplot(li)
-        plt.show()"""
-        osc = results['osc_E']
-        plt.plot([i for i in range(len(osc))], osc)
-        plt.title('summed voltage for E pop')
-        plt.show()
         results.pop('peak', None)
-        results.pop('test', None)
         return results
 
 
 def get_objectives(features):
     if int(context.pc.id()) == 0:
         objectives = {}
-        for feature_name in ['E_peak_rate', 'I_peak_rate', 'E_mean_rate', 'I_mean_rate', 'peak_theta_osc_E', \
-                             'peak_theta_osc_I']:
+        for feature_name in ['E_peak_rate', 'I_peak_rate', 'E_mean_rate', 'I_mean_rate', 'peak_osc_freq_E', \
+                             'peak_osc_freq_I']:
             objective_name = feature_name
             if features[feature_name] == 0.:
                 objectives[objective_name] = (context.peak_voltage - 45.) ** 2

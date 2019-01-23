@@ -44,7 +44,7 @@ def main(config_file_path, export, output_dir, export_file_path, label, interact
     from neuron import h
     comm = MPI.COMM_WORLD
     context.interface = ParallelContextInterface(procs_per_worker=comm.size)
-    config_interactive(context, __file__, config_file_path=config_file_path, output_dir=output_dir,
+    config_optimize_interactive(__file__, config_file_path=config_file_path, output_dir=output_dir,
                        export_file_path=export_file_path, label=label, verbose=verbose)
     context.interface.start()
 
@@ -125,7 +125,13 @@ def compute_features_simple_ring(x, export=False):
         return processed_result
 
 
-def get_objectives_simple_ring(features):
+def get_objectives_simple_ring(features, export=False):
+    """
+
+    :param features: dict
+    :param export: bool
+    :return: tuple of dict
+    """
     if int(context.pc.id()) == 0:
         objectives = {}
         for feature_name in ['n2.EPSP', 'n2.IPSP']:

@@ -34,11 +34,11 @@ update_context:
   - update_syn_mechanisms
 get_features_stages:
 - source: optimize_DG_GC_synaptic_integration
-  get_args_dynamic: get_args_dynamic_unitary_EPSP_amp
+  get_args_static: get_args_static_unitary_EPSP_amp
   compute_features: compute_features_unitary_EPSP_amp
   filter_features: filter_features_unitary_EPSP_amp
 - source: optimize_DG_GC_synaptic_integration
-  get_args_dynamic: get_args_dynamic_compound_EPSP_amp
+  get_args_static: get_args_static_compound_EPSP_amp
   compute_features: compute_features_compound_EPSP_amp
   filter_features: filter_features_compound_EPSP_amp
 get_objectives:
@@ -91,16 +91,10 @@ target_val:
   initial_gain_control: 1.
   initial_gain_AP5: 1.
 x0:
-#  AMPA.g0: 0.000531417018
-#  AMPA.slope: 6.43144631e-06
-#  AMPA.tau: 51.8492464
-#  NMDA.Kd: 6.9342349
-#  NMDA.gamma: 0.107891902
-#  NMDA.g_unit: 0.0209192397
-  NMDA.gamma: 0.05
-  NMDA.Kd: 6.471973E+00
-  NMDA.g_unit: 1.0545E-04
-  AMPA.slope: 5.093128E-06
-  AMPA.g0: 2.082046E-04
-  AMPA.tau: 5.970824E+01
-  NMDA.vshift: -10.
+  AMPA.tau: 3.589608E+02
+  AMPA.slope: 3.548587E-06
+  AMPA.g0: 1.423032E-04
+  NMDA.g_unit: 2.172663E-03
+  NMDA.gamma: 9.233136E-02
+  NMDA.Kd: 6.055083E+00
+  NMDA.vshift: -3.167129E+00

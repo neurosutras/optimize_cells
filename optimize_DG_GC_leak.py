@@ -39,7 +39,7 @@ def main(config_file_path, output_dir, export, export_file_path, label, verbose,
     # requires a global variable context: :class:'Context'
     context.update(locals())
     disp = verbose > 0
-    config_interactive(context, __file__, config_file_path=config_file_path, output_dir=output_dir, export=export,
+    config_optimize_interactive(__file__, config_file_path=config_file_path, output_dir=output_dir, export=export,
                        export_file_path=export_file_path, label=label, disp=disp)
     if run_tests:
         unit_tests_leak()
@@ -55,7 +55,7 @@ def unit_tests_leak():
                 [[context.plot] * group_size]
     primitives = map(compute_features_leak, *sequences)
     features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
-    features, objectives = get_objectives_leak(features)
+    features, objectives = get_objectives_leak(features, context.export)
     print 'params:'
     pprint.pprint(context.x0_dict)
     print 'features:'
@@ -225,10 +225,11 @@ def compute_features_leak(x, section, export=False, plot=False):
     return result
 
 
-def get_objectives_leak(features):
+def get_objectives_leak(features, export=False):
     """
 
     :param features: dict
+    :param export: bool
     :return: tuple of dict
     """
     objectives = {}

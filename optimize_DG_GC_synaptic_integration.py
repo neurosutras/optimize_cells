@@ -42,18 +42,19 @@ def main(config_file_path, output_dir, export, export_file_path, label, verbose,
     # requires a global variable context: :class:'Context'
     context.update(locals())
     disp = verbose > 0
-    config_interactive(context, __file__, config_file_path=config_file_path, output_dir=output_dir, export=export,
-                       export_file_path=export_file_path, label=label, disp=disp)
 
-    if debug:
-        start_time = time.time()
-        config_sim_env(context)
-        update_source_contexts(context.x0_array, context)
-        print 'optimize_DG_GC_synaptic_integration: with cache_queries: %s, updating synaptic mechanisms took %.2f ' \
-              's' % (context.env.cache_queries, time.time() - start_time)
+    from nested.parallel import ParallelContextInterface
+    context.interface = ParallelContextInterface()
+    context.interface.apply(config_optimize_interactive, __file__, config_file_path=config_file_path,
+                            output_dir=output_dir, export=export, export_file_path=export_file_path, label=label,
+                            disp=disp, verbose=verbose, debug=debug)
+    context.interface.start(disp=True)
+    context.interface.ensure_controller()
 
     if run_tests:
         unit_tests_synaptic_integration()
+
+    context.interface.stop()
 
 
 def unit_tests_synaptic_integration():
@@ -64,26 +65,25 @@ def unit_tests_synaptic_integration():
     objectives = dict()
 
     # Stage 0:
-    args = get_args_dynamic_unitary_EPSP_amp(context.x0_array, features)
+    args = get_args_static_unitary_EPSP_amp()
     group_size = len(args[0])
     sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
                 [[context.plot] * group_size]
-    primitives = map(compute_features_unitary_EPSP_amp, *sequences)
+    primitives = context.interface.map(compute_features_unitary_EPSP_amp, *sequences)
     this_features = filter_features_unitary_EPSP_amp(primitives, features, context.export)
     features.update(this_features)
 
     # Stage 1:
-    args = get_args_dynamic_compound_EPSP_amp(context.x0_array, features)
+    args = get_args_static_compound_EPSP_amp()
     group_size = len(args[0])
     sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
                 [[context.plot] * group_size]
-    primitives = map(compute_features_compound_EPSP_amp, *sequences)
+    primitives = context.interface.map(compute_features_compound_EPSP_amp, *sequences)
     this_features = filter_features_compound_EPSP_amp(primitives, features, context.export)
     features.update(this_features)
-    
-    features, objectives = get_objectives_synaptic_integration(features)
 
-    shutdown_worker()
+    features, objectives = get_objectives_synaptic_integration(features, context.export)
+
     context.update(locals())
     print 'params:'
     pprint.pprint(context.x0_dict)
@@ -103,22 +103,6 @@ def config_worker():
         context.debug = False
     if not context_has_sim_env(context):
         build_sim_env(context, **context.kwargs)
-
-
-def reset_worker():
-    """
-
-    """
-    with h5py.File(context.temp_traces_path, 'w') as f:
-        f.flush()
-
-
-def shutdown_worker():
-    """
-
-    """
-    if os.path.isfile(context.temp_traces_path):
-        os.remove(context.temp_traces_path)
 
 
 def context_has_sim_env(context):
@@ -185,7 +169,7 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
     init_context()
     context.env = Env(comm=context.comm, verbose=verbose > 1, **kwargs)
     configure_hoc_env(context.env)
-    cell = get_biophys_cell(context.env, gid=context.gid, pop_name=context.cell_type)
+    cell = get_biophys_cell(context.env, gid=context.gid, pop_name=context.cell_type, set_edge_delays=False)
     init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path,
                     correct_cm=context.correct_for_spines, correct_g_pas=context.correct_for_spines, env=context.env,
                     verbose=verbose > 1)
@@ -194,9 +178,6 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
     context.spike_output_vec = h.Vector()
     cell.spike_detector.record(context.spike_output_vec)
     context.cell = cell
-    context.temp_traces_path = '%s/%s_temp_traces_%s.hdf5' % \
-                               (context.output_dir, datetime.datetime.today().strftime('%Y%m%d_%H%M'),
-                                str(uuid.uuid1()))
     config_sim_env(context)
 
 
@@ -303,8 +284,8 @@ def config_sim_env(context):
 def update_syn_mechanisms(x, context=None):
     """
 
-    :param x:
-    :param context:
+    :param x: array
+    :param context: :class:'Context'
     """
     if context is None:
         raise RuntimeError('update_syn_mechanisms: missing required Context object')
@@ -312,43 +293,36 @@ def update_syn_mechanisms(x, context=None):
     cell = context.cell
     env = context.env
     modify_syn_param(cell, env, 'apical', context.AMPA_type, param_name='g_unit', value=x_dict['AMPA.g0'],
-                          filters={'syn_types': ['excitatory']}, origin='soma', slope=x_dict['AMPA.slope'],
-                          tau=x_dict['AMPA.tau'], update_targets=False)
+                     filters={'syn_types': ['excitatory']}, origin='soma', slope=x_dict['AMPA.slope'],
+                     tau=x_dict['AMPA.tau'], update_targets=False)
     modify_syn_param(cell, env, 'apical', context.AMPA_type, param_name='g_unit',
-                          filters={'syn_types': ['excitatory']}, origin='parent',
-                          origin_filters={'syn_types': ['excitatory']},
-                          custom={'func': 'custom_filter_if_terminal'}, update_targets=False, append=True)
+                     filters={'syn_types': ['excitatory']}, origin='parent',
+                     origin_filters={'syn_types': ['excitatory']},
+                     custom={'func': 'custom_filter_if_terminal'}, update_targets=False, append=True)
     modify_syn_param(cell, env, 'apical', context.AMPA_type, param_name='g_unit',
-                          filters={'syn_types': ['excitatory'], 'layers': ['OML']}, origin='apical',
-                          origin_filters={'syn_types': ['excitatory'], 'layers': ['MML']}, update_targets=False,
-                          append=True)
+                     filters={'syn_types': ['excitatory'], 'layers': ['OML']}, origin='apical',
+                     origin_filters={'syn_types': ['excitatory'], 'layers': ['MML']}, update_targets=False, append=True)
     modify_syn_param(cell, env, 'apical', context.NMDA_type, param_name='Kd', value=x_dict['NMDA.Kd'],
-                          update_targets=False)
+                     update_targets=False)
     modify_syn_param(cell, env, 'apical', context.NMDA_type, param_name='gamma', value=x_dict['NMDA.gamma'],
-                          update_targets=False)
+                     update_targets=False)
     modify_syn_param(cell, env, 'apical', context.NMDA_type, param_name='g_unit', value=x_dict['NMDA.g_unit'],
-                          update_targets=False)
+                     update_targets=False)
     modify_syn_param(cell, env, 'apical', context.NMDA_type, param_name='vshift', value=x_dict['NMDA.vshift'],
                      update_targets=False)
     config_biophys_cell_syns(env=env, gid=cell.gid, postsyn_name=cell.pop_name, syn_ids=context.syn_id_list,
                              verbose=context.verbose > 1, throw_error=True)
 
 
-def get_args_dynamic_unitary_EPSP_amp(x, features):
+def get_args_static_unitary_EPSP_amp():
     """
-    A nested map operation is required to compute unitary EPSP amplitude features. The arguments to be mapped include
-    a unique string key for each set of model parameters that will be used to identify temporarily stored simulation
-    output.
-    :param x: array
-    :param features: dict
+    A nested map operation is required to compute unitary EPSP amplitude features. The arguments to be mapped are the
+    same (static) for each set of parameters.
     :return: list of list
     """
-    model_key = str(uuid.uuid1())
-
     syn_group_list = []
     syn_id_lists = []
     syn_condition_list = []
-    model_key_list = []
 
     for syn_group in context.syn_id_dict:
         this_syn_id_chunk = context.syn_id_dict[syn_group]
@@ -362,19 +336,17 @@ def get_args_dynamic_unitary_EPSP_amp(x, features):
             syn_id_lists.extend(this_syn_id_lists)
             syn_group_list.extend([syn_group] * num_sims)
             syn_condition_list.extend([syn_condition] * num_sims)
-            model_key_list.extend([model_key] * num_sims)
 
-    return [syn_id_lists, syn_condition_list, syn_group_list, model_key_list]
+    return [syn_id_lists, syn_condition_list, syn_group_list]
 
 
-def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, model_key, export=False, plot=False):
+def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, export=False, plot=False):
     """
 
     :param x: array
     :param syn_ids: list of int
     :param syn_condition: str
     :param syn_group: str
-    :param model_key: str
     :param export: bool
     :param plot: bool
     :return: dict
@@ -425,50 +397,27 @@ def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, mode
 
     sim.run(context.v_active)
 
-    soma_EPSP_amp_dict = {}
     traces_dict = defaultdict(dict)
     for i, syn_id in enumerate(syn_ids):
         start = int((equilibrate + i * ISI) / dt)
         end = start + int(ISI / dt)
         trace_start = start - int(trace_baseline / dt)
         baseline_start, baseline_end = int(start - 3. / dt), int(start - 1. / dt)
+        syn_id_key = str(syn_id)
         for rec_name in context.sim.recs:
             this_vm = np.array(context.sim.recs[rec_name]['vec'])
             baseline = np.mean(this_vm[baseline_start:baseline_end])
             this_vm = this_vm[trace_start:end] - baseline
-            peak = np.max(this_vm)
             peak_index = np.argmax(this_vm)
             zero_index = np.where(this_vm[peak_index:] <= 0.)[0]
             if np.any(zero_index):
                 this_vm[peak_index+zero_index[0]:] = 0.
-            if rec_name == 'soma':
-                soma_EPSP_amp_dict[syn_id] = peak
-            traces_dict[syn_id][rec_name] = np.array(this_vm)
+            traces_dict[syn_id_key][rec_name] = np.array(this_vm)
         for syn_name in context.syn_mech_names:
             this_nc = syn_attrs.get_netcon(context.cell.gid, syn_id, syn_name)
             this_nc.pre().play(h.Vector())
 
-    description = 'unitary_EPSP_traces'
-    with h5py.File(context.temp_traces_path, 'a') as f:
-        if description not in f:
-            f.create_group(description)
-            f[description].attrs['enumerated'] = False
-        group = f[description]
-        if model_key not in group:
-            group.create_group(model_key)
-        data_group = group[model_key]
-        if syn_group not in data_group:
-            data_group.create_group(syn_group)
-        if syn_condition not in data_group[syn_group]:
-            data_group[syn_group].create_group(syn_condition)
-        for syn_id in traces_dict:
-            syn_key = str(syn_id)
-            this_group = data_group[syn_group][syn_condition].create_group(syn_key)
-            for rec_name in traces_dict[syn_id]:
-                this_group.create_dataset(rec_name, data=traces_dict[syn_id][rec_name])
-
-    result = {'syn_group': syn_group, 'syn_condition': syn_condition, 'soma_unitary_EPSP_amp': soma_EPSP_amp_dict,
-              'temp_traces_path': context.temp_traces_path, 'model_key': model_key}
+    result = {'syn_group': syn_group, 'syn_condition': syn_condition, 'unitary_EPSP_traces': traces_dict}
 
     title = 'unitary_EPSP_amp'
     description = 'condition: %s, group: %s, num_syns: %i, first syn_id: %i' % \
@@ -497,60 +446,51 @@ def filter_features_unitary_EPSP_amp(primitives, current_features, export=False)
     :return: dict
     """
     features = {}
-    soma_unitary_EPSP_amp_dict = defaultdict(lambda: defaultdict(dict))
-    temp_traces_path_list = []
-    model_key = None
+
+    temp_traces_path = '%s/%s_temp_traces_%s.hdf5' % (context.output_dir,
+                                                     datetime.datetime.today().strftime('%Y%m%d_%H%M'),
+                                                     str(uuid.uuid1()))
+    features['temp_traces_path'] = temp_traces_path
+
+    unitary_EPSP_traces = dict()
     for this_feature_dict in primitives:
-        temp_traces_path_list.append(this_feature_dict['temp_traces_path'])
-        this_model_key = this_feature_dict['model_key']
-        if model_key is None:
-            model_key = this_model_key
-        if this_model_key != model_key:
-            raise KeyError('filter_features_unitary_EPSP_amp: mismatched model keys')
         syn_group = this_feature_dict['syn_group']
         syn_condition = this_feature_dict['syn_condition']
-        soma_unitary_EPSP_amp_dict[syn_group][syn_condition].update(this_feature_dict['soma_unitary_EPSP_amp'])
-    temp_traces_path_set = set(temp_traces_path_list)
+        if syn_group not in unitary_EPSP_traces:
+            unitary_EPSP_traces[syn_group] = {}
+        if syn_condition not in unitary_EPSP_traces[syn_group]:
+            unitary_EPSP_traces[syn_group][syn_condition] = {}
+        unitary_EPSP_traces[syn_group][syn_condition].update(this_feature_dict['unitary_EPSP_traces'])
 
-    control_EPSP_amp_list = []
-    NMDA_contribution_list = []
-    for syn_id in context.syn_id_dict['random']:
-        control_amp = np.array(soma_unitary_EPSP_amp_dict['random']['control'][syn_id])
-        control_EPSP_amp_list.append(control_amp)
-        AP5_amp = np.array(soma_unitary_EPSP_amp_dict['random']['AP5'][syn_id])
-        NMDA_contribution_list.append((control_amp - AP5_amp) / control_amp)
-
-    mean_unitary_EPSP_amp_residuals = \
-        np.mean(((np.array(control_EPSP_amp_list) - context.target_val['mean_unitary_EPSP_amp']) /
-                 context.target_range['mean_unitary_EPSP_amp']) ** 2.)
-    mean_NMDA_contribution_residuals = \
-        np.mean(((np.array(NMDA_contribution_list) - context.target_val['mean_NMDA_contribution']) /
-                 context.target_range['mean_NMDA_contribution']) ** 2.)
-
-    features['mean_unitary_EPSP_amp'] = np.mean(control_EPSP_amp_list)
-    features['mean_NMDA_contribution'] = np.mean(NMDA_contribution_list)
-    features['mean_unitary_EPSP_amp_residuals'] = mean_unitary_EPSP_amp_residuals
-    features['mean_NMDA_contribution_residuals'] = mean_NMDA_contribution_residuals
-    features['model_key'] = model_key
-    features['unitary_EPSP_temp_traces_path_set'] = temp_traces_path_set
+    description = 'unitary_EPSP_traces'
+    with h5py.File(temp_traces_path, 'w') as f:
+        data_group = f.create_group(description)
+        for syn_group in unitary_EPSP_traces:
+            if syn_group not in data_group:
+                data_group.create_group(syn_group)
+            for syn_condition in unitary_EPSP_traces[syn_group]:
+                if syn_condition not in data_group[syn_group]:
+                    data_group[syn_group].create_group(syn_condition)
+                for syn_id_key in unitary_EPSP_traces[syn_group][syn_condition]:
+                    this_group = data_group[syn_group][syn_condition].create_group(syn_id_key)
+                    for rec_name in unitary_EPSP_traces[syn_group][syn_condition][syn_id_key]:
+                        this_group.create_dataset(
+                            rec_name, data=unitary_EPSP_traces[syn_group][syn_condition][syn_id_key][rec_name])
+        f.flush()
 
     return features
 
 
-def get_args_dynamic_compound_EPSP_amp(x, features):
+def get_args_static_compound_EPSP_amp():
     """
-    A nested map operation is required to compute compound EPSP amplitude features. The arguments to be mapped include
-    a unique string key for each set of model parameters that will be used to identify temporarily stored simulation
-    output.
-    :param x: array
-    :param features: dict
+    A nested map operation is required to compute compound EPSP amplitude features. The arguments to be mapped are the
+    same (static) for each set of parameters.
     :return: list of list
     """
     syn_group_list = []
     syn_id_lists = []
     syn_condition_list = []
-    model_key = features['model_key']
-    model_key_list = []
+
     for syn_group in context.clustered_branch_names:
         this_syn_id_group = context.syn_id_dict[syn_group]
         this_syn_id_lists = []
@@ -561,19 +501,17 @@ def get_args_dynamic_compound_EPSP_amp(x, features):
             syn_id_lists.extend(this_syn_id_lists)
             syn_group_list.extend([syn_group] * num_sims)
             syn_condition_list.extend([syn_condition] * num_sims)
-            model_key_list.extend([model_key] * num_sims)
 
-    return [syn_id_lists, syn_condition_list, syn_group_list, model_key_list]
+    return [syn_id_lists, syn_condition_list, syn_group_list]
 
 
-def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, model_key, export=False, plot=False):
+def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, export=False, plot=False):
     """
 
     :param x: array
     :param syn_ids: list of int
     :param syn_condition: str
     :param syn_group: str
-    :param model_key: str
     :param export: bool
     :param plot: bool
     :return: dict
@@ -637,26 +575,8 @@ def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, mod
             this_nc = syn_attrs.get_netcon(context.cell.gid, syn_id, syn_name)
             this_nc.pre().play(h.Vector())
 
-    description = 'compound_EPSP_traces'
-    with h5py.File(context.temp_traces_path, 'a') as f:
-        if description not in f:
-            f.create_group(description)
-            f[description].attrs['enumerated'] = False
-        group = f[description]
-        if model_key not in group:
-            group.create_group(model_key)
-        data_group = group[model_key]
-        if syn_group not in data_group:
-            data_group.create_group(syn_group)
-        if syn_condition not in data_group[syn_group]:
-            data_group[syn_group].create_group(syn_condition)
-        key = str(len(syn_ids))
-        this_group = data_group[syn_group][syn_condition].create_group(key)
-        for rec_name in traces_dict:
-            this_group.create_dataset(rec_name, data=traces_dict[rec_name])
-
     result = {'syn_group': syn_group, 'syn_condition': syn_condition, 'syn_ids': syn_ids,
-              'temp_traces_path': context.temp_traces_path, 'model_key': model_key}
+              'compound_EPSP_traces': traces_dict}
 
     title = 'compound_EPSP_amp'
     description = 'condition: %s, group: %s, num_syns: %i, first syn_id: %i' % \
@@ -675,6 +595,55 @@ def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, mod
     sim.restore_state()
 
     return result
+
+
+def filter_features_compound_EPSP_amp(primitives, current_features, export=False):
+    """
+    :param primitives: list of dict (each dict contains results from a single simulation)
+    :param current_features: dict
+    :param export: bool
+    :return: dict
+    """
+    features = {}
+    temp_traces_path = current_features['temp_traces_path']
+    features['temp_traces_path'] = temp_traces_path
+
+    compound_EPSP_traces = dict()
+    syn_ids_dict = dict()
+    for this_feature_dict in primitives:
+        syn_group = this_feature_dict['syn_group']
+        syn_condition = this_feature_dict['syn_condition']
+        syn_ids = this_feature_dict['syn_ids']
+        num_syns_key = str(len(syn_ids))
+        if syn_group not in compound_EPSP_traces:
+            compound_EPSP_traces[syn_group] = {}
+            syn_ids_dict[syn_group] = {}
+        if syn_condition not in compound_EPSP_traces[syn_group]:
+            compound_EPSP_traces[syn_group][syn_condition] = {}
+            syn_ids_dict[syn_group][syn_condition] = {}
+        compound_EPSP_traces[syn_group][syn_condition][num_syns_key] = dict(this_feature_dict['compound_EPSP_traces'])
+        syn_ids_dict[syn_group][syn_condition][num_syns_key] = np.array(syn_ids)
+
+    description = 'compound_EPSP_traces'
+    with h5py.File(temp_traces_path, 'a') as f:
+        data_group = f.create_group(description)
+        for syn_group in compound_EPSP_traces:
+            if syn_group not in data_group:
+                data_group.create_group(syn_group)
+            for syn_condition in compound_EPSP_traces[syn_group]:
+                if syn_condition not in data_group[syn_group]:
+                    data_group[syn_group].create_group(syn_condition)
+                for num_syns_key in compound_EPSP_traces[syn_group][syn_condition]:
+                    data_group[syn_group][syn_condition].create_group(num_syns_key)
+                    data_group[syn_group][syn_condition][num_syns_key].create_dataset(
+                        'syn_ids', data=syn_ids_dict[syn_group][syn_condition][num_syns_key])
+                    this_group = data_group[syn_group][syn_condition][num_syns_key].create_group('recs')
+                    for rec_name in compound_EPSP_traces[syn_group][syn_condition][num_syns_key]:
+                        this_group.create_dataset(
+                            rec_name, data=compound_EPSP_traces[syn_group][syn_condition][num_syns_key][rec_name])
+        f.flush()
+
+    return features
 
 
 def get_expected_compound_EPSP_traces(unitary_traces_dict, syn_id_dict):
@@ -700,58 +669,62 @@ def get_expected_compound_EPSP_traces(unitary_traces_dict, syn_id_dict):
     return traces
 
 
-def filter_features_compound_EPSP_amp(primitives, current_features, export=False):
+def get_objectives_synaptic_integration(features, export=False):
     """
-    :param primitives: list of dict (each dict contains results from a single simulation)
-    :param current_features: dict
+
+    :param features: dict
     :param export: bool
-    :return: dict
+    :return: tuple of dict
     """
-    features = {}
-    syn_ids_dict = defaultdict(lambda: defaultdict(dict))
-    temp_traces_path_list = []
-    model_key = None
-    for this_feature_dict in primitives:
-        temp_traces_path_list.append(this_feature_dict['temp_traces_path'])
-        this_model_key = this_feature_dict['model_key']
-        if model_key is None:
-            model_key = this_model_key
-        if this_model_key != model_key:
-            raise KeyError('filter_features_compound_EPSP_amp: mismatched model keys')
-        syn_group = this_feature_dict['syn_group']
-        syn_condition = this_feature_dict['syn_condition']
-        syn_ids = this_feature_dict['syn_ids']
-        num_syns = len(syn_ids)
-        syn_ids_dict[syn_group][syn_condition][num_syns] = syn_ids
-    compound_EPSP_temp_traces_path_set = set(temp_traces_path_list)
+    objectives = dict()
+    temp_traces_path = features['temp_traces_path']
 
-    unitary_EPSP_temp_traces_path_set = current_features['unitary_EPSP_temp_traces_path_set']
     unitary_EPSP_traces_dict = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
-    description = 'unitary_EPSP_traces'
-    for temp_traces_path in unitary_EPSP_temp_traces_path_set:
-        with h5py.File(temp_traces_path, 'r') as g:
-            for syn_group in g[description][model_key]:
-                for syn_condition in g[description][model_key][syn_group]:
-                    this_group = g[description][model_key][syn_group][syn_condition]
-                    for syn_id_key in this_group:
-                        syn_id = int(syn_id_key)
-                        for rec_name in this_group[syn_id_key]:
-                            unitary_EPSP_traces_dict[syn_group][syn_condition][syn_id][rec_name] = \
-                                this_group[syn_id_key][rec_name][:]
-
     compound_EPSP_traces_dict = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
-    for temp_traces_path in compound_EPSP_temp_traces_path_set:
-        with h5py.File(temp_traces_path, 'r') as f:
-            description = 'compound_EPSP_traces'
-            if description in f:
-                for syn_group in (syn_group for syn_group in syn_ids_dict if syn_group in f[description][model_key]):
-                    for syn_condition in f[description][model_key][syn_group]:
-                        for num_syns_key in f[description][model_key][syn_group][syn_condition]:
-                            this_group = f[description][model_key][syn_group][syn_condition][num_syns_key]
-                            num_syns = int(num_syns_key)
-                            for rec_name in this_group:
-                                compound_EPSP_traces_dict[syn_group][syn_condition][num_syns][rec_name] = \
-                                    this_group[rec_name][:]
+    syn_ids_dict = defaultdict(lambda: defaultdict(dict))
+    with h5py.File(temp_traces_path, 'r') as f:
+        description = 'unitary_EPSP_traces'
+        for syn_group in f[description]:
+            for syn_condition in f[description][syn_group]:
+                this_group = f[description][syn_group][syn_condition]
+                for syn_id_key in this_group:
+                    syn_id = int(syn_id_key)
+                    for rec_name in this_group[syn_id_key]:
+                        unitary_EPSP_traces_dict[syn_group][syn_condition][syn_id][rec_name] = \
+                            this_group[syn_id_key][rec_name][:]
+        description = 'compound_EPSP_traces'
+        if description in f:
+            for syn_group in f[description]:
+                for syn_condition in f[description][syn_group]:
+                    for num_syns_key in f[description][syn_group][syn_condition]:
+                        this_group = f[description][syn_group][syn_condition][num_syns_key]
+                        num_syns = int(num_syns_key)
+                        syn_ids_dict[syn_group][syn_condition][num_syns] = this_group['syn_ids'][:]
+                        for rec_name in this_group['recs']:
+                            compound_EPSP_traces_dict[syn_group][syn_condition][num_syns][rec_name] = \
+                                this_group['recs'][rec_name][:]
+
+    control_EPSP_amp_list = []
+    NMDA_contribution_list = []
+    for syn_id in context.syn_id_dict['random']:
+        control_soma_trace = np.array(unitary_EPSP_traces_dict['random']['control'][syn_id]['soma'][:])
+        control_soma_amp = np.max(control_soma_trace)
+        control_EPSP_amp_list.append(control_soma_amp)
+        AP5_soma_trace = np.array(unitary_EPSP_traces_dict['random']['AP5'][syn_id]['soma'][:])
+        AP5_soma_amp = np.max(AP5_soma_trace)
+        NMDA_contribution_list.append((control_soma_amp - AP5_soma_amp) / control_soma_amp)
+
+    mean_unitary_EPSP_amp_residuals = \
+        np.mean(((np.array(control_EPSP_amp_list) - context.target_val['mean_unitary_EPSP_amp']) /
+                 context.target_range['mean_unitary_EPSP_amp']) ** 2.)
+    mean_NMDA_contribution_residuals = \
+        np.mean(((np.array(NMDA_contribution_list) - context.target_val['mean_NMDA_contribution']) /
+                 context.target_range['mean_NMDA_contribution']) ** 2.)
+
+    features['mean_unitary_EPSP_amp'] = np.mean(control_EPSP_amp_list)
+    features['mean_NMDA_contribution'] = np.mean(NMDA_contribution_list)
+    objectives['mean_unitary_EPSP_amp_residuals'] = mean_unitary_EPSP_amp_residuals
+    objectives['mean_NMDA_contribution_residuals'] = mean_NMDA_contribution_residuals
 
     for syn_group in compound_EPSP_traces_dict:
         for syn_condition in compound_EPSP_traces_dict[syn_group].keys():
@@ -762,7 +735,9 @@ def filter_features_compound_EPSP_amp(primitives, current_features, export=False
 
     soma_compound_EPSP_amp = defaultdict(lambda: defaultdict(list))
     initial_gain = defaultdict(list)
+    initial_gain_residuals = defaultdict(list)
     integration_gain = defaultdict(list)
+    integration_gain_residuals = defaultdict(list)
     for syn_group in compound_EPSP_traces_dict:
         for syn_condition in compound_EPSP_traces_dict[syn_group]:
             max_num_syns = max(compound_EPSP_traces_dict[syn_group][syn_condition].keys())
@@ -776,38 +751,38 @@ def filter_features_compound_EPSP_amp(primitives, current_features, export=False
             this_initial_gain = (this_actual[1] - this_actual[0]) / (this_expected[1] - this_expected[0])
             # Integration should be close to linear without gain for the first few synapses.
             initial_gain[syn_condition].append(this_initial_gain)
+            feature_key = 'initial_gain_%s' % syn_condition
+            this_initial_gain_residuals = ((this_initial_gain - context.target_val[feature_key]) /
+                                           context.target_range[feature_key]) ** 2.
+            initial_gain_residuals[syn_condition].append(this_initial_gain_residuals)
             indexes = np.where(this_expected <= context.max_expected_compound_EPSP_amp)[0]
             if not np.any(indexes) or (not context.debug and syn_condition == 'control' and
                                        max(this_expected) < context.min_expected_compound_EPSP_amp):
                 if context.verbose > 0:
-                    print 'filter_features_compound_EPSP_amp: pid: %i; aborting - expected compound EPSP amplitude ' \
-                          'below criterion' % os.getpid()
-                return dict()
+                    print 'optimize_DG_GC_synaptic_integration: get_objectives: pid: %i; aborting - expected ' \
+                          'compound EPSP amplitude below criterion' % os.getpid()
+                return dict(), dict()
             slope, intercept, r_value, p_value, std_err = stats.linregress(this_expected[indexes], this_actual[indexes])
             integration_gain[syn_condition].append(slope)
+            feature_key = 'integration_gain_%s' % syn_condition
+            this_target = context.target_val[feature_key] * this_expected[indexes] + intercept
+            this_integration_gain_residuals = 0.
+            for target_val, actual_val in zip(this_target, this_actual[indexes]):
+                this_integration_gain_residuals += ((actual_val - target_val) /
+                                                    context.target_range['mean_unitary_EPSP_amp']) ** 2.
+            this_integration_gain_residuals /= float(len(indexes))
+            integration_gain_residuals[syn_condition].append(this_integration_gain_residuals)
 
     for feature_name, feature_dict in zip(['initial_gain', 'integration_gain'], [initial_gain, integration_gain]):
-        for syn_condition in feature_dict:
+        for syn_condition in context.syn_conditions:
             feature_key = '%s_%s' % (feature_name, syn_condition)
-            residuals_key = '%s_residuals' % feature_key
             features[feature_key] = np.mean(feature_dict[syn_condition])
-            features[residuals_key] = \
-                np.mean(((np.array(feature_dict[syn_condition]) - context.target_val[feature_key]) /
-                         context.target_range[feature_key]) ** 2.)
 
-    if context.plot:
-        fig, axes = plt.subplots(1, len(soma_compound_EPSP_amp))
-        for i, syn_group in enumerate(soma_compound_EPSP_amp):
-            if len(soma_compound_EPSP_amp) > 1:
-                this_axes = axes[i]
-            else:
-                this_axes = axes
-            for syn_condition in soma_compound_EPSP_amp[syn_group]:
-                this_axes.plot(range(1, num_syns + 1), soma_compound_EPSP_amp[syn_group][syn_condition],
-                               label=syn_condition)
-            this_axes.set_title(syn_group)
-            this_axes.legend(loc='best', frameon=False, framealpha=0.5)
-        fig.show()
+    for feature_name, feature_dict in zip(['initial_gain', 'integration_gain'],
+                                          [initial_gain_residuals, integration_gain_residuals]):
+        for syn_condition in context.syn_conditions:
+            residuals_key = '%s_%s_residuals' % (feature_name, syn_condition)
+            objectives[residuals_key] = np.mean(feature_dict[syn_condition])
 
     if export:
         with h5py.File(context.export_file_path, 'a') as f:
@@ -855,20 +830,8 @@ def filter_features_compound_EPSP_amp(primitives, current_features, export=False
                     this_group.create_dataset(syn_condition, compression='gzip',
                                               data=soma_compound_EPSP_amp[syn_group][syn_condition])
 
-    return features
+    os.remove(temp_traces_path)
 
-
-def get_objectives_synaptic_integration(features):
-    """
-
-    :param features: dict
-    :return: tuple of dict
-    """
-    objectives = dict()
-    for objective_name in context.objective_names:
-        if objective_name not in features:
-            return dict(), dict()
-        objectives[objective_name] = features[objective_name]
     return features, objectives
 
 

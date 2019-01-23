@@ -42,7 +42,7 @@ def main(config_file_path, output_dir, export, export_file_path, label, verbose,
     context.update(locals())
     disp = verbose > 0
     # parse config_file and initialize context with relative bounds, parameters, paths, etc. for simulation
-    config_interactive(context, __file__, config_file_path=config_file_path, output_dir=output_dir, export=export,
+    config_optimize_interactive(__file__, config_file_path=config_file_path, output_dir=output_dir, export=export,
                        export_file_path=export_file_path, label=label, disp=disp)
 
     if debug:
@@ -76,7 +76,7 @@ def unit_tests_spiking():
     this_features = filter_features_fI(primitives, features, context.export)
     features.update(this_features)
 
-    features, objectives = get_objectives_spiking(features)
+    features, objectives = get_objectives_spiking(features, context.export)
     print 'params:'
     pprint.pprint(context.x0_dict)
     print 'features:'
@@ -582,10 +582,11 @@ def filter_features_fI(primitives, current_features, export=False):
     return new_features
 
 
-def get_objectives_spiking(features):
+def get_objectives_spiking(features, export=False):
     """
 
     :param features: dict
+    :param export: bool
     :return: tuple of dict
     """
 
