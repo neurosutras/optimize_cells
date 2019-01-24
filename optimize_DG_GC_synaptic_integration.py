@@ -805,6 +805,8 @@ def get_objectives_synaptic_integration(features, export=False):
                             compound_EPSP_traces_dict[syn_group][syn_condition][num_syns][rec_name] = \
                                 this_group['recs'][rec_name][:]
 
+    os.remove(model_data_path)
+
     control_EPSP_amp_list = []
     NMDA_contribution_list = []
     for syn_id in context.syn_id_dict['random']:
@@ -930,8 +932,6 @@ def get_objectives_synaptic_integration(features, export=False):
                 for syn_condition in soma_compound_EPSP_amp[syn_group]:
                     this_group.create_dataset(syn_condition, compression='gzip',
                                               data=soma_compound_EPSP_amp[syn_group][syn_condition])
-
-    os.remove(model_data_path)
 
     return features, objectives
 
