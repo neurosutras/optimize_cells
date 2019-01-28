@@ -331,7 +331,7 @@ def shutdown_worker():
 def export_unitary_EPSP_traces():
     """
     Data from model simulations is temporarily stored locally on each worker. This method uses collective operations to
-    export the data to disk, with one file per model.
+    export the data to disk, with one hdf5 group per model.
     """
     start_time = time.time()
     description = 'unitary_EPSP_traces'
@@ -417,7 +417,7 @@ def export_unitary_EPSP_traces():
 def export_compound_EPSP_traces():
     """
     Data from model simulations is temporarily stored locally on each worker. This method uses collective operations to
-    export the data to disk, with one file per model.
+    export the data to disk, with one hdf5 group per model.
     """
     start_time = time.time()
     description = 'compound_EPSP_traces'
@@ -447,20 +447,20 @@ def export_compound_EPSP_traces():
                     f.create_group(group_key)
                 if description not in f[group_key]:
                     f[group_key].create_group(description)
-                for syn_group in context.clustered_branch_names:
-                    f[group_key][description].create_group(syn_group)
-                    this_syn_id_list = context.syn_id_dict[syn_group]
-                    for syn_condition in context.syn_conditions:
-                        f[group_key][description][syn_group].create_group(syn_condition)
-                        for i in xrange(1, len(this_syn_id_list) + 1):
-                            num_syns_key = str(i)
-                            f[group_key][description][syn_group][syn_condition].create_group(num_syns_key)
-                            f[group_key][description][syn_group][syn_condition][num_syns_key].create_dataset(
-                                'syn_ids', (i,))
-                            f[group_key][description][syn_group][syn_condition][num_syns_key].create_group('recs')
-                            for rec_name in context.sim.recs:
-                                f[group_key][description][syn_group][syn_condition][num_syns_key][
-                                    'recs'].create_dataset(rec_name, (trace_len,))
+                    for syn_group in context.clustered_branch_names:
+                        f[group_key][description].create_group(syn_group)
+                        this_syn_id_list = context.syn_id_dict[syn_group]
+                        for syn_condition in context.syn_conditions:
+                            f[group_key][description][syn_group].create_group(syn_condition)
+                            for i in xrange(1, len(this_syn_id_list) + 1):
+                                num_syns_key = str(i)
+                                f[group_key][description][syn_group][syn_condition].create_group(num_syns_key)
+                                f[group_key][description][syn_group][syn_condition][num_syns_key].create_dataset(
+                                    'syn_ids', (i,))
+                                f[group_key][description][syn_group][syn_condition][num_syns_key].create_group('recs')
+                                for rec_name in context.sim.recs:
+                                    f[group_key][description][syn_group][syn_condition][num_syns_key][
+                                        'recs'].create_dataset(rec_name, (trace_len,))
                 if model_key in context.temp_model_data:
                     if description in context.temp_model_data[model_key]:
                         for syn_group in context.temp_model_data[model_key][description]:
