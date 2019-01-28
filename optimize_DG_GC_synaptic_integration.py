@@ -320,6 +320,14 @@ def update_syn_mechanisms(x, context=None):
                              verbose=context.verbose > 1, throw_error=True)
 
 
+def shutdown_worker():
+    """
+
+    """
+    if context.interface.global_comm.rank == 0:
+        os.remove(context.temp_model_file_path)
+
+
 def export_unitary_EPSP_traces():
     """
     Data from model simulations is temporarily stored locally on each worker. This method uses collective operations to
