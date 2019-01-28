@@ -3,7 +3,7 @@ from neuron import h
 import numpy as np
 import random
 import scipy.signal as signal
-
+import matplotlib.pyplot as plt
 # for h.lambda_f
 h.load_file('stdlib.hoc')
 # for h.stdinit
@@ -202,29 +202,34 @@ class Network(object):
                     self.peakdict[key] = 1. / (isivec.min() / 1000)
 
     def summation(self, vecdict, dt=.025):
-        size = self.tstop * (1 / dt) + 1
+        size = self.tstop + 2  #* (1 / dt) + 1
         self.osc_E = h.Vector(size)
         self.osc_I = h.Vector(size)
         for key, vec in vecdict.iteritems():
             cell_type = self.get_cell_type(key)
-            # binned = vec.histogram(0, self.tstop, 1)
+            binned = vec.histogram(0, self.tstop, 1)
+            # for i in binned: print i
             if cell_type == 'RS':  # E
-                self.osc_E.add(vec)
+                self.osc_E.add(binned)
             elif cell_type == 'FS':  # F
-                self.osc_I.add(vec)
+                self.osc_I.add(binned)
 
-    def compute_peak_osc_freq(self, osc):
-        sparse_t = []
+    def compute_peak_osc_freq(self, osc, freq):
         sub_osc = osc[int(len(osc) / 6):]
-        peak_sum = sub_osc.max()
-        """for i, v in enumerate(sub_osc):
-            if v >= peak_sum * .8:
-                sparse_t.append(i)
-        print "sparse", sparse_t"""
-        peak_loc = signal.find_peaks_cwt(sub_osc, np.arange(1, self.tstop / 10))
-        print peak_loc
+        window = signal.general_gaussian(101, p=0.5, sig=20)
+        filtered = signal.fftconvolve(window, sub_osc)
+        filtered = (np.average(sub_osc) / np.average(filtered)) * filtered
+        filtered = np.roll(filtered, -25)
+        if freq == 'theta':
+            widths = np.arange(50, 200)
+        else:
+            widths = np.arange(5, 50)
+        peak_loc = signal.find_peaks_cwt(filtered, widths)
         tmp = h.Vector()
-        if len(sub_osc) > 1:
+        x = [i for i in range(len(sub_osc) + 100)]
+        """plt.plot(x, filtered, '-gD', markevery=peak_loc)
+        plt.show()"""
+        if len(peak_loc) > 1:
             tmp.deriv(h.Vector(peak_loc), 1, 1)
             peak = 1 / (tmp.min() / 1000.)
         else:
@@ -239,6 +244,25 @@ class Network(object):
                 self.ncdict.pop(pair)
                 #print pair
         self.connectcells(self.ncell)
+
+
+def gauss_smooth(x, window_len=101):
+    x = np.array(x)
+    window = signal.general_gaussian(window_len, p=0.5, sig=20)
+    filtered = signal.fftconvolve(window, x)
+    filtered = (np.average(x) / np.average(filtered)) * filtered
+    filtered = np.roll(filtered, -25)
+    return filtered
+
+
+def boxcar(x, window_len):
+    y = np.zeros((len(x),))
+    for i in range(window_len):
+        y[i] = x[i]
+    for i in range(window_len, len(x)):
+        y[i] = y[i - 1] + x[i] - x[i - window_len]
+    y = y * 1 / float(window_len)
+    return y
 
 
 def run_network(network, pc, comm, tstop, dt=.025):
@@ -264,10 +288,14 @@ def run_network(network, pc, comm, tstop, dt=.025):
         for elem in tmp:
             for key, val in elem.iteritems():
                 tmp2[key] = val
-        network.summation(tmp2)
-        """osc_E = network.compute_peak_osc_freq(network.osc_E)
-        osc_I = network.compute_peak_osc_freq(network.osc_I)"""
-
+        network.summation(all_events)
+        """y = gauss_smooth(network.osc_E)
+        x = [i for i in range(len(y))]
+        plt.plot(x, y, alpha=.5)
+        x_1 = [i for i in range(len(network.osc_E))]
+        plt.plot(x_1, network.osc_E, alpha=.5)
+        plt.show()"""
+    
         peak_voltage = float("-inf") #print list(rec.keys())
         if network.ncell in list(rec.keys()):
             for i, x in enumerate(rec[network.ncell]):
@@ -302,34 +330,31 @@ def run_network(network, pc, comm, tstop, dt=.025):
 
         # t = {key: value for dict in all_dicts for key, value in dict['t'].iteritems()}
 
-        import matplotlib.pyplot as plt
-        down_dt = .5
-        sz = int(network.tstop * (1 / dt)) + 1
-        down_t = np.arange(0., tstop, .5)
-        x_vec = [x * dt for x in range(sz)]
-        down_sampled_E = np.interp(down_t, x_vec, network.osc_E)
-        down_sampled_I = np.interp(down_t, x_vec, network.osc_I)
-        # 2000 ms Hamming window, ~3 Hz low-pass for ramp, ~5 - 10 Hz bandpass for theta
-        window_len = min(int(2000. / down_dt), len(down_t) - 1)
-        theta_filter = signal.firwin(window_len, [5., 10.], nyq=1000. / 2. / down_dt, pass_zero=False)
-        theta_E = signal.filtfilt(theta_filter, [1.], down_sampled_E, padtype='even', padlen=window_len)
-        theta_I = signal.filtfilt(theta_filter, [1.], down_sampled_I, padtype='even', padlen=window_len)
+        bc_E = boxcar(network.osc_E, 100)
+        bc_I = boxcar(network.osc_I, 100)
+
+        # window_len = min(int(2000./down_dt), len(down_t) - 1)
+        window_len = 2000.
+        theta_filter = signal.firwin(window_len, [5., 10.], nyq=1000. / 2., pass_zero=False)
+        theta_E = signal.filtfilt(theta_filter, [1.], bc_E, padtype='even', padlen=window_len)
+        theta_I = signal.filtfilt(theta_filter, [1.], bc_I, padtype='even', padlen=window_len)
         plt.plot([i for i in range(len(theta_E))], theta_E)
         plt.title('theta')
         plt.show()
 
-        window_len = min(int(100. / down_dt), len(down_t) - 1)
-        gamma_filter = signal.firwin(window_len, [30., 100.], nyq=1000. / 2. / down_dt, pass_zero=False)
-        gamma_E = signal.filtfilt(gamma_filter, [1.], down_sampled_E, padtype='even', padlen=window_len)
-        gamma_I = signal.filtfilt(gamma_filter, [1.], down_sampled_I, padtype='even', padlen=window_len)
+        # window_len = min(int(100./down_dt), len(down_t) - 1)
+        window_len = 200.
+        gamma_filter = signal.firwin(window_len, [30., 100.], nyq=1000. / 2., pass_zero=False)
+        gamma_E = signal.filtfilt(gamma_filter, [1.], bc_E, padtype='even', padlen=window_len)
+        gamma_I = signal.filtfilt(gamma_filter, [1.], bc_I, padtype='even', padlen=window_len)
         plt.plot([i for i in range(len(gamma_E))], gamma_E)
         plt.title('gamma')
         plt.show()
 
-        peak_theta_osc_E = network.compute_peak_osc_freq(theta_E)
-        peak_theta_osc_I = network.compute_peak_osc_freq(theta_I)
-        peak_gamma_osc_E = network.compute_peak_osc_freq(gamma_E)
-        peak_gamma_osc_I = network.compute_peak_osc_freq(gamma_I)
+        peak_theta_osc_E = network.compute_peak_osc_freq(theta_E, 'theta')
+        peak_theta_osc_I = network.compute_peak_osc_freq(theta_I, 'theta')
+        peak_gamma_osc_E = network.compute_peak_osc_freq(gamma_E, 'gamma')
+        peak_gamma_osc_I = network.compute_peak_osc_freq(gamma_I, 'gamma')
 
 
         # rec = {key: value for dict in all_dicts for key, value in dict['rec'].iteritems()}
@@ -392,7 +417,7 @@ class FFCell(object):
         sample = np.random.poisson(float(tstop) / length, length * 10)
         spikes = []
         for i, t in enumerate(sample):
-            if i == 0:
+            if i == 0: 
                 spikes.append(float(t))
             else:
                 if spikes[i - 1] + t > tstop: break
