@@ -340,7 +340,6 @@ def export_unitary_EPSP_traces():
 
     if context.interface.global_comm.rank == 0:
         context.interface.pc.post('merge1', context.temp_model_data)
-        print 'optimize_DG_GC_synaptic_integration: export_unitary_EPSP_traces: master completed first step of merge'
     elif context.interface.global_comm.rank == 1:
         while not context.interface.pc.look_take('merge1'):
             time.sleep(0.1)
@@ -402,11 +401,7 @@ def export_unitary_EPSP_traces():
         while not context.interface.pc.look_take('merge3'):
             time.sleep(0.1)
         context.temp_model_data_legend = context.interface.pc.upkpyobj()
-        if context.verbose > 1:
-            print 'optimize_DG_GC_synaptic_integration: export_unitary_EPSP_traces: master completed second step of ' \
-                  'merge'
     elif context.interface.global_comm.rank == 1:
-        print 'rank 1: type of context.temp_model_file_path: %s' % str(type(context.temp_model_file_path))
         context.interface.pc.post('merge2', [context.temp_model_file_path])
         context.interface.pc.post('merge3', context.temp_model_data_legend)
 
@@ -425,7 +420,6 @@ def export_compound_EPSP_traces():
 
     if context.interface.global_comm.rank == 0:
         context.interface.pc.post('merge', context.temp_model_data)
-        print 'optimize_DG_GC_synaptic_integration: export_compound_EPSP_traces: master completed first step of merge'
     elif context.interface.global_comm.rank == 1:
         context.interface.pc.take('merge')
         temp_model_data_from_master = context.interface.pc.upkpyobj()
