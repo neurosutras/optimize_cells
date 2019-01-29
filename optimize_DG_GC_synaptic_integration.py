@@ -327,7 +327,7 @@ def shutdown_worker():
 
     """
     context.open_temp_model_data_file.close()
-    if context.interface.global_comm.rank == 0:
+    if context.interface.global_comm.rank == 0 and not context.debug:
         os.remove(context.temp_model_data_file_path)
 
 
@@ -979,6 +979,12 @@ def get_objectives_synaptic_integration(features, export=False):
                 for syn_condition in soma_compound_EPSP_amp[syn_group]:
                     this_group.create_dataset(syn_condition, compression='gzip',
                                               data=soma_compound_EPSP_amp[syn_group][syn_condition])
+
+    if context.debug:
+        print 'features:'
+        pprint.pprint(features)
+        print 'objectives:'
+        pprint.pprint(objectives)
 
     return features, objectives
 
