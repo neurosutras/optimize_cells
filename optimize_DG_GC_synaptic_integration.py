@@ -326,7 +326,7 @@ def shutdown_worker():
     """
 
     """
-    context.open_temp_model_data_file.close()
+    context.temp_model_data_file.close()
     if context.interface.global_comm.rank == 0 and not context.debug:
         os.remove(context.temp_model_data_file_path)
 
@@ -335,6 +335,8 @@ def export_unitary_EPSP_traces():
     """
     Data from model simulations is temporarily stored locally on each worker. This method uses collective operations to
     export the data to disk, with one hdf5 group per model.
+    Global MPI rank 0 cannot participate in global collective operations while monitoring the NEURON ParallelContext
+    bulletin board, so global rank 1 serves as root for this collective write procedure.
     """
     start_time = time.time()
     description = 'unitary_EPSP_traces'
@@ -344,8 +346,7 @@ def export_unitary_EPSP_traces():
     if context.interface.global_comm.rank == 0:
         context.interface.pc.post('merge1', context.temp_model_data)
     elif context.interface.global_comm.rank == 1:
-        while not context.interface.pc.look_take('merge1'):
-            time.sleep(0.1)
+        context.interface.pc.take('merge1')
         temp_model_data_from_master = context.interface.pc.upkpyobj()
         dict_merge(context.temp_model_data, temp_model_data_from_master)
 
@@ -365,36 +366,37 @@ def export_unitary_EPSP_traces():
                                                 context.optimization_title)
             context.temp_model_data_file_path = \
                 context.interface.worker_comm.bcast(context.temp_model_data_file_path, root=0)
-
-        with h5py.File(context.temp_model_data_file_path, 'a', driver='mpio', comm=context.interface.worker_comm) as f:
-            for i, model_key in enumerate(model_keys):
-                group_key = str(i)
-                context.temp_model_data_legend[model_key] = group_key
-                if group_key not in f:
-                    f.create_group(group_key)
-                if description not in f[group_key]:
-                    f[group_key].create_group(description)
-                    for syn_group in context.syn_id_dict:
-                        f[group_key][description].create_group(syn_group)
-                        this_syn_id_list = context.syn_id_dict[syn_group]
-                        for syn_condition in context.syn_conditions:
-                            f[group_key][description][syn_group].create_group(syn_condition)
-                            for syn_id in this_syn_id_list:
-                                syn_id_key = str(syn_id)
-                                f[group_key][description][syn_group][syn_condition].create_group(syn_id_key)
-                                for rec_name in context.sim.recs:
-                                    f[group_key][description][syn_group][syn_condition][syn_id_key].create_dataset(
-                                        rec_name, (trace_len,))
-                if model_key in context.temp_model_data:
-                    if description in context.temp_model_data[model_key]:
-                        for syn_group in context.temp_model_data[model_key][description]:
-                            for syn_condition in context.temp_model_data[model_key][description][syn_group]:
-                                this_dict = context.temp_model_data[model_key][description][syn_group][syn_condition]
-                                for syn_id_key in this_dict:
-                                    for rec_name in this_dict[syn_id_key]:
-                                        f[group_key][description][syn_group][syn_condition][syn_id_key][rec_name][:] = \
-                                            this_dict[syn_id_key][rec_name]
-            f.flush()
+            context.temp_model_data_file = h5py.File(context.temp_model_data_file_path, 'a', driver='mpio',
+                                                     comm=context.interface.worker_comm)
+        for i, model_key in enumerate(model_keys):
+            group_key = str(i)
+            context.temp_model_data_legend[model_key] = group_key
+            if group_key not in context.temp_model_data_file:
+                context.temp_model_data_file.create_group(group_key)
+            if description not in context.temp_model_data_file[group_key]:
+                context.temp_model_data_file[group_key].create_group(description)
+                for syn_group in context.syn_id_dict:
+                    context.temp_model_data_file[group_key][description].create_group(syn_group)
+                    this_syn_id_list = context.syn_id_dict[syn_group]
+                    for syn_condition in context.syn_conditions:
+                        context.temp_model_data_file[group_key][description][syn_group].create_group(syn_condition)
+                        for syn_id in this_syn_id_list:
+                            syn_id_key = str(syn_id)
+                            context.temp_model_data_file[group_key][description][syn_group][
+                                syn_condition].create_group(syn_id_key)
+                            for rec_name in context.sim.recs:
+                                context.temp_model_data_file[group_key][description][syn_group][syn_condition][
+                                    syn_id_key].create_dataset(rec_name, (trace_len,))
+            if model_key in context.temp_model_data:
+                if description in context.temp_model_data[model_key]:
+                    for syn_group in context.temp_model_data[model_key][description]:
+                        for syn_condition in context.temp_model_data[model_key][description][syn_group]:
+                            this_dict = context.temp_model_data[model_key][description][syn_group][syn_condition]
+                            for syn_id_key in this_dict:
+                                for rec_name in this_dict[syn_id_key]:
+                                    context.temp_model_data_file[group_key][description][syn_group][syn_condition][
+                                        syn_id_key][rec_name][:] = this_dict[syn_id_key][rec_name]
+        context.temp_model_data_file.flush()
 
     del context.temp_model_data
     context.temp_model_data = dict()
@@ -437,39 +439,40 @@ def export_compound_EPSP_traces():
             model_keys = None
         model_keys = context.interface.worker_comm.bcast(model_keys, root=0)
 
-        with h5py.File(context.temp_model_data_file_path, 'a', driver='mpio', comm=context.interface.worker_comm) as f:
-            for model_key in model_keys:
-                group_key = context.temp_model_data_legend[model_key]
-                if group_key not in f:
-                    f.create_group(group_key)
-                if description not in f[group_key]:
-                    f[group_key].create_group(description)
-                    for syn_group in context.clustered_branch_names:
-                        f[group_key][description].create_group(syn_group)
-                        this_syn_id_list = context.syn_id_dict[syn_group]
-                        for syn_condition in context.syn_conditions:
-                            f[group_key][description][syn_group].create_group(syn_condition)
-                            for i in xrange(1, len(this_syn_id_list) + 1):
-                                num_syns_key = str(i)
-                                f[group_key][description][syn_group][syn_condition].create_group(num_syns_key)
-                                f[group_key][description][syn_group][syn_condition][num_syns_key].create_dataset(
-                                    'syn_ids', (i,))
-                                f[group_key][description][syn_group][syn_condition][num_syns_key].create_group('recs')
-                                for rec_name in context.sim.recs:
-                                    f[group_key][description][syn_group][syn_condition][num_syns_key][
-                                        'recs'].create_dataset(rec_name, (trace_len,))
-                if model_key in context.temp_model_data:
-                    if description in context.temp_model_data[model_key]:
-                        for syn_group in context.temp_model_data[model_key][description]:
-                            for syn_condition in context.temp_model_data[model_key][description][syn_group]:
-                                this_dict = context.temp_model_data[model_key][description][syn_group][syn_condition]
-                                for num_syns_key in this_dict:
-                                    f[group_key][description][syn_group][syn_condition][num_syns_key]['syn_ids'][:] = \
-                                        this_dict[num_syns_key]['syn_ids']
-                                    for rec_name in this_dict[num_syns_key]['recs']:
-                                        f[group_key][description][syn_group][syn_condition][num_syns_key]['recs'][
-                                            rec_name][:] = this_dict[num_syns_key]['recs'][rec_name]
-            f.flush()
+        for model_key in model_keys:
+            group_key = context.temp_model_data_legend[model_key]
+            if group_key not in context.temp_model_data_file:
+                context.temp_model_data_file.create_group(group_key)
+            if description not in context.temp_model_data_file[group_key]:
+                context.temp_model_data_file[group_key].create_group(description)
+                for syn_group in context.clustered_branch_names:
+                    context.temp_model_data_file[group_key][description].create_group(syn_group)
+                    this_syn_id_list = context.syn_id_dict[syn_group]
+                    for syn_condition in context.syn_conditions:
+                        context.temp_model_data_file[group_key][description][syn_group].create_group(syn_condition)
+                        for i in xrange(1, len(this_syn_id_list) + 1):
+                            num_syns_key = str(i)
+                            context.temp_model_data_file[group_key][description][syn_group][
+                                syn_condition].create_group(num_syns_key)
+                            context.temp_model_data_file[group_key][description][syn_group][syn_condition][
+                                num_syns_key].create_dataset('syn_ids', (i,))
+                            context.temp_model_data_file[group_key][description][syn_group][syn_condition][
+                                num_syns_key].create_group('recs')
+                            for rec_name in context.sim.recs:
+                                context.temp_model_data_file[group_key][description][syn_group][syn_condition][
+                                    num_syns_key]['recs'].create_dataset(rec_name, (trace_len,))
+            if model_key in context.temp_model_data:
+                if description in context.temp_model_data[model_key]:
+                    for syn_group in context.temp_model_data[model_key][description]:
+                        for syn_condition in context.temp_model_data[model_key][description][syn_group]:
+                            this_dict = context.temp_model_data[model_key][description][syn_group][syn_condition]
+                            for num_syns_key in this_dict:
+                                context.temp_model_data_file[group_key][description][syn_group][syn_condition][
+                                    num_syns_key]['syn_ids'][:] = this_dict[num_syns_key]['syn_ids']
+                                for rec_name in this_dict[num_syns_key]['recs']:
+                                    context.temp_model_data_file[group_key][description][syn_group][syn_condition][
+                                        num_syns_key]['recs'][rec_name][:] = this_dict[num_syns_key]['recs'][rec_name]
+        context.temp_model_data_file.flush()
 
     del context.temp_model_data
     context.temp_model_data = dict()
@@ -477,11 +480,10 @@ def export_compound_EPSP_traces():
     if context.interface.global_comm.rank == 0:
         context.interface.pc.take('merge5')
         handshake = context.interface.pc.upkscalar()
+        if 'temp_model_data_file' not in context() or context.temp_model_data_file is None:
+            context.temp_model_data_file = h5py.File(context.temp_model_data_file_path, 'r')
     elif context.interface.global_comm.rank == 1:
         context.interface.pc.post('merge5', 0)
-
-    if 'open_temp_model_data_file' not in context() or context.open_temp_model_data_file is None:
-        context.open_temp_model_data_file = h5py.File(context.temp_model_data_file_path, 'r')
 
     if context.interface.global_comm.rank == 1 and context.disp:
         print 'optimize_DG_GC_synaptic_integration: export_compound_EPSP_traces took %.2f s' % \
@@ -834,19 +836,19 @@ def get_objectives_synaptic_integration(features, export=False):
     syn_ids_dict = defaultdict(lambda: defaultdict(dict))
 
     description = 'unitary_EPSP_traces'
-    for syn_group in context.open_temp_model_data_file[group_key][description]:
-        for syn_condition in context.open_temp_model_data_file[group_key][description][syn_group]:
-            this_group = context.open_temp_model_data_file[group_key][description][syn_group][syn_condition]
+    for syn_group in context.temp_model_data_file[group_key][description]:
+        for syn_condition in context.temp_model_data_file[group_key][description][syn_group]:
+            this_group = context.temp_model_data_file[group_key][description][syn_group][syn_condition]
             for syn_id_key in this_group:
                 syn_id = int(syn_id_key)
                 for rec_name in this_group[syn_id_key]:
                     unitary_EPSP_traces_dict[syn_group][syn_condition][syn_id][rec_name] = \
                         this_group[syn_id_key][rec_name][:]
     description = 'compound_EPSP_traces'
-    for syn_group in context.open_temp_model_data_file[group_key][description]:
-        for syn_condition in context.open_temp_model_data_file[group_key][description][syn_group]:
-            for num_syns_key in context.open_temp_model_data_file[group_key][description][syn_group][syn_condition]:
-                this_group = context.open_temp_model_data_file[group_key][description][syn_group][syn_condition][
+    for syn_group in context.temp_model_data_file[group_key][description]:
+        for syn_condition in context.temp_model_data_file[group_key][description][syn_group]:
+            for num_syns_key in context.temp_model_data_file[group_key][description][syn_group][syn_condition]:
+                this_group = context.temp_model_data_file[group_key][description][syn_group][syn_condition][
                     num_syns_key]
                 num_syns = int(num_syns_key)
                 syn_ids_dict[syn_group][syn_condition][num_syns] = this_group['syn_ids'][:]
