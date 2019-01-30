@@ -12,14 +12,14 @@ bounds:
   - 1.0e-4
   - 5.0e-2
   NMDA.gamma: !!python/tuple
-  - 0.01
+  - 0.02
   - 0.12
   NMDA.Kd: !!python/tuple
   - 3.
   - 12.
   NMDA.vshift: !!python/tuple
-    - -15.
-    - 0.
+    - -10.
+    - 10.
 feature_names:
 - mean_unitary_EPSP_amp
 - mean_NMDA_contribution
@@ -104,4 +104,4 @@ x0:
   AMPA.slope: 5.093128E-06
   AMPA.g0: 2.082046E-04
   AMPA.tau: 5.970824E+01
-  NMDA.vshift: -10.
+  NMDA.vshift: 0.
