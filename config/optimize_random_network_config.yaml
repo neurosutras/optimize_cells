@@ -11,9 +11,12 @@ bounds:
   II_connection_prob: !!python/tuple
   - 1.0E-4
   - .8
-  FF_connection_weight: !!python/tuple
+  FF2E_connection_weight: !!python/tuple
   - 0.
-  - 200.
+  - 5.
+  FF2I_connection_weight: !!python/tuple
+  - 0.
+  - 5.
   EE_connection_weight: !!python/tuple
   - 0.
   - 5.
@@ -32,6 +35,21 @@ bounds:
   FF_frac_active: !!python/tuple
   - 0.
   - 1.
+  FF2I_connection_probability: !!python/tuple
+  - 0.
+  - 1.
+  FF2E_connection_probability: !!python/tuple
+  - 0.
+  - 1.
+  FF_weights_sigma_factor: !!python/tuple
+  - 0.
+  - 2.
+  E_weights_sigma_factor: !!python/tuple 
+  - 0.
+  - 2. 
+  I_weights_sigma_factor: !!python/tuple
+  - 0. 
+  - 2.
 feature_names:
 - E_peak_rate
 - I_peak_rate
@@ -63,25 +81,31 @@ param_names:
 - EI_connection_prob
 - II_connection_prob
 - IE_connection_prob
-- FF_connection_weight
+- FF2I_connection_weight
+- FF2E_connection_weight
 - EE_connection_weight
 - EI_connection_weight
 - II_connection_weight
 - IE_connection_weight
 - FF_mean_freq
 - FF_frac_active
+- FF2I_connection_probability
+- FF2E_connection_probability
+- FF_weights_sigma_factor
+- E_weights_sigma_factor
+- I_weights_sigma_factor
 target_range:
   E_peak_rate: 5.
-  I_peak_rate: 10.
-  E_mean_rate: 2.
-  I_mean_rate: 11.
+  I_peak_rate: 7.
+  E_mean_rate: 3.
+  I_mean_rate: 5.
   peak_theta_osc_E: 2.5
   peak_theta_osc_I: 2.5
 target_val:
-  E_peak_rate: 10.
-  I_peak_rate: 30.
-  E_mean_rate: 3.
-  I_mean_rate: 3.5
+  E_peak_rate: 30.
+  I_peak_rate: 40.
+  E_mean_rate: 10.
+  I_mean_rate: 30.
   peak_theta_osc_E: 8.
   peak_theta_osc_I: 8.
 x0:
@@ -89,10 +113,16 @@ x0:
   EI_connection_prob: 0.1
   IE_connection_prob: 0.1
   II_connection_prob: 0.1
-  FF_connection_weight: 2.
+  FF2I_connection_weight: 1.
+  FF2E_connection_weight: 2.
   EE_connection_weight: 2.
   EI_connection_weight: 2.
   IE_connection_weight: .2
   II_connection_weight: .5
   FF_mean_freq: 20
   FF_frac_active: .8
+  FF2I_connection_probability: .5
+  FF2E_connection_probability: .5
+  FF_weights_sigma_factor: .3
+  I_weights_sigma_factor: .3
+  E_weights_sigma_factor: .3

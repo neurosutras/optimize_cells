@@ -1,4 +1,5 @@
 from nested.optimize_utils import *
+from nested.parallel import *
 from random_network import *
 import collections
 import click
@@ -35,22 +36,17 @@ def main(config_file_path, export, output_dir, export_file_path, label, interact
     random.seed(137)
     context.update(locals())
     comm = MPI.COMM_WORLD
-
-    from nested.parallel import ParallelContextInterface
     context.interface = ParallelContextInterface(procs_per_worker=comm.size)
-    context.interface.apply(config_optimize_interactive, __file__, config_file_path=config_file_path,
-                            output_dir=output_dir, export=export, export_file_path=export_file_path, label=label,
-                            disp=verbose > 0, verbose=verbose)
-    context.interface.start(disp=True)
-    context.interface.ensure_controller()
+    config_interactive(context, __file__, config_file_path=config_file_path, output_dir=output_dir,
+                       export_file_path=export_file_path, label=label, verbose=verbose)
+    context.interface.start()
 
     sequences = [[context.x0_array]] + [[context.export]]
     primitives = context.interface.map(compute_features, *sequences)
     features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
     features, objectives = get_objectives(features)
-
-    #plt.plot([i for i in range(len(context.osc.E))], context.osc_E)
-    #plt.show()
+    plt.plot([i for i in range(len(context.osc.E))], context.osc_E)
+    plt.show()
     print 'params:'
     pprint.pprint(context.x0_dict)
     print 'features:'
@@ -76,7 +72,7 @@ def init_context():
     """
 
     """
-    ncell = 5
+    ncell = 12
     delay = 1
     tstop = 3000
     context.update(locals())
@@ -95,13 +91,19 @@ def update_context(x, local_context=None):
     local_context.e2i_prob = x_dict['EI_connection_prob']
     local_context.i2i_prob = x_dict['II_connection_prob']
     local_context.i2e_prob = x_dict['IE_connection_prob']
-    local_context.ff_weight = x_dict['FF_connection_weight']
+    local_context.ff2i_weight = x_dict['FF2I_connection_weight']
+    local_context.ff2e_weight = x_dict['FF2E_connection_weight']
     local_context.e2e_weight = x_dict['EE_connection_weight']
     local_context.e2i_weight = x_dict['EI_connection_weight']
     local_context.i2i_weight = x_dict['II_connection_weight']
     local_context.i2e_weight = x_dict['IE_connection_weight']
     local_context.ff_meanfreq = x_dict['FF_mean_freq']
     local_context.ff_frac_active = x_dict['FF_frac_active']
+    local_context.ff2i_prob = x_dict['FF2I_connection_probability']
+    local_context.ff2e_prob = x_dict['FF2E_connection_probability']
+    local_context.ff_sig = x_dict['FF_weights_sigma_factor']
+    local_context.i_sig = x_dict['I_weights_sigma_factor']
+    local_context.e_sig = x_dict['E_weights_sigma_factor']
 
 
 # magic nums
@@ -110,38 +112,22 @@ def compute_features(x, export=False):
     context.pc.gid_clear()
     context.network = Network(context.ncell, context.delay, context.pc, e2e_prob=context.e2e_prob, \
                               e2i_prob=context.e2i_prob, i2i_prob=context.i2i_prob, i2e_prob=context.i2e_prob, \
-                              ff_weight=context.ff_weight, e2e_weight=context.e2e_weight, e2i_weight=\
-                              context.e2i_weight, i2i_weight=context.i2i_weight, i2e_weight=context.i2e_weight, \
-                              ff_meanfreq=context.ff_meanfreq, tstop=context.tstop,
-                              ff_frac_active=context.ff_frac_active)
+                              ff2i_weight=context.ff2i_weight, ff2e_weight=context.ff2e_weight, e2e_weight= \
+                                  context.e2e_weight, e2i_weight=context.e2i_weight, i2i_weight=context.i2i_weight, \
+                              i2e_weight=context.i2e_weight, ff_meanfreq=context.ff_meanfreq, tstop=context.tstop, \
+                              ff_frac_active=context.ff_frac_active, ff2i_prob=context.ff2i_prob, ff2e_prob= \
+                                  context.ff2e_prob, ff_sig=context.ff_sig, i_sig=context.i_sig, e_sig=context.e_sig)
     results = run_network(context.network, context.pc, context.comm, context.tstop)
     if int(context.pc.id()) == 0:
         if results is None:
             return dict()
         context.peak_voltage = results['peak']
-        print context.peak_voltage
-        """context.event = results['event']
-        li = []
-        for i in range(context.ncell * 3):
-            li.append([j for j in context.event[i]])
-        plt.eventplot(li)
-        plt.show()"""
-        osc = results['osc_E']
-        plt.plot([i for i in range(len(osc))], osc)
-        plt.title('summed voltage for E pop')
-        plt.show()
         results.pop('peak', None)
         results.pop('test', None)
         return results
 
 
-def get_objectives(features, export=False):
-    """
-
-    :param features: dict
-    :param export: bool
-    :return: tuple of dict
-    """
+def get_objectives(features):
     if int(context.pc.id()) == 0:
         objectives = {}
         for feature_name in ['E_peak_rate', 'I_peak_rate', 'E_mean_rate', 'I_mean_rate', 'peak_theta_osc_E', \
