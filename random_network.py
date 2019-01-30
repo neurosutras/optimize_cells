@@ -20,18 +20,23 @@ NUM_POP = 3
 # =================== network class
 class Network(object):
 
-    def __init__(self, ncell, delay, pc, tstop, dt=None, ff_prob=1., e2e_prob=.05, e2i_prob=.05, \
-                 i2i_prob=.05, i2e_prob=.05, ff_weight=2., e2e_weight=1., e2i_weight=1., i2i_weight=.5, \
-                 i2e_weight=.5, ff_meanfreq=100, ff_frac_active=.8):
+    def __init__(self, ncell, delay, pc, tstop, dt=None, e2e_prob=.05, e2i_prob=.05, \
+                 i2i_prob=.05, i2e_prob=.05, ff2i_weight=1., ff2e_weight=2., e2e_weight=1., e2i_weight=1., \
+                 i2i_weight=.5, i2e_weight=.5, ff_meanfreq=100, ff_frac_active=.8, ff2i_prob=.5, ff2e_prob=.5, \
+                 ff_sig=.3, i_sig=.3, e_sig=.3):
         # spiking script uses dt = 0.02
         self.pc = pc
         self.delay = delay
         self.ncell = int(ncell)
+        self.FF_firing = {}
         self.ff_frac_active = ff_frac_active
-        self.prob_dict = {'ff': ff_prob, 'e2e': e2e_prob, 'e2i': e2i_prob, 'i2i': i2i_prob, 'i2e': i2e_prob}
-        self.weight_dict = {'ff' : ff_weight, 'e2e' : e2e_weight, 'e2i' : e2i_weight, 'i2i' : i2i_weight, \
-                             'i2e' : i2e_weight}
-        self.index_dict = {'ff': ((0, ncell), (ncell, ncell * NUM_POP)),  # exclusive [x, y)
+        self.prob_dict = {'e2e': e2e_prob, 'e2i': e2i_prob, 'i2i': i2i_prob, 'i2e': i2e_prob, \
+                          'ff2i': ff2i_prob, 'ff2e': ff2e_prob}
+        self.weight_dict = {'ff2i': ff2i_weight, 'ff2e': ff2e_weight, 'e2e': e2e_weight, 'e2i': e2i_weight, \
+                            'i2i': i2i_weight, 'i2e': i2e_weight}
+        self.weight_std_dict = {'ff': ff_sig, 'E': e_sig, 'I': i_sig}
+        self.index_dict = {'ff2i': ((0, ncell), (ncell, ncell * 2)),  # exclusive [x, y)
+                           'ff2e': ((0, ncell), (ncell * 2, ncell * NUM_POP)),
                            'e2e': ((ncell, ncell * 2), (ncell, ncell * 2)),
                            'e2i': ((ncell, ncell * 2), (ncell * 2, ncell * NUM_POP)),
                            'i2i': ((ncell * 2, ncell * NUM_POP), (ncell * 2, ncell * NUM_POP)),
@@ -56,7 +61,7 @@ class Network(object):
         self.gids = []
         for i in range(rank, ncell * NUM_POP, nhost):
             if i < ncell:
-                cell = FFCell(self.tstop, self.ff_meanfreq, self.ff_frac_active)
+                cell = FFCell(self.tstop, self.ff_meanfreq, self.ff_frac_active, self, i)
             else: 
                 if i not in list(range(ncell * 2, ncell * 3)):
                     cell_type = 'RS'
@@ -99,7 +104,7 @@ class Network(object):
         nhost = int(self.pc.nhost())
         self.ncdict = {}
         # not efficient but demonstrates use of pc.gid_exists
-        for connection in ['ff', 'e2e', 'e2i', 'i2i', 'i2e']:
+        for connection in ['ff2i', 'ff2e', 'e2e', 'e2i', 'i2i', 'i2e']:
             indices = self.index_dict[connection]
             inp = indices[0]
             out = indices[1]
@@ -114,26 +119,32 @@ class Network(object):
                     target_type = self.get_cell_type(target_gid)
                     if pre_type is None: #E
                         syn = target.synlist[0]
-                        weight = self.weight_dict['ff']
+                        std = self.weight_std_dict['ff']
+                        if target_type == 'RS':
+                            mu = self.weight_dict['ff2e']
+                        else:
+                            mu = self.weight_dict['ff2i']
                     elif pre_type == 'RS': #E
                         syn = target.synlist[0]
+                        std = self.weight_std_dict['E']
                         if target_type == 'RS':
-                            weight = self.weight_dict['e2e']
+                            mu = self.weight_dict['e2e']
                         else:
-                            weight = self.weight_dict['e2i']
+                            mu = self.weight_dict['e2i']
                     else: #I
                         syn = target.synlist[1]
+                        std = self.weight_std_dict['I']
                         if target_type == 'RS':
                             weight = self.weight_dict['i2e']
                         else:
                             weight = self.weight_dict['i2i']
                     nc = self.pc.gid_connect(presyn_gid, syn)
                     nc.delay = self.delay
-                    nc.weight[0] = weight
+                    nc.weight[0] = np.random.normal(mu, std, 1)
                     self.ncdict[pair] = nc
 
     # Instrumentation - stimulation and recording
-    def mkstim(self, ncell):
+    """def mkstim(self, ncell):
         self.ns = h.NetStim()
         self.ns.number = 100
         self.ns.start = 0
@@ -144,7 +155,7 @@ class Network(object):
             self.nc.delay = 0
             self.nc.weight[0] = 2
             self.ncdict[('stim', i)] = self.nc
-            # print self.ncdict
+            #print self.ncdict"""
 
     def spike_record(self):
         self.spike_tvec = {}
@@ -157,13 +168,13 @@ class Network(object):
             self.spike_tvec[gid] = tvec
             self.spike_idvec[gid] = idvec
 
-    def event_record(self, dt = None):
+    """def event_record(self, dt = None):
         for i, cell in enumerate(self. cells):
             if cell.is_art(): continue
             nc = h.NetCon(cell.sec(.5)._ref_v, None)
             rec = h.Vector()
             nc.record(rec)
-            self.event_rec[i] = rec
+            self.event_rec[i] = rec"""
 
             
     def voltage_record(self, dt=None):
@@ -189,7 +200,7 @@ class Network(object):
             self.pydicts[name][key] = value.to_python()
             # Alternatively, could use nc.record(tvec)
 
-    def compute_isi(self, vecdict):  #vecdict is an event dict
+    def compute_isi(self, vecdict):  # vecdict is an event dict
         self.ratedict = {}
         self.peakdict = {}
         for key, vec in vecdict.iteritems():
@@ -209,9 +220,9 @@ class Network(object):
             cell_type = self.get_cell_type(key)
             binned = vec.histogram(0, self.tstop, 1)
             # for i in binned: print i
-            if cell_type == 'RS':  # E
+            if cell_type == 'RS':  #E
                 self.osc_E.add(binned)
-            elif cell_type == 'FS':  # F
+            elif cell_type == 'FS':  #F
                 self.osc_I.add(binned)
 
     def compute_peak_osc_freq(self, osc, freq):
@@ -246,16 +257,19 @@ class Network(object):
         self.connectcells(self.ncell)
 
 
+"""smoothing to denoise peaks"""
+
+
 def gauss_smooth(x, window_len=101):
     x = np.array(x)
-    window = signal.general_gaussian(window_len, p=0.5, sig=20)
+    window = signal.general_gaussian(window_len, p=1, sig=20)
     filtered = signal.fftconvolve(window, x)
     filtered = (np.average(x) / np.average(filtered)) * filtered
     filtered = np.roll(filtered, -25)
     return filtered
 
 
-def boxcar(x, window_len):
+def boxcar(x, window_len=101):
     y = np.zeros((len(x),))
     for i in range(window_len):
         y[i] = x[i]
@@ -273,6 +287,8 @@ def run_network(network, pc, comm, tstop, dt=.025):
     all_events = pc.py_alltoall([network.spike_tvec for _ in range(nhost)]) # list
     all_events = {key : val for dict in all_events for key, val in dict.iteritems()} #collapse list into dict
     network.compute_isi(all_events)
+    ff_events = pc.py_alltoall([network.FF_firing for _ in range(nhost)])
+    ff_events = {key: val for dict in ff_events for key, val in dict.iteritems()}
     # Use MPI Gather instead:
     rate_dicts = pc.py_alltoall([network.ratedict for _ in range(nhost)])
     peak_dicts = pc.py_alltoall([network.peakdict for _ in range(nhost)])
@@ -284,10 +300,6 @@ def run_network(network, pc, comm, tstop, dt=.025):
     tmp = pc.py_alltoall([network.voltage_recvec for i in range(nhost)])
     if int(pc.id()) == 0:
         rec = {key: val for dict in test for key, val in dict['rec'].iteritems()}
-        tmp2 = {}
-        for elem in tmp:
-            for key, val in elem.iteritems():
-                tmp2[key] = val
         network.summation(all_events)
         """y = gauss_smooth(network.osc_E)
         x = [i for i in range(len(y))]
@@ -295,9 +307,28 @@ def run_network(network, pc, comm, tstop, dt=.025):
         x_1 = [i for i in range(len(network.osc_E))]
         plt.plot(x_1, network.osc_E, alpha=.5)
         plt.show()"""
-    
+
+        hm = np.zeros((network.ncell * NUM_POP, network.tstop + 1))
+        for i in range(network.ncell):
+            x = np.zeros((1, network.tstop + 1))
+            for t in ff_events[i]:
+                x[0][int(t)] = 1
+            smoothed = boxcar(x[0])
+            hm[i] = smoothed
+        for i in range(network.ncell, network.ncell * 3):
+            x = np.zeros((1, network.tstop + 1))
+            for t in all_events[i]:
+                x[0][int(t)] = 1
+            smoothed = boxcar(x[0])
+            hm[i] = smoothed
+        import seaborn as sns
+        sns.heatmap(hm)
+        plt.show()
+        #sns.plt.show()
+            
         peak_voltage = float("-inf") #print list(rec.keys())
         if network.ncell in list(rec.keys()):
+            print max(rec[network.ncell])
             for i, x in enumerate(rec[network.ncell]):
                 if i % 500 == 0: 
                     peak_voltage = max(peak_voltage, x)
@@ -329,11 +360,11 @@ def run_network(network, pc, comm, tstop, dt=.025):
             I_max = I_max / float(network.ncell - uncounted)
 
         # t = {key: value for dict in all_dicts for key, value in dict['t'].iteritems()}
-
+        """temp until smoothing gets sorted"""
         bc_E = boxcar(network.osc_E, 100)
         bc_I = boxcar(network.osc_I, 100)
 
-        # window_len = min(int(2000./down_dt), len(down_t) - 1)
+        #window_len = min(int(2000./down_dt), len(down_t) - 1)
         window_len = 2000.
         theta_filter = signal.firwin(window_len, [5., 10.], nyq=1000. / 2., pass_zero=False)
         theta_E = signal.filtfilt(theta_filter, [1.], bc_E, padtype='even', padlen=window_len)
@@ -342,7 +373,7 @@ def run_network(network, pc, comm, tstop, dt=.025):
         plt.title('theta')
         plt.show()
 
-        # window_len = min(int(100./down_dt), len(down_t) - 1)
+        #window_len = min(int(100./down_dt), len(down_t) - 1)
         window_len = 200.
         gamma_filter = signal.firwin(window_len, [30., 100.], nyq=1000. / 2., pass_zero=False)
         gamma_E = signal.filtfilt(gamma_filter, [1.], bc_E, padtype='even', padlen=window_len)
@@ -409,7 +440,7 @@ class IzhiCell(object):
         return 0
 
 class FFCell(object):
-    def __init__(self, tstop, mean_freq, frac_active):
+    def __init__(self, tstop, mean_freq, frac_active, network, gid):
         self.pp = h.VecStim()
         #tstop in ms and mean_rate in s
         n_spikes = tstop * mean_freq / 1000.
@@ -422,10 +453,13 @@ class FFCell(object):
             else:
                 if spikes[i - 1] + t > tstop: break
                 spikes.append(spikes[i - 1] + float(t))
-        #spikes = [x * float(tstop) / length for x in range(length)]
+        network.FF_firing[gid] = spikes  #spikes = [x * float(tstop) / length for x in range(length)]
         vec = h.Vector(spikes)
         if random.random() <= frac_active:  #vec = h.Vector([5, 200])
             self.pp.play(vec)
+            network.FF_firing[gid] = spikes
+        else:
+            network.FF_firing[gid] = []
 
     def connect2target(self, target):
         nc = h.NetCon(self.pp, target)
