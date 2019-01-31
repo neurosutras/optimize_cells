@@ -406,13 +406,18 @@ def run_network(network, pc, comm, tstop, dt=.025):
         plt.eventplot(test)
         plt.title("test")
         plt.show()
+        duration = 3000
+        timeline = np.arange(0., duration, dt)
         spike_time_series = {}
         for k in all_events.keys():
             spike_time_series[k] = []
             for elem in all_events[k]:
                 spike_time_series[k].append(elem)
             print(spike_time_series[k])
-            plt.eventplot(spike_time_series[k])
+            spike_indexes = [np.where(t >= spike_time)[0][0] for spike_time in spike_time_series[k]]
+            spike_count = np.zeros_like(timeline)
+            spike_count[spike_indexes] = 1.
+            plt.plot(t, spike_count)
             plt.title(str(k) + " before")
             plt.show()
             if len(spike_time_series[k]) != 0:
