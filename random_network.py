@@ -332,6 +332,44 @@ def run_network(network, pc, comm, tstop, dt=.025):
         peak_gamma_osc_I = network.compute_peak_osc_freq(gamma_I)
 
 
+        #frac active
+        # for k in all_events.keys():
+        #     print("KEY: " + str(k))
+        #     for elem in all_events[k]:
+        #         print(elem)
+
+        window_len = 100  # 100 ms
+        dt = 0.025
+        window = np.hanning(window_len / dt)
+        sigma = 10
+        x = np.arange(-3 * sigma, 3 * sigma, dt)
+        gaussian = np.exp(-(x / sigma) ** 2 / 2)
+        time_test = [100]
+        test = np.convolve(time_test, gaussian, mode='full')
+        print(test)
+        plt.eventplot(test)
+        plt.title("test")
+        plt.show()
+        spike_time_series = {}
+        for k in all_events.keys():
+            spike_time_series[k] = []
+            for elem in all_events[k]:
+                spike_time_series[k].append(elem)
+            print(spike_time_series[k])
+            plt.eventplot(spike_time_series[k])
+            plt.title(str(k) + " before")
+            plt.show()
+            if len(spike_time_series[k]) != 0:
+                spike_time_series[k] = np.convolve(spike_time_series[k], window/window.sum(), mode='valid')
+                #spike_time_series[k] = np.convolve(spike_time_series[k], gaussian, mode='full')
+            print(spike_time_series[k])
+            plt.eventplot(spike_time_series[k])
+            plt.title(str(k) + " after")
+            plt.show()
+        print(spike_time_series)
+
+
+
         # rec = {key: value for dict in all_dicts for key, value in dict['rec'].iteritems()}
         return {'E_mean_rate': E_mean, 'E_peak_rate': E_max, 'I_mean_rate': I_mean, "I_peak_rate": I_max, \
                 'peak': peak_voltage, 'peak_theta_osc_E': peak_theta_osc_E, 'peak_theta_osc_I': \

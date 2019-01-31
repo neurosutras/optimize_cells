@@ -39,6 +39,8 @@ feature_names:
 - I_mean_rate
 - peak_theta_osc_E
 - peak_theta_osc_I
+- E_frac_active
+- I_frac_active
 update_context:
 - - optimize_random_network
   - update_context
@@ -56,6 +58,8 @@ objective_names:
 - I_mean_rate
 - peak_theta_osc_E
 - peak_theta_osc_I
+- E_frac_active
+- I_frac_active
 optimization_title: random_network
 param_gen: PopulationAnnealing
 param_names:
@@ -77,6 +81,8 @@ target_range:
   I_mean_rate: 11.
   peak_theta_osc_E: 2.5
   peak_theta_osc_I: 2.5
+  E_frac_active: 0.1
+  I_frac_active: 0.1
 target_val:
   E_peak_rate: 10.
   I_peak_rate: 30.
@@ -84,6 +90,8 @@ target_val:
   I_mean_rate: 3.5
   peak_theta_osc_E: 8.
   peak_theta_osc_I: 8.
+  E_frac_active: 0.3
+  I_frac_active: 0.3
 x0:
   EE_connection_prob: 0.8
   EI_connection_prob: 0.1
