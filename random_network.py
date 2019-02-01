@@ -178,7 +178,6 @@ class Network(object):
             nc.record(rec)
             self.event_rec[i] = rec"""
 
-            
     def voltage_record(self, dt=None):
         self.voltage_tvec = {}
         self.voltage_recvec = {}
@@ -227,7 +226,7 @@ class Network(object):
             elif cell_type == 'FS':  #F
                 self.osc_I.add(binned)
 
-    def compute_peak_osc_freq(self, osc, freq):
+    def compute_peak_osc_freq(self, osc, freq, plot=False):
         sub_osc = osc[int(len(osc) / 6):]
         filtered = gauss_smooth(sub_osc)
         if freq == 'theta':
@@ -237,16 +236,16 @@ class Network(object):
         peak_loc = signal.find_peaks_cwt(filtered, widths)
         tmp = h.Vector()
         x = [i for i in range(len(sub_osc) + 100)]
-        plt.plot(x, filtered, '-gD', markevery=peak_loc)
-        plt.show()
         if len(peak_loc) > 1:
             tmp.deriv(h.Vector(peak_loc), 1, 1)
             peak = 1 / (tmp.min() / 1000.)
+            if plot:
+                plt.plot(x, filtered, '-gD', markevery=peak_loc)
+                plt.show()
         else:
             peak = -1
         return peak
 
-    
     def remake_syn(self):
         if int(self.pc.id() == 0):
             for pair, nc in self.ncdict.iteritems():
@@ -275,7 +274,7 @@ def boxcar(x, window_len=101):
     return y
 
 
-def run_network(network, pc, comm, tstop, dt=.025):
+def run_network(network, pc, comm, tstop, dt=.025, plot=False):
     pc.set_maxstep(10)
     h.stdinit()
     pc.psolve(tstop)
@@ -311,11 +310,12 @@ def run_network(network, pc, comm, tstop, dt=.025):
                 x[0][int(t)] = 1
             smoothed = boxcar(x[0])
             hm[i] = smoothed
-        import seaborn as sns
-        sns.heatmap(hm)
-        plt.show()
-        #sns.plt.show()
-            
+        if plot:
+            import seaborn as sns
+            sns.heatmap(hm)
+            plt.show()
+            #sns.plt.show()
+
         peak_voltage = float("-inf") #print list(rec.keys())
         if network.ncell in list(rec.keys()):
             print max(rec[network.ncell])
@@ -355,22 +355,25 @@ def run_network(network, pc, comm, tstop, dt=.025):
         bc_I = boxcar(network.osc_I, 100)
 
         #window_len = min(int(2000./down_dt), len(down_t) - 1)
-        window_len = 2000.
+        dt = 1.  # ms
+        window_len = int(2000. / dt)
         theta_filter = signal.firwin(window_len, [5., 10.], nyq=1000. / 2., pass_zero=False)
         theta_E = signal.filtfilt(theta_filter, [1.], bc_E, padtype='even', padlen=window_len)
         theta_I = signal.filtfilt(theta_filter, [1.], bc_I, padtype='even', padlen=window_len)
-        plt.plot([i for i in range(len(theta_E))], theta_E)
-        plt.title('theta')
-        plt.show()
+        if plot:
+            plt.plot([i for i in range(len(theta_E))], theta_E)
+            plt.title('theta')
+            plt.show()
 
         #window_len = min(int(100./down_dt), len(down_t) - 1)
-        window_len = 200.
+        window_len = int(200. / dt)
         gamma_filter = signal.firwin(window_len, [30., 100.], nyq=1000. / 2., pass_zero=False)
         gamma_E = signal.filtfilt(gamma_filter, [1.], bc_E, padtype='even', padlen=window_len)
         gamma_I = signal.filtfilt(gamma_filter, [1.], bc_I, padtype='even', padlen=window_len)
-        plt.plot([i for i in range(len(gamma_E))], gamma_E)
-        plt.title('gamma')
-        plt.show()
+        if plot:
+            plt.plot([i for i in range(len(gamma_E))], gamma_E)
+            plt.title('gamma')
+            plt.show()
 
         peak_theta_osc_E = network.compute_peak_osc_freq(theta_E, 'theta')
         peak_theta_osc_I = network.compute_peak_osc_freq(theta_I, 'theta')
