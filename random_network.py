@@ -23,13 +23,15 @@ class Network(object):
     def __init__(self, ncell, delay, pc, tstop, dt=None, e2e_prob=.05, e2i_prob=.05, \
                  i2i_prob=.05, i2e_prob=.05, ff2i_weight=1., ff2e_weight=2., e2e_weight=1., e2i_weight=1., \
                  i2i_weight=.5, i2e_weight=.5, ff_meanfreq=100, ff_frac_active=.8, ff2i_prob=.5, ff2e_prob=.5, \
-                 ff_sig=.3, i_sig=.3, e_sig=.3):
+                 ff_sig=.3, i_sig=.3, e_sig=.3, tau_E=2., tau_I=5.):
         # spiking script uses dt = 0.02
         self.pc = pc
         self.delay = delay
         self.ncell = int(ncell)
         self.FF_firing = {}
         self.ff_frac_active = ff_frac_active
+        self.tau_E = tau_E
+        self.tau_I = tau_I
         self.prob_dict = {'e2e': e2e_prob, 'e2i': e2i_prob, 'i2i': i2i_prob, 'i2e': i2e_prob, \
                           'ff2i': ff2i_prob, 'ff2e': ff2e_prob}
         self.weight_dict = {'ff2i': ff2i_weight, 'ff2e': ff2e_weight, 'e2e': e2e_weight, 'e2i': e2i_weight, \
@@ -67,7 +69,7 @@ class Network(object):
                     cell_type = 'RS'
                 else:
                     cell_type = 'FS'
-                cell = IzhiCell(cell_type)
+                cell = IzhiCell(self.tau_E, self.tau_I, cell_type)
             self.cells.append(cell)
             self.gids.append(i)
             self.pc.set_gid2node(i, rank)
@@ -176,7 +178,6 @@ class Network(object):
             nc.record(rec)
             self.event_rec[i] = rec"""
 
-            
     def voltage_record(self, dt=None):
         self.voltage_tvec = {}
         self.voltage_recvec = {}
@@ -225,12 +226,9 @@ class Network(object):
             elif cell_type == 'FS':  #F
                 self.osc_I.add(binned)
 
-    def compute_peak_osc_freq(self, osc, freq):
+    def compute_peak_osc_freq(self, osc, freq, plot=False):
         sub_osc = osc[int(len(osc) / 6):]
-        window = signal.general_gaussian(101, p=0.5, sig=20)
-        filtered = signal.fftconvolve(window, sub_osc)
-        filtered = (np.average(sub_osc) / np.average(filtered)) * filtered
-        filtered = np.roll(filtered, -25)
+        filtered = gauss_smooth(sub_osc)
         if freq == 'theta':
             widths = np.arange(50, 200)
         else:
@@ -238,16 +236,16 @@ class Network(object):
         peak_loc = signal.find_peaks_cwt(filtered, widths)
         tmp = h.Vector()
         x = [i for i in range(len(sub_osc) + 100)]
-        """plt.plot(x, filtered, '-gD', markevery=peak_loc)
-        plt.show()"""
         if len(peak_loc) > 1:
             tmp.deriv(h.Vector(peak_loc), 1, 1)
             peak = 1 / (tmp.min() / 1000.)
+            if plot:
+                plt.plot(x, filtered, '-gD', markevery=peak_loc)
+                plt.show()
         else:
             peak = -1
         return peak
 
-    
     def remake_syn(self):
         if int(self.pc.id() == 0):
             for pair, nc in self.ncdict.iteritems():
@@ -256,18 +254,15 @@ class Network(object):
                 #print pair
         self.connectcells(self.ncell)
 
-
 """smoothing to denoise peaks"""
 
 
 def gauss_smooth(x, window_len=101):
-    x = np.array(x)
     window = signal.general_gaussian(window_len, p=1, sig=20)
     filtered = signal.fftconvolve(window, x)
     filtered = (np.average(x) / np.average(filtered)) * filtered
     filtered = np.roll(filtered, -25)
     return filtered
-
 
 def boxcar(x, window_len=101):
     y = np.zeros((len(x),))
@@ -279,7 +274,7 @@ def boxcar(x, window_len=101):
     return y
 
 
-def run_network(network, pc, comm, tstop, dt=.025):
+def run_network(network, pc, comm, tstop, dt=.025, plot=False):
     pc.set_maxstep(10)
     h.stdinit()
     pc.psolve(tstop)
@@ -301,12 +296,6 @@ def run_network(network, pc, comm, tstop, dt=.025):
     if int(pc.id()) == 0:
         rec = {key: val for dict in test for key, val in dict['rec'].iteritems()}
         network.summation(all_events)
-        """y = gauss_smooth(network.osc_E)
-        x = [i for i in range(len(y))]
-        plt.plot(x, y, alpha=.5)
-        x_1 = [i for i in range(len(network.osc_E))]
-        plt.plot(x_1, network.osc_E, alpha=.5)
-        plt.show()"""
 
         hm = np.zeros((network.ncell * NUM_POP, network.tstop + 1))
         for i in range(network.ncell):
@@ -321,11 +310,12 @@ def run_network(network, pc, comm, tstop, dt=.025):
                 x[0][int(t)] = 1
             smoothed = boxcar(x[0])
             hm[i] = smoothed
-        import seaborn as sns
-        sns.heatmap(hm)
-        plt.show()
-        #sns.plt.show()
-            
+        if plot:
+            import seaborn as sns
+            sns.heatmap(hm)
+            plt.show()
+            #sns.plt.show()
+
         peak_voltage = float("-inf") #print list(rec.keys())
         if network.ncell in list(rec.keys()):
             print max(rec[network.ncell])
@@ -365,22 +355,25 @@ def run_network(network, pc, comm, tstop, dt=.025):
         bc_I = boxcar(network.osc_I, 100)
 
         #window_len = min(int(2000./down_dt), len(down_t) - 1)
-        window_len = 2000
+        dt = 1.  # ms
+        window_len = int(2000. / dt)
         theta_filter = signal.firwin(window_len, [5., 10.], nyq=1000. / 2., pass_zero=False)
         theta_E = signal.filtfilt(theta_filter, [1.], bc_E, padtype='even', padlen=window_len)
         theta_I = signal.filtfilt(theta_filter, [1.], bc_I, padtype='even', padlen=window_len)
-        plt.plot([i for i in range(len(theta_E))], theta_E)
-        plt.title('theta')
-        plt.show()
+        if plot:
+            plt.plot([i for i in range(len(theta_E))], theta_E)
+            plt.title('theta')
+            plt.show()
 
         #window_len = min(int(100./down_dt), len(down_t) - 1)
-        window_len = 200
+        window_len = int(200. / dt)
         gamma_filter = signal.firwin(window_len, [30., 100.], nyq=1000. / 2., pass_zero=False)
         gamma_E = signal.filtfilt(gamma_filter, [1.], bc_E, padtype='even', padlen=window_len)
         gamma_I = signal.filtfilt(gamma_filter, [1.], bc_I, padtype='even', padlen=window_len)
-        plt.plot([i for i in range(len(gamma_E))], gamma_E)
-        plt.title('gamma')
-        plt.show()
+        if plot:
+            plt.plot([i for i in range(len(gamma_E))], gamma_E)
+            plt.title('gamma')
+            plt.show()
 
         peak_theta_osc_E = network.compute_peak_osc_freq(theta_E, 'theta')
         peak_theta_osc_I = network.compute_peak_osc_freq(theta_I, 'theta')
@@ -454,7 +447,7 @@ def run_network(network, pc, comm, tstop, dt=.025):
 
 class IzhiCell(object):
     # derived from modelDB
-    def __init__(self, type='RS'):  # RS = excit or FS = inhib
+    def __init__(self, tau_E, tau_I, type='RS'):  # RS = excit or FS = inhib
         self.type = type
         self.sec = h.Section(cell=self)
         self.sec.L, self.sec.diam, self.sec.cm = 10, 10, 31.831
@@ -466,20 +459,20 @@ class IzhiCell(object):
         if type == 'RS': self.izh.a = .1
         if type == 'FS': self.izh.a = .02
 
-        self.synapses()
+        self.synapses(tau_E, tau_I)
 
     def __del__(self):
         # print 'delete ', self
         pass
 
     # from Ball_Stick
-    def synapses(self):
+    def synapses(self, tau_E, tau_I):
         synlist = []
         s = h.ExpSyn(self.sec(0.8))  # E
-        s.tau = 2
+        s.tau = tau_E
         synlist.append(s)
         s = h.ExpSyn(self.sec(0.1))  # I1
-        s.tau = 5
+        s.tau = tau_I
         s.e = -80
         synlist.append(s)
 
@@ -500,7 +493,7 @@ class FFCell(object):
         #tstop in ms and mean_rate in s
         n_spikes = tstop * mean_freq / 1000.
         length = int(tstop / n_spikes)
-        sample = np.random.poisson(float(tstop) / length, length * 10)
+        sample = np.random.poisson(tstop / n_spikes, length * 10)
         spikes = []
         for i, t in enumerate(sample):
             if i == 0: 
@@ -508,8 +501,10 @@ class FFCell(object):
             else:
                 if spikes[i - 1] + t > tstop: break
                 spikes.append(spikes[i - 1] + float(t))
-        network.FF_firing[gid] = spikes  #spikes = [x * float(tstop) / length for x in range(length)]
+        network.FF_firing[gid] = spikes
         vec = h.Vector(spikes)
+        """self.pp.play(vec)
+        print spikes"""
         if random.random() <= frac_active:  #vec = h.Vector([5, 200])
             self.pp.play(vec)
             network.FF_firing[gid] = spikes
