@@ -46,8 +46,6 @@ def main(config_file_path, export, output_dir, export_file_path, label, interact
     primitives = context.interface.map(compute_features, *sequences)
     features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
     features, objectives = get_objectives(features)
-    plt.plot([i for i in range(len(context.osc.E))], context.osc_E)
-    plt.show()
     print 'params:'
     pprint.pprint(context.x0_dict)
     print 'features:'
@@ -105,6 +103,8 @@ def update_context(x, local_context=None):
     local_context.ff_sig = x_dict['FF_weights_sigma_factor']
     local_context.i_sig = x_dict['I_weights_sigma_factor']
     local_context.e_sig = x_dict['E_weights_sigma_factor']
+    local_context.tau_E = x_dict['tau_E']
+    local_context.tau_I = x_dict['tau_I']
 
 
 # magic nums
@@ -117,14 +117,16 @@ def compute_features(x, export=False):
                                   context.e2e_weight, e2i_weight=context.e2i_weight, i2i_weight=context.i2i_weight, \
                               i2e_weight=context.i2e_weight, ff_meanfreq=context.ff_meanfreq, tstop=context.tstop, \
                               ff_frac_active=context.ff_frac_active, ff2i_prob=context.ff2i_prob, ff2e_prob= \
-                                  context.ff2e_prob, ff_sig=context.ff_sig, i_sig=context.i_sig, e_sig=context.e_sig)
+                                  context.ff2e_prob, ff_sig=context.ff_sig, i_sig=context.i_sig, e_sig=context.e_sig, \
+                              tau_E=context.tau_E, tau_I=context.tau_I)
     results = run_network(context.network, context.pc, context.comm, context.tstop)
     if int(context.pc.id()) == 0:
         if results is None:
             return dict()
         context.peak_voltage = results['peak']
         results.pop('peak', None)
-        results.pop('test', None)
+        results.pop('event', None)
+        results.pop('osc_E')
         return results
 
 
