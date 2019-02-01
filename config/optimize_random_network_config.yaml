@@ -13,10 +13,10 @@ bounds:
   - .8
   FF2E_connection_weight: !!python/tuple
   - 0.
-  - 5.
+  - 2.
   FF2I_connection_weight: !!python/tuple
   - 0.
-  - 5.
+  - 2.
   EE_connection_weight: !!python/tuple
   - 0.
   - 5.
@@ -50,6 +50,12 @@ bounds:
   I_weights_sigma_factor: !!python/tuple
   - 0. 
   - 2.
+  tau_E: !!python/tuple
+  - 1.
+  - 8.
+  tau_I: !!python/tuple
+  - 2.
+  - 10.  
 feature_names:
 - E_peak_rate
 - I_peak_rate
@@ -94,6 +100,8 @@ param_names:
 - FF_weights_sigma_factor
 - E_weights_sigma_factor
 - I_weights_sigma_factor
+- tau_E
+- tau_I
 target_range:
   E_peak_rate: 5.
   I_peak_rate: 7.
@@ -113,8 +121,8 @@ x0:
   EI_connection_prob: 0.1
   IE_connection_prob: 0.1
   II_connection_prob: 0.1
-  FF2I_connection_weight: 1.
-  FF2E_connection_weight: 2.
+  FF2I_connection_weight: .05
+  FF2E_connection_weight: .05
   EE_connection_weight: 2.
   EI_connection_weight: 2.
   IE_connection_weight: .2
@@ -126,3 +134,5 @@ x0:
   FF_weights_sigma_factor: .3
   I_weights_sigma_factor: .3
   E_weights_sigma_factor: .3
+  tau_E: 2.
+  tau_I: 5.
