@@ -46,8 +46,8 @@ def main(config_file_path, export, output_dir, export_file_path, label, interact
     primitives = context.interface.map(compute_features, *sequences)
     features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
     features, objectives = get_objectives(features)
-    plt.plot([i for i in range(len(context.osc.E))], context.osc_E)
-    plt.show()
+    # plt.plot([i for i in range(len(context.osc_E))], context.osc_E)
+    # plt.show()
     print 'params:'
     pprint.pprint(context.x0_dict)
     print 'features:'
@@ -73,7 +73,7 @@ def init_context():
     """
 
     """
-    ncell = 12
+    ncell = 1
     delay = 1
     tstop = 3000
     context.update(locals())
@@ -138,7 +138,7 @@ def get_objectives(features, export=False):
     if int(context.pc.id()) == 0:
         objectives = {}
         for feature_name in ['E_peak_rate', 'I_peak_rate', 'E_mean_rate', 'I_mean_rate', 'peak_theta_osc_E', \
-                             'peak_theta_osc_I']:
+                             'peak_theta_osc_I', 'frac_active']:
             objective_name = feature_name
             if features[feature_name] == 0.:
                 objectives[objective_name] = (context.peak_voltage - 45.) ** 2

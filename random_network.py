@@ -365,7 +365,7 @@ def run_network(network, pc, comm, tstop, dt=.025):
         bc_I = boxcar(network.osc_I, 100)
 
         #window_len = min(int(2000./down_dt), len(down_t) - 1)
-        window_len = 2000.
+        window_len = 2000
         theta_filter = signal.firwin(window_len, [5., 10.], nyq=1000. / 2., pass_zero=False)
         theta_E = signal.filtfilt(theta_filter, [1.], bc_E, padtype='even', padlen=window_len)
         theta_I = signal.filtfilt(theta_filter, [1.], bc_I, padtype='even', padlen=window_len)
@@ -374,7 +374,7 @@ def run_network(network, pc, comm, tstop, dt=.025):
         plt.show()
 
         #window_len = min(int(100./down_dt), len(down_t) - 1)
-        window_len = 200.
+        window_len = 200
         gamma_filter = signal.firwin(window_len, [30., 100.], nyq=1000. / 2., pass_zero=False)
         gamma_E = signal.filtfilt(gamma_filter, [1.], bc_E, padtype='even', padlen=window_len)
         gamma_I = signal.filtfilt(gamma_filter, [1.], bc_I, padtype='even', padlen=window_len)
@@ -388,54 +388,66 @@ def run_network(network, pc, comm, tstop, dt=.025):
         peak_gamma_osc_I = network.compute_peak_osc_freq(gamma_I, 'gamma')
 
 
-        #frac active
-        # for k in all_events.keys():
-        #     print("KEY: " + str(k))
-        #     for elem in all_events[k]:
-        #         print(elem)
-
-        window_len = 100  # 100 ms
+        filter_duration = 100  # 100 ms
+        filter_t = np.arange(-filter_duration, filter_duration, dt)
+        sigma = filter_duration / 3. / np.sqrt(2.)  # contains 99.7% gaussian area
+        gaussian_filter = np.exp(-(filter_t / sigma) ** 2.)
+        # The area of a convolution filter affects the amplitude of the resulting signal.
+        # The time integral of the filter (the area under the curve) should be 1.
+        gaussian_filter /= np.trapz(gaussian_filter, dx=dt / 1000.)  # convert ms to sec
         dt = 0.025
-        window = np.hanning(window_len / dt)
-        sigma = 10
-        x = np.arange(-3 * sigma, 3 * sigma, dt)
-        gaussian = np.exp(-(x / sigma) ** 2 / 2)
-        time_test = [100]
-        test = np.convolve(time_test, gaussian, mode='full')
-        print(test)
-        plt.eventplot(test)
-        plt.title("test")
-        plt.show()
         duration = 3000
         timeline = np.arange(0., duration, dt)
+        total_active = np.zeros_like(timeline)
         spike_time_series = {}
-        for k in all_events.keys():
-            spike_time_series[k] = []
-            for elem in all_events[k]:
-                spike_time_series[k].append(elem)
-            print(spike_time_series[k])
-            spike_indexes = [np.where(t >= spike_time)[0][0] for spike_time in spike_time_series[k]]
+        for k in all_events:
+            # spike_time_series[k] = []
+            # for elem in all_events[k]:
+            #     spike_time_series[k].append(elem)
+            # print(spike_time_series[k])
+            spike_indexes = [np.where(timeline >= spike_time)[0][0] for spike_time in all_events[k]]
+            # print(spike_indexes)
             spike_count = np.zeros_like(timeline)
             spike_count[spike_indexes] = 1.
-            plt.plot(t, spike_count)
-            plt.title(str(k) + " before")
-            plt.show()
-            if len(spike_time_series[k]) != 0:
-                spike_time_series[k] = np.convolve(spike_time_series[k], window/window.sum(), mode='valid')
-                #spike_time_series[k] = np.convolve(spike_time_series[k], gaussian, mode='full')
-            print(spike_time_series[k])
-            plt.eventplot(spike_time_series[k])
-            plt.title(str(k) + " after")
-            plt.show()
-        print(spike_time_series)
+            # plt.plot(timeline, spike_count)
+            # plt.title(str(k) + " before")
+            # plt.show()
+            if len(spike_indexes) != 0:
+                test_signal = np.convolve(spike_count, gaussian_filter)
+                sig = test_signal[int(filter_duration / dt):][:len(spike_count)]
+                # print(sig)
+                # plt.plot(timeline, sig)
+                # plt.title(str(k) + " after")
+                # plt.show()
+                smoothed_times = np.where(sig >= 1)[0]  # threshold at 1 Hz
+                #print(smoothed_times)
+                #smoothed = smoothed[0] / dt
+                #smoothed_times = [int(i) for i in smoothed]
+                smoothed_spikes = np.zeros_like(timeline)
+                smoothed_spikes[smoothed_times] = 1.
+                total_active += smoothed_spikes
+                spike_time_series[k] = smoothed_spikes
+            else:
+                spike_time_series[k] = np.zeros_like(timeline)
+
+        total_active /= len(spike_time_series)
+        plt.plot(timeline, total_active)
+        plt.title("fraction active at each timestep")
+        plt.show()
+        print(total_active)
+        frac_active = np.mean(total_active)
+        #print(spike_time_series)
+        print("Fraction Active: " + str(frac_active))
 
 
 
         # rec = {key: value for dict in all_dicts for key, value in dict['rec'].iteritems()}
-        return {'E_mean_rate': E_mean, 'E_peak_rate': E_max, 'I_mean_rate': I_mean, "I_peak_rate": I_max, \
+        feature_values = {'E_mean_rate': E_mean, 'E_peak_rate': E_max, 'I_mean_rate': I_mean, "I_peak_rate": I_max, \
                 'peak': peak_voltage, 'peak_theta_osc_E': peak_theta_osc_E, 'peak_theta_osc_I': \
                     peak_theta_osc_I, 'peak_gamma_osc_E': peak_gamma_osc_E, 'peak_gamma_osc_I': peak_gamma_osc_I, \
-                "event": all_events, 'osc_E': network.osc_E}
+                "event": all_events, 'osc_E': network.osc_E, 'frac_active': frac_active}
+        print(feature_values)
+        return feature_values
 
 
 # ==================== cell class                                                                                                                                                                                                                                                                                                                                                        # single cell
