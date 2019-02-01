@@ -13,22 +13,22 @@ bounds:
   - .8
   FF2E_connection_weight: !!python/tuple
   - 0.
-  - 2.
+  - 0.5 #2.
   FF2I_connection_weight: !!python/tuple
   - 0.
-  - 2.
+  - 0.5 #2.
   EE_connection_weight: !!python/tuple
   - 0.
-  - 5.
+  - 0.5 #5.
   EI_connection_weight: !!python/tuple
   - 0.
-  - 5.
+  - 0.5 #5.
   II_connection_weight: !!python/tuple
   - 0.
-  - 5.
+  - 0.5 #5.
   IE_connection_weight: !!python/tuple
   - 0.
-  - 5.
+  - 0.5 #5.
   FF_mean_freq: !!python/tuple
   - .15
   - 200.
@@ -111,7 +111,7 @@ target_range:
   I_mean_rate: 5.
   peak_theta_osc_E: 2.5
   peak_theta_osc_I: 2.5
-  frac_active: 0.1
+  frac_active: 0.01
 target_val:
   E_peak_rate: 30.
   I_peak_rate: 40.
@@ -119,7 +119,7 @@ target_val:
   I_mean_rate: 30.
   peak_theta_osc_E: 8.
   peak_theta_osc_I: 8.
-  frac_active: 0.3
+  frac_active: 0.05
 x0:
   EE_connection_prob: 0.8
   EI_connection_prob: 0.1
@@ -127,10 +127,10 @@ x0:
   II_connection_prob: 0.1
   FF2I_connection_weight: .05
   FF2E_connection_weight: .05
-  EE_connection_weight: 2.
-  EI_connection_weight: 2.
-  IE_connection_weight: .2
-  II_connection_weight: .5
+  EE_connection_weight: 0.1 #2.
+  EI_connection_weight: 0.1 #2.
+  IE_connection_weight: 0.1 #.2
+  II_connection_weight: 0.1 #.5
   FF_mean_freq: 20
   FF_frac_active: .8
   FF2I_connection_probability: .5

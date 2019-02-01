@@ -129,7 +129,7 @@ def compute_features(x, export=False):
                               ff_frac_active=context.ff_frac_active, ff2i_prob=context.ff2i_prob, ff2e_prob= \
                                   context.ff2e_prob, ff_sig=context.ff_sig, i_sig=context.i_sig, e_sig=context.e_sig, \
                               tau_E=context.tau_E, tau_I=context.tau_I)
-    results = run_network(context.network, context.pc, context.comm, context.tstop, context.plot)
+    results = run_network(context.network, context.pc, context.comm, context.tstop, plot=context.plot)
     if int(context.pc.id()) == 0:
         if results is None:
             return dict()

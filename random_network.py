@@ -1,3 +1,4 @@
+#from __future__ import division
 from mpi4py import MPI
 from neuron import h
 import numpy as np
@@ -137,9 +138,11 @@ class Network(object):
                         syn = target.synlist[1]
                         std = self.weight_std_dict['I']
                         if target_type == 'RS':
-                            weight = self.weight_dict['i2e']
+                            # weight = self.weight_dict['i2e']
+                            mu = self.weight_dict['i2e']
                         else:
-                            weight = self.weight_dict['i2i']
+                            # weight = self.weight_dict['i2i']
+                            mu = self.weight_dict['i2i']
                     nc = self.pc.gid_connect(presyn_gid, syn)
                     nc.delay = self.delay
                     nc.weight[0] = np.random.normal(mu, std, 1)
@@ -236,8 +239,10 @@ class Network(object):
         peak_loc = signal.find_peaks_cwt(filtered, widths)
         tmp = h.Vector()
         x = [i for i in range(len(sub_osc) + 100)]
-        if len(peak_loc) > 1:
+        if len(peak_loc) > 1 or tmp.min() != 0.0:
             tmp.deriv(h.Vector(peak_loc), 1, 1)
+            print("temp min")
+            print(tmp.min())
             peak = 1 / (tmp.min() / 1000.)
             if plot:
                 plt.plot(x, filtered, '-gD', markevery=peak_loc)
@@ -355,8 +360,8 @@ def run_network(network, pc, comm, tstop, dt=.025, plot=False):
         bc_I = boxcar(network.osc_I, 100)
 
         #window_len = min(int(2000./down_dt), len(down_t) - 1)
-        dt = 1.  # ms
-        window_len = int(2000. / dt)
+        filter_dt = 1.  # ms
+        window_len = int(2000. / filter_dt)
         theta_filter = signal.firwin(window_len, [5., 10.], nyq=1000. / 2., pass_zero=False)
         theta_E = signal.filtfilt(theta_filter, [1.], bc_E, padtype='even', padlen=window_len)
         theta_I = signal.filtfilt(theta_filter, [1.], bc_I, padtype='even', padlen=window_len)
@@ -366,7 +371,7 @@ def run_network(network, pc, comm, tstop, dt=.025, plot=False):
             plt.show()
 
         #window_len = min(int(100./down_dt), len(down_t) - 1)
-        window_len = int(200. / dt)
+        window_len = int(200. / filter_dt)
         gamma_filter = signal.firwin(window_len, [30., 100.], nyq=1000. / 2., pass_zero=False)
         gamma_E = signal.filtfilt(gamma_filter, [1.], bc_E, padtype='even', padlen=window_len)
         gamma_I = signal.filtfilt(gamma_filter, [1.], bc_I, padtype='even', padlen=window_len)
@@ -381,14 +386,15 @@ def run_network(network, pc, comm, tstop, dt=.025, plot=False):
         peak_gamma_osc_I = network.compute_peak_osc_freq(gamma_I, 'gamma')
 
 
-        filter_duration = 100  # 100 ms
+        filter_duration = 100.  # 100 ms
+        # dt = 0.025
         filter_t = np.arange(-filter_duration, filter_duration, dt)
         sigma = filter_duration / 3. / np.sqrt(2.)  # contains 99.7% gaussian area
         gaussian_filter = np.exp(-(filter_t / sigma) ** 2.)
         # The area of a convolution filter affects the amplitude of the resulting signal.
         # The time integral of the filter (the area under the curve) should be 1.
         gaussian_filter /= np.trapz(gaussian_filter, dx=dt / 1000.)  # convert ms to sec
-        dt = 0.025
+
         duration = 3000
         timeline = np.arange(0., duration, dt)
         total_active = np.zeros_like(timeline)
@@ -398,20 +404,30 @@ def run_network(network, pc, comm, tstop, dt=.025, plot=False):
             # for elem in all_events[k]:
             #     spike_time_series[k].append(elem)
             # print(spike_time_series[k])
+            #spike_indexes = [np.where(timeline >= spike_time)[0][0] for spike_time in all_events[k]]
             spike_indexes = [np.where(timeline >= spike_time)[0][0] for spike_time in all_events[k]]
+            #print("shape!")
+            #print(spike_indexes.shape)
             # print(spike_indexes)
             spike_count = np.zeros_like(timeline)
             spike_count[spike_indexes] = 1.
-            # plt.plot(timeline, spike_count)
-            # plt.title(str(k) + " before")
-            # plt.show()
+            if plot:
+                plt.plot(timeline, spike_count)
+                plt.title(str(k) + " before")
+                plt.show()
             if len(spike_indexes) != 0:
                 test_signal = np.convolve(spike_count, gaussian_filter)
+                #test_signal = gauss_smooth(spike_count)
+                # print(spike_count)
+                # print("boom")
+                # print(test_signal)
+                # print(test_signal.shape)
                 sig = test_signal[int(filter_duration / dt):][:len(spike_count)]
                 # print(sig)
-                # plt.plot(timeline, sig)
-                # plt.title(str(k) + " after")
-                # plt.show()
+                if plot:
+                    plt.plot(timeline, sig)
+                    plt.title(str(k) + " after")
+                    plt.show()
                 smoothed_times = np.where(sig >= 1)[0]  # threshold at 1 Hz
                 #print(smoothed_times)
                 #smoothed = smoothed[0] / dt
@@ -424,10 +440,11 @@ def run_network(network, pc, comm, tstop, dt=.025, plot=False):
                 spike_time_series[k] = np.zeros_like(timeline)
 
         total_active /= len(spike_time_series)
-        plt.plot(timeline, total_active)
-        plt.title("fraction active at each timestep")
-        plt.show()
-        print(total_active)
+        if plot:
+            plt.plot(timeline, total_active)
+            plt.title("fraction active at each timestep")
+            plt.show()
+        #print(total_active)
         frac_active = np.mean(total_active)
         #print(spike_time_series)
         print("Fraction Active: " + str(frac_active))
