@@ -147,7 +147,7 @@ def export_unitary_EPSP_traces():
         model_keys = context.interface.worker_comm.gather(model_keys, root=0)
         if context.interface.worker_comm.rank == 0:
             model_keys = list(set([key for key_list in model_keys for key in key_list]))
-            print 'gathered model keys: %s' % str(model_keys)
+            # print 'gathered model keys: %s' % str(model_keys)
         else:
             model_keys = None
         model_keys = context.interface.worker_comm.bcast(model_keys, root=0)
@@ -192,7 +192,7 @@ def export_compound_EPSP_traces():
         model_keys = context.interface.worker_comm.gather(model_keys, root=0)
         if context.interface.worker_comm.rank == 0:
             model_keys = list(set([key for key_list in model_keys for key in key_list]))
-            print 'gathered model keys: %s' % str(model_keys)
+            # print 'gathered model keys: %s' % str(model_keys)
         else:
             model_keys = None
         model_keys = context.interface.worker_comm.bcast(model_keys, root=0)
