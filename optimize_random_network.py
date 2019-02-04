@@ -17,7 +17,8 @@ context = Context()
 @click.option("--label", type=str, default=None)
 @click.option("--interactive", is_flag=True)
 @click.option("--verbose", type=int, default=2)
-def main(config_file_path, export, output_dir, export_file_path, label, interactive, verbose):
+@click.option("--plot", is_flag=True)
+def main(config_file_path, export, output_dir, export_file_path, label, interactive, verbose, plot):
     """
 
     :param config_file_path: str (path)
@@ -27,6 +28,7 @@ def main(config_file_path, export, output_dir, export_file_path, label, interact
     :param label: str
     :param interactive: bool
     :param verbose: int
+    :param plot: bool
     """
     # requires a global variable context: :class:'Context'
 
@@ -38,7 +40,7 @@ def main(config_file_path, export, output_dir, export_file_path, label, interact
     context.interface = ParallelContextInterface(procs_per_worker=comm.size)
     context.interface.apply(config_optimize_interactive, __file__, config_file_path=config_file_path,
                             output_dir=output_dir, export=export, export_file_path=export_file_path, label=label,
-                            disp=verbose > 0, verbose=verbose)
+                            disp=verbose > 0, verbose=verbose, plot=plot)
     context.interface.start(disp=True)
     context.interface.ensure_controller()
 
@@ -62,6 +64,8 @@ def config_worker():
     """
 
     """
+    if 'plot' not in context():
+        context.plot = False
     init_context()
     context.pc = h.ParallelContext()
     # setup_network(**context.kwargs)
@@ -109,6 +113,12 @@ def update_context(x, local_context=None):
 
 # magic nums
 def compute_features(x, export=False):
+    """
+
+    :param x: array
+    :param export: bool
+    :return: dict
+    """
     update_source_contexts(x, context)
     context.pc.gid_clear()
     context.network = Network(context.ncell, context.delay, context.pc, e2e_prob=context.e2e_prob, \
@@ -119,7 +129,7 @@ def compute_features(x, export=False):
                               ff_frac_active=context.ff_frac_active, ff2i_prob=context.ff2i_prob, ff2e_prob= \
                                   context.ff2e_prob, ff_sig=context.ff_sig, i_sig=context.i_sig, e_sig=context.e_sig, \
                               tau_E=context.tau_E, tau_I=context.tau_I)
-    results = run_network(context.network, context.pc, context.comm, context.tstop)
+    results = run_network(context.network, context.pc, context.comm, context.tstop, context.plot)
     if int(context.pc.id()) == 0:
         if results is None:
             return dict()
