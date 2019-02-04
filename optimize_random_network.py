@@ -32,7 +32,6 @@ def main(config_file_path, export, output_dir, export_file_path, label, interact
     """
     # requires a global variable context: :class:'Context'
 
-    random.seed(137)
     context.update(locals())
     comm = MPI.COMM_WORLD
 
@@ -73,11 +72,13 @@ def config_worker():
 
 def init_context():
     """
-
+    TODO: Define each population size separately here.
     """
     ncell = 12
     delay = 1  # ms
     tstop = 3000  # ms
+    local_random = random.Random()
+    local_random.seed(context.seed + context.comm.rank)
     context.update(locals())
 
 
@@ -128,8 +129,9 @@ def compute_features(x, export=False):
                               i2e_weight=context.i2e_weight, ff_meanfreq=context.ff_meanfreq, tstop=context.tstop, \
                               ff_frac_active=context.ff_frac_active, ff2i_prob=context.ff2i_prob, ff2e_prob= \
                                   context.ff2e_prob, ff_sig=context.ff_sig, i_sig=context.i_sig, e_sig=context.e_sig, \
-                              tau_E=context.tau_E, tau_I=context.tau_I)
+                              tau_E=context.tau_E, tau_I=context.tau_I, local_random=context.local_random)
     results = run_network(context.network, context.pc, context.comm, context.tstop, context.plot)
+    return dict()
     if int(context.pc.id()) == 0:
         if results is None:
             return dict()
