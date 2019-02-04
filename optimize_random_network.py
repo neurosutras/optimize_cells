@@ -78,7 +78,8 @@ def init_context():
     delay = 1  # ms
     tstop = 3000  # ms
     local_random = random.Random()
-    local_random.seed(context.seed + context.comm.rank)
+    if context.seed:
+        local_random.seed(context.seed + context.comm.rank)
     context.update(locals())
 
 
@@ -105,11 +106,13 @@ def update_context(x, local_context=None):
     local_context.ff_frac_active = x_dict['FF_frac_active']
     local_context.ff2i_prob = x_dict['FF2I_connection_probability']
     local_context.ff2e_prob = x_dict['FF2E_connection_probability']
-    local_context.ff_sig = x_dict['FF_weights_sigma_factor']
-    local_context.i_sig = x_dict['I_weights_sigma_factor']
-    local_context.e_sig = x_dict['E_weights_sigma_factor']
     local_context.tau_E = x_dict['tau_E']
     local_context.tau_I = x_dict['tau_I']
+    local_context.weight_std_factors = {'ff2e': x_dict['FF2E_weights_sigma_factor'], 'ff2i': \
+        x_dict['FF2I_weights_sigma_factor'], 'e2i': x_dict['EI_weights_sigma_factor'], 'e2e': \
+                                            x_dict['EE_weights_sigma_factor'], 'i2e': x_dict['IE_weights_sigma_factor'],
+                                        'i2i': \
+                                            x_dict['II_weights_sigma_factor']}
 
 
 # magic nums
@@ -128,10 +131,9 @@ def compute_features(x, export=False):
                                   context.e2e_weight, e2i_weight=context.e2i_weight, i2i_weight=context.i2i_weight, \
                               i2e_weight=context.i2e_weight, ff_meanfreq=context.ff_meanfreq, tstop=context.tstop, \
                               ff_frac_active=context.ff_frac_active, ff2i_prob=context.ff2i_prob, ff2e_prob= \
-                                  context.ff2e_prob, ff_sig=context.ff_sig, i_sig=context.i_sig, e_sig=context.e_sig, \
+                                  context.ff2e_prob, std_dict=context.weight_std_factors, \
                               tau_E=context.tau_E, tau_I=context.tau_I, local_random=context.local_random)
     results = run_network(context.network, context.pc, context.comm, context.tstop, context.plot)
-    return dict()
     if int(context.pc.id()) == 0:
         if results is None:
             return dict()
@@ -155,7 +157,7 @@ def get_objectives(features, export=False):
                              'peak_theta_osc_I']:
             objective_name = feature_name
             if features[feature_name] == 0.:
-                objectives[objective_name] = (context.peak_voltage - 45.) ** 2
+                objectives[objective_name] = (context.peak_voltage - 30.) ** 2
             else:
                 objectives[objective_name] = ((context.target_val[objective_name] - features[feature_name]) /
                                                       context.target_range[objective_name]) ** 2.
