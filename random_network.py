@@ -138,12 +138,14 @@ class Network(object):
                         syn = target.synlist[1]
                         std = self.weight_std_dict['I']
                         if target_type == 'RS':
-                            weight = self.weight_dict['i2e']
+                            mu = self.weight_dict['i2e']
                         else:
-                            weight = self.weight_dict['i2i']
+                            mu = self.weight_dict['i2i']
                     nc = self.pc.gid_connect(presyn_gid, syn)
                     nc.delay = self.delay
-                    nc.weight[0] = np.random.normal(mu, std, 1)
+                    weight = np.random.normal(mu, std, 1)
+                    if weight < 0: weight = mu
+                    nc.weight[0] = weight
                     self.ncdict[pair] = nc
 
     # Instrumentation - stimulation and recording
@@ -207,12 +209,13 @@ class Network(object):
         self.peakdict = {}
         for key, vec in vecdict.iteritems():
             isivec = h.Vector()
-            if len(vec) > 1: 
+            if len(vec) > 1:
                 isivec.deriv(vec, 1, 1)
                 rate = 1. / (isivec.mean() / 1000)
                 self.ratedict[key] = rate
                 if isivec.min() > 0:
                     self.peakdict[key] = 1. / (isivec.min() / 1000)
+
 
     def summation(self, vecdict, dt=.025):
         size = self.tstop + 2  #* (1 / dt) + 1
@@ -236,7 +239,14 @@ class Network(object):
             widths = np.arange(5, 50)
         peak_loc = signal.find_peaks_cwt(filtered, widths)
         tmp = h.Vector()
+
+<< << << < HEAD
+"""x = [i for i in range(len(sub_osc) + 100)]
+plt.plot(x, filtered, '-gD', markevery=peak_loc)
+plt.show()"""
+== == == =
         x = [i for i in range(len(sub_osc) + 100)]
+>> >> >> > origin / master
         if len(peak_loc) > 1:
             tmp.deriv(h.Vector(peak_loc), 1, 1)
             peak = 1 / (tmp.min() / 1000.)
@@ -255,10 +265,26 @@ class Network(object):
                 #print pair
         self.connectcells(self.ncell)
 
+
+def gauss(spikes, dt, tstop, filter_duration=100):
+    filter_duration = filter_duration  # ms
+    filter_t = np.arange(-filter_duration, filter_duration, dt)
+    sigma = filter_duration / 3. / np.sqrt(2.)
+    gaussian_filter = np.exp(-(filter_t / sigma) ** 2.)
+    gaussian_filter /= np.trapz(gaussian_filter, dx=dt / 1000)
+
+    signal = np.convolve(spikes, gaussian_filter)
+    signal_t = np.arange(0., len(signal) * dt, dt)
+    signal = signal[int(filter_duration / dt):][:len(spikes)]
+    print signal
+
+    return signal
+
+
 """smoothing to denoise peaks"""
 
 
-def gauss_smooth(x, window_len=101):
+def smooth_peaks(x, window_len=101):
     window = signal.general_gaussian(window_len, p=1, sig=20)
     filtered = signal.fftconvolve(window, x)
     filtered = (np.average(x) / np.average(filtered)) * filtered
@@ -266,13 +292,18 @@ def gauss_smooth(x, window_len=101):
     return filtered
 
 def boxcar(x, window_len=101):
-    y = np.zeros((len(x),))
-    for i in range(window_len):
+    x = np.array(x)
+    y = np.zeros((len(x) + window_len,))
+    x = np.append(x[:window_len], x)
+    for i in range(len(x)):
+        y[i] = y[i - 1] + x[i] - x[i - window_len]
+
+    """for i in range(window_len):
         y[i] = x[i]
     for i in range(window_len, len(x)):
-        y[i] = y[i - 1] + x[i] - x[i - window_len]
+        y[i] = y[i - 1] + x[i] - x[i - window_len]"""
     y = y * 1 / float(window_len)
-    return y
+    return y[window_len:]
 
 
 def run_network(network, pc, comm, tstop, dt=.025, plot=False):
@@ -308,6 +339,17 @@ def run_network(network, pc, comm, tstop, dt=.025, plot=False):
     tmp = pc.py_alltoall([network.voltage_recvec for i in range(nhost)])
     if int(pc.id()) == 0:
         rec = {key: val for dict in test for key, val in dict['rec'].iteritems()}
+        for i in range(network.ncell * 2, network.ncell * NUM_POP):
+            recv = rec[i]
+            recv2 = []
+            for j, v in enumerate(recv):
+                if j % 40 == 0: recv2.append(v)
+            ev = all_events[i]
+            x = range(len(recv2))
+            plt.plot(x, recv2, '-gD', markevery=ev)
+            plt.title('v trace')
+            plt.show()
+
         network.summation(all_events)
 
         hm = np.zeros((network.ncell * NUM_POP, network.tstop + 1))
@@ -331,9 +373,8 @@ def run_network(network, pc, comm, tstop, dt=.025, plot=False):
 
         peak_voltage = float("-inf") #print list(rec.keys())
         if network.ncell in list(rec.keys()):
-            print max(rec[network.ncell])
             for i, x in enumerate(rec[network.ncell]):
-                if i % 500 == 0: 
+                if i % 500 == 0:
                     peak_voltage = max(peak_voltage, x)
 
         E_mean = 0
@@ -343,7 +384,7 @@ def run_network(network, pc, comm, tstop, dt=.025, plot=False):
         uncounted = 0
 
         for i in range(network.ncell, network.ncell * 2):
-            if i not in processed_p: 
+            if i not in processed_p:
                 uncounted += 1
                 continue
             E_mean += processed_rd[i]
@@ -353,10 +394,10 @@ def run_network(network, pc, comm, tstop, dt=.025, plot=False):
             E_max = E_max / float(network.ncell - uncounted)
         uncounted = 0
         for i in range(network.ncell * 2, network.ncell * 3):
-            if i not in processed_p: 
-                uncounted = 0 
+            if i not in processed_p:
+                uncounted = 0
                 continue
-            I_mean += processed_rd[i] 
+            I_mean += processed_rd[i]
             I_max += processed_p[i]
         if network.ncell - uncounted != 0:
             I_mean = I_mean / float(network.ncell - uncounted)
@@ -364,8 +405,10 @@ def run_network(network, pc, comm, tstop, dt=.025, plot=False):
 
         # t = {key: value for dict in all_dicts for key, value in dict['t'].iteritems()}
         """temp until smoothing gets sorted"""
-        bc_E = boxcar(network.osc_E, 100)
-        bc_I = boxcar(network.osc_I, 100)
+        bc_E = boxcar(network.osc_E, 101)
+        bc_I = boxcar(network.osc_I, 101)
+        E_test = gauss(network.osc_E, 1., network.tstop)
+        x = range(len(E_test))
 
         #window_len = min(int(2000./down_dt), len(down_t) - 1)
         dt = 1.  # ms
@@ -450,7 +493,7 @@ class FFCell(object):
     def __init__(self, tstop, mean_freq, frac_active, network, gid):
         self.pp = h.VecStim()
         #tstop in ms and mean_rate in s
-        n_spikes = tstop * mean_freq / 1000.
+        """n_spikes = tstop * mean_freq / 1000.
         length = int(tstop / n_spikes)
         sample = np.random.poisson(tstop / n_spikes, length * 10)
         spikes = []
@@ -459,7 +502,8 @@ class FFCell(object):
                 spikes.append(float(t))
             else:
                 if spikes[i - 1] + t > tstop: break
-                spikes.append(spikes[i - 1] + float(t))
+                spikes.append(spikes[i - 1] + float(t))"""
+        spikes = get_inhom_poisson_spike_times_by_thinning([mean_freq, mean_freq], [0, tstop], 0.025)
         network.FF_firing[gid] = spikes
         vec = h.Vector(spikes)
         """self.pp.play(vec)
@@ -477,3 +521,31 @@ class FFCell(object):
     def is_art(self):
         return 1
 
+
+"""from dentate > stgen.py. temporary. personal issues with importing dentate -S"""
+
+
+def get_inhom_poisson_spike_times_by_thinning(rate, t, dt=0.02, refractory=3., generator=None):
+    if generator is None:
+        generator = random
+    interp_t = np.arange(t[0], t[-1] + dt, dt)
+    interp_rate = np.interp(interp_t, t, rate)
+    interp_rate /= 1000.
+    non_zero = np.where(interp_rate > 0.)[0]
+    interp_rate[non_zero] = 1. / (1. / interp_rate[non_zero] - refractory)
+    spike_times = []
+    max_rate = np.max(interp_rate)
+    if not max_rate > 0.:
+        return spike_times
+    i = 0
+    ISI_memory = 0.
+    while i < len(interp_t):
+        x = generator.random()
+        if x > 0.:
+            ISI = -np.log(x) / max_rate
+            i += int(ISI / dt)
+            ISI_memory += ISI
+            if (i < len(interp_t)) and (generator.random() <= interp_rate[i] / max_rate) and ISI_memory >= 0.:
+                spike_times.append(interp_t[i])
+                ISI_memory = -refractory
+    return spike_times
