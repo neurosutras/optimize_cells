@@ -2,6 +2,7 @@ from mpi4py import MPI
 from neuron import h
 import numpy as np
 import random
+import sys, time
 import scipy.signal as signal
 import matplotlib.pyplot as plt
 # for h.lambda_f
@@ -279,8 +280,20 @@ def run_network(network, pc, comm, tstop, dt=.025, plot=False):
     h.stdinit()
     pc.psolve(tstop)
     nhost = int(pc.nhost())
+
     all_events = pc.py_alltoall([network.spike_tvec for _ in range(nhost)]) # list
-    all_events = {key : val for dict in all_events for key, val in dict.iteritems()} #collapse list into dict
+
+    if comm.rank == 0:
+        print 'rank 0 sees these events:'
+        print all_events
+        sys.stdout.flush()
+    if comm.rank == 1:
+        time.sleep(1.)
+        print 'rank 1 sees these events:'
+        print all_events
+        sys.stdout.flush()
+        time.sleep(1.)
+    all_events = {key : val for this_dict in all_events for key, val in this_dict.iteritems()} #collapse list into dict
     network.compute_isi(all_events)
     ff_events = pc.py_alltoall([network.FF_firing for _ in range(nhost)])
     ff_events = {key: val for dict in ff_events for key, val in dict.iteritems()}
@@ -431,6 +444,7 @@ class IzhiCell(object):
 
     def is_art(self):
         return 0
+
 
 class FFCell(object):
     def __init__(self, tstop, mean_freq, frac_active, network, gid):
