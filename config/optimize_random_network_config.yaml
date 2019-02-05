@@ -41,15 +41,24 @@ bounds:
   FF2E_connection_probability: !!python/tuple
   - 0.
   - 1.
-  FF_weights_sigma_factor: !!python/tuple
+  FF2E_weights_sigma_factor: !!python/tuple
   - 0.
-  - 2.
-  E_weights_sigma_factor: !!python/tuple 
+  - 1.
+  FF2I_weights_sigma_factor: !!python/tuple
   - 0.
-  - 2. 
-  I_weights_sigma_factor: !!python/tuple
-  - 0. 
-  - 2.
+  - 1.
+  EI_weights_sigma_factor: !!python/tuple
+  - 0.
+  - 1.
+  EE_weights_sigma_factor: !!python/tuple
+  - 0.
+  - 1.
+  IE_weights_sigma_factor: !!python/tuple
+  - 0.
+  - 1.
+  II_weights_sigma_factor: !!python/tuple
+  - 0.
+  - 1.
   tau_E: !!python/tuple
   - 1.
   - 8.
@@ -72,7 +81,6 @@ get_features_stages:
 get_objectives:
   optimize_random_network: get_objectives
 kwargs:
-  seed: 137
   verbose: True
 objective_names:
 - E_peak_rate
@@ -98,9 +106,12 @@ param_names:
 - FF_frac_active
 - FF2I_connection_probability
 - FF2E_connection_probability
-- FF_weights_sigma_factor
-- E_weights_sigma_factor
-- I_weights_sigma_factor
+- FF2E_weights_sigma_factor
+- FF2I_weights_sigma_factor
+- EI_weights_sigma_factor
+- EE_weights_sigma_factor
+- IE_weights_sigma_factor
+- II_weights_sigma_factor
 - tau_E
 - tau_I
 target_range:
@@ -132,8 +143,11 @@ x0:
   FF_frac_active: .8
   FF2I_connection_probability: .5
   FF2E_connection_probability: .5
-  FF_weights_sigma_factor: .3
-  I_weights_sigma_factor: .3
-  E_weights_sigma_factor: .3
+  FF2E_weights_sigma_factor: .1
+  FF2I_weights_sigma_factor: .1
+  EI_weights_sigma_factor: .1
+  EE_weights_sigma_factor: .1
+  IE_weights_sigma_factor: .1
+  II_weights_sigma_factor: .1
   tau_E: 2.
   tau_I: 5.
