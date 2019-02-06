@@ -222,13 +222,7 @@ class Network(object):
             this_pydict[key] = np.array(value)
         return this_pydict
 
-    def compute_isi(self, vecdict):  # vecdict is an event dict
-        """
-        TODO: Operate on pydicts instead of vecdicts
-        TODO: Use gauss_smooth to get rates instead
-        :param vecdict:
-        :return:
-        """
+    """def compute_isi(self, vecdict):  # vecdict is an event dict
         self.ratedict = {}
         self.peakdict = {}
         for key, vec in vecdict.iteritems():
@@ -238,8 +232,22 @@ class Network(object):
                 rate = 1. / (isivec.mean() / 1000)
                 self.ratedict[key] = rate
                 if isivec.min() > 0:
-                    self.peakdict[key] = 1. / (isivec.min() / 1000)
+                    self.peakdict[key] = 1. / (isivec.min() / 1000)"""
 
+    def py_compute_isi(self, vecdict):
+        self.rate_dict = {}
+        self.peak_dict = {}
+        for key, vec in vecdict.iteritems():
+            if len(vec) > 1:
+                isi = []
+                for i in range(len(vec) - 1):
+                    isi.append(vec[i + 1] - vec[i])
+                isi = np.array(isi)
+                rate = 1. / (isi.mean() / 1000.)
+                self.rate_dict[key] = rate
+                self.peak_dict[key] = 1. / (isi.min() / 1000.)
+
+    
     def summation(self, vecdict, dt=.025):
         """
         TODO: operate on pydicts
@@ -259,6 +267,22 @@ class Network(object):
             elif cell_type == 'FS':  #F
                 self.osc_I.add(binned)
 
+    def py_summation(self, vecdict, dt=.025):
+        size = self.tstop
+        self.E_sum = np.zeros(size)
+        self.I_sum = np.zeros(size)
+        for i in range(self.ncell, self.ncell * NUM_POP):
+            cell_type = self.get_cell_type(i)
+            vec = map(int, vecdict[i])
+            t = np.arange(0., self.tstop, 1.)
+            spike_indexes = [np.where(t >= time)[0][0] for time in vec]
+            spike_count = np.zeros_like(t)
+            spike_count[spike_indexes] = 1.
+            if cell_type == 'RS':
+                self.E_sum = np.add(self.E_sum, spike_count)
+            else:
+                self.I_sum = np.add(self.I_sum, spike_count)
+
     def compute_peak_osc_freq(self, osc, freq, plot=False):
         sub_osc = osc[int(len(osc) / 6):]
         filtered = smooth_peaks(sub_osc)
@@ -276,16 +300,89 @@ class Network(object):
                 plt.plot(x, filtered, '-gD', markevery=peak_loc)
                 plt.show()
         else:
-            peak = -1
+            peak = 0.
         return peak
 
-    def remake_syn(self):
+    def compute_pop_firing_rates(self, lower, upper, rate_dict, peak_dict):
+        uncounted = 0
+        mean = 0;
+        max_firing = 0
+        for i in range(lower, upper):
+            if i not in rate_dict:
+                uncounted += 1
+                continue
+            mean += rate_dict[i]
+            max_firing += peak_dict[i]
+        if self.ncell - uncounted != 0:
+            mean = mean / float(self.ncell - uncounted)
+            max_firing = max_firing / float(self.ncell - uncounted)
+
+        return mean, max_firing
+
+    def plot_voltage_trace(self, vecdict, all_events, dt=.025):
+        ms_step = int(1. / dt)
+        for i in range(self.ncell * 2, self.ncell * NUM_POP):
+            ms_rec = []
+            for j, v in enumerate(vecdict[i]):
+                if j % ms_step == 0: ms_rec.append(v)
+            ev = list(all_events[i])
+            plt.plot(range(len(ms_rec)), ms_rec, '-gD', markevery=ev)
+            plt.title('v trace')
+            plt.show()
+
+    def plot_cell_activity(self, all_spikes_dict):
+        import seaborn as sns
+
+        hm = np.zeros((self.ncell * NUM_POP, self.tstop))
+        for key, val in all_spikes_dict.iteritems():
+            x = np.zeros(self.tstop)
+            for t in val: x[int(t)] = 1
+            smoothed = boxcar(x)
+            hm[key] = smoothed
+        sns.heatmap(hm)
+        plt.show()
+
+    def plot_smoothing(self, gauss_E):
+        plt.plot(range(len(gauss_E)), gauss_E)
+        plt.title('gauss smoothing - E pop')
+        plt.show()
+        plt.plot(range(len(network.E_sum)), self.E_sum)
+        plt.title('spike counts - E pop')
+        plt.show()
+
+    def plot_bands(self, theta_E, gamma_E):
+        plt.plot(range(len(theta_E)), theta_E)
+        plt.title('theta E')
+        plt.show()
+        plt.plot(range(len(gamma_E)), gamma_E)
+        plt.title('gamma E')
+        plt.show()
+
+    def get_bands_of_interest(self, plot):
+        gauss_E = gauss(self.E_sum, 1., self.tstop)
+        gauss_I = gauss(self.I_sum, 1., self.tstop)
+
+        filter_dt = 1.  # ms
+        window_len = int(2000. / filter_dt)
+        theta_band = [5., 10.]
+        theta_E, theta_I = filter_band(gauss_E, gauss_I, window_len, theta_band)
+        window_len = int(200. / filter_dt)
+        gamma_band = [30., 100.]
+        gamma_E, gamma_I = filter_band(gauss_E, gauss_I, window_len, gamma_band)
+
+        if plot:
+            network.plot_smoothing(gauss_E)
+            network.plot_bands(theta_E, gamma_E)
+
+        return theta_E, theta_I, gamma_E, gamma_I
+
+    """def remake_syn(self):
         if int(self.pc.id() == 0):
             for pair, nc in self.ncdict.iteritems():
                 nc.weight[0] = 0.
                 self.ncdict.pop(pair)
                 #print pair
-        self.connectcells(self.ncell)
+        self.connectcells(self.ncell)"""
 
 
 def gauss(spikes, dt, tstop, filter_duration=100):
@@ -298,15 +395,19 @@ def gauss(spikes, dt, tstop, filter_duration=100):
     signal = np.convolve(spikes, gaussian_filter)
     signal_t = np.arange(0., len(signal) * dt, dt)
     signal = signal[int(filter_duration / dt):][:len(spikes)]
-    print signal
 
     return signal
 
 
-"""smoothing to denoise peaks"""
+def filter_band(E, I, window_len, band):
+    filt = signal.firwin(window_len, band, nyq=1000. / 2., pass_zero=False)
+    E_band = signal.filtfilt(filt, [1.], E, padtype='even', padlen=window_len)
+    I_band = signal.filtfilt(filt, [1.], I, padtype='even', padlen=window_len)
 
+    return E_band, I_band
 
 def smooth_peaks(x, window_len=101):
+    """smoothing to denoise peaks"""
     window = signal.general_gaussian(window_len, p=1, sig=20)
     filtered = signal.fftconvolve(window, x)
     filtered = (np.average(x) / np.average(filtered)) * filtered
@@ -333,151 +434,85 @@ def run_network(network, pc, comm, tstop, dt=.025, plot=False):
     h.stdinit()
     pc.psolve(tstop)
     nhost = int(pc.nhost())
+    # hoc vec to np
+    py_spike_dict = network.vecdict_to_pydict(network.spike_tvec)
+    py_V_dict = network.vecdict_to_pydict(network.voltage_recvec)
+    gauss_firing_rates = {}
+    for key, val in py_spike_dict.iteritems():
+        if len(val) > 0:
+            val = map(int, val)
+            t = np.arange(0., tstop, 1.)
+            spike_indexes = [np.where(t >= time)[0][0] for time in val]
+            spike_count = np.zeros_like(t)
+            spike_count[spike_indexes] = 1.
 
-    """py_spike_dict = network.vecdict_to_pydict(network.spike_tvec)
+            smoothed = gauss(spike_count, 1., tstop)
+            gauss_firing_rates[key] = smoothed
+        else:
+            gauss_firing_rates[key] = []
+    
+
     all_spikes_dict = comm.gather(py_spike_dict, root=0)
+    all_V_dict = comm.gather(py_V_dict, root=0)
+    ff_spikes = comm.gather(network.FF_firing, root=0)
+    gauss_firing_rates = comm.gather(gauss_firing_rates, root=0)
     if comm.rank == 0:
-        all_spikes_dict = {key: val for this_dict in all_spikes_dict for key, val in this_dict.iteritems()}
-        print all_spikes_dict.keys()
-    else:
-        if all_spikes_dict is not None:
-            print 'something went wrong'"""
+        gauss_firing_rates = {key: val for fire_dict in gauss_firing_rates for key, val in fire_dict.iteritems()}
+        widths = np.arange(50, 200)
+        rate_dict = {}
+        peak_dict = {}
+        for key, val in gauss_firing_rates.iteritems():
+            if len(val) > 0:
+                peak_loc = signal.find_peaks_cwt(val, widths)
+                c_sum = 0
+                peak = float("-inf")
+                for loc in peak_loc:
+                    c_sum += val[loc]
+                    peak = max(peak, val[loc])
+                rate_dict[key] = c_sum / float(len(peak_loc))
+                peak_dict[key] = peak
+
+        all_V_dict = {key: val for V_dict in all_V_dict for key, val in V_dict.iteritems()}
+        all_spikes_dict = {key: val for spike_dict in all_spikes_dict for key, val in spike_dict.iteritems()}
+        for ff_dict in ff_spikes:
+            for key, val in ff_dict.iteritems():
+                all_spikes_dict[key] = val
 
     """
-    1) Convert hoc vectors to python arrays (spikes and voltages)
-    2) Compute firing rates by smoothing, on each rank
-    3) Process anything that can be computed locally on each rank.
-    4) Collect spikes to rank 0 for population analysis.
-    5) Collect anything that rank 0 needs to do a final population analysis.
-    6) return feature_dict
-    """
+    #old method is being commented out. kept for comparison purposes. new method (not using
+    hoc vec.deriv()) seems more biologically accurate
+    network.py_compute_isi(py_spike_dict)
+    rate_dicts = comm.gather(network.rate_dict, root=0)
+    peak_dicts = comm.gather(network.peak_dict, root=0)
+    if comm.rank == 0:
+        rate_dicts = {key: val for r_dict in rate_dicts for key, val in r_dict.iteritems()}
+        peak_dicts = {key: val for p_dict in peak_dicts for key, val in p_dict.iteritems()}#
+        print "old method", rate_dicts
+        print "old method", peak_dicts"""
 
-    all_events = pc.py_alltoall([network.spike_tvec for _ in range(nhost)])  # list
-    all_events = {key : val for this_dict in all_events for key, val in this_dict.iteritems()} #collapse list into dict
-    network.compute_isi(all_events)
-    ff_events = pc.py_alltoall([network.FF_firing for _ in range(nhost)])
-    ff_events = {key: val for dict in ff_events for key, val in dict.iteritems()}
-    # Use MPI Gather instead:
-    rate_dicts = pc.py_alltoall([network.ratedict for _ in range(nhost)])
-    peak_dicts = pc.py_alltoall([network.peakdict for _ in range(nhost)])
-    processed_rd = {key: val for dict in rate_dicts for key, val in dict.iteritems()}
-    processed_p = {key: val for dict in peak_dicts for key, val in dict.iteritems()}
-    # all_dicts = pc.py_alltoall([network.voltage_recvec for i in range(nhost)])
-    """network.vecdict_to_pydict(network.voltage_recvec, 'rec')
-    test = pc.py_alltoall([network.pydicts for i in range(nhost)])"""
-    tmp = pc.py_alltoall([network.voltage_recvec for i in range(nhost)])
-    if int(pc.id()) == 0:
-        """rec = {key: val for dict in test for key, val in dict['rec'].iteritems()}
-        for i in range(network.ncell * 2, network.ncell * NUM_POP):
-            recv = rec[i]
-            recv2 = []
-            for j, v in enumerate(recv):
-                if j % 40 == 0: recv2.append(v)
-            ev = all_events[i]
-            x = range(len(recv2))
-            plt.plot(x, recv2, '-gD', markevery=ev)
-            plt.title('v trace')
-            plt.show()"""
-
-        network.summation(all_events)
-
-        hm = np.zeros((network.ncell * NUM_POP, network.tstop + 1))
-        for i in range(network.ncell):
-            x = np.zeros((1, network.tstop + 1))
-            for t in ff_events[i]:
-                x[0][int(t)] = 1
-            smoothed = boxcar(x[0])
-            hm[i] = smoothed
-        for i in range(network.ncell, network.ncell * 3):
-            x = np.zeros((1, network.tstop + 1))
-            for t in all_events[i]:
-                x[0][int(t)] = 1
-            smoothed = boxcar(x[0])
-            hm[i] = smoothed
+    if comm.rank == 0:
+        network.py_summation(all_spikes_dict)
+        #x = range(len(E_test))
         if plot:
-            import seaborn as sns
-            sns.heatmap(hm)
-            plt.show()
-            #sns.plt.show()
-        peak_voltage = 35.
-        """peak_voltage = float("-inf") #print list(rec.keys())
-        if network.ncell in list(rec.keys()):
-            # use np.max, look at more cells
-            for i, x in enumerate(rec[network.ncell]):
-                if i % 500 == 0:
-                    peak_voltage = max(peak_voltage, x)"""
-
-        E_mean = 0
-        I_mean = 0
-        I_max = 0
-        E_max = 0
-        uncounted = 0
-
-        for i in range(network.ncell, network.ncell * 2):
-            if i not in processed_p:
-                uncounted += 1
-                continue
-            E_mean += processed_rd[i]
-            E_max += processed_p[i]
-        if network.ncell - uncounted != 0:
-            E_mean = E_mean / float(network.ncell - uncounted)
-            E_max = E_max / float(network.ncell - uncounted)
-        uncounted = 0
-        for i in range(network.ncell * 2, network.ncell * 3):
-            if i not in processed_p:
-                uncounted = 0
-                continue
-            I_mean += processed_rd[i]
-            I_max += processed_p[i]
-        if network.ncell - uncounted != 0:
-            I_mean = I_mean / float(network.ncell - uncounted)
-            I_max = I_max / float(network.ncell - uncounted)
-
-        # t = {key: value for dict in all_dicts for key, value in dict['t'].iteritems()}
-        # temp until smoothing gets sorted
-        gauss_E = gauss(network.osc_E, 1., network.tstop)
-        gauss_I = gauss(network.osc_I, 1., network.tstop)
-        # x = range(len(E_test))
-        if plot:
-            plt.plot(x, gauss_E)
-            plt.title('gauss smoothing - E pop')
-            plt.show()
-            plt.plot(range(len(network.osc_E)), network.osc_E)
-            plt.title('spike counts - E pop')
-            plt.show()
-
+            network.plot_voltage_trace(all_V_dict, all_spikes_dict, dt)
+            network.plot_cell_activity(all_spikes_dict)
         #window_len = min(int(2000./down_dt), len(down_t) - 1)
-        filter_dt = 1.  # ms
-        window_len = int(2000. / filter_dt)
-        theta_filter = signal.firwin(window_len, [5., 10.], nyq=1000. / 2., pass_zero=False)
-        theta_E = signal.filtfilt(theta_filter, [1.], gauss_E, padtype='even', padlen=window_len)
-        theta_I = signal.filtfilt(theta_filter, [1.], gauss_I, padtype='even', padlen=window_len)
-        if plot:
-            plt.plot([i for i in range(len(theta_E))], theta_E)
-            plt.title('theta')
-            plt.show()
+        E_mean, E_max = network.compute_pop_firing_rates(network.ncell, network.ncell * 2, rate_dict, peak_dict)
+        I_mean, I_max = network.compute_pop_firing_rates(network.ncell * 2, network.ncell * NUM_POP, \
+                                                         rate_dict, peak_dict)
 
-        #window_len = min(int(100./down_dt), len(down_t) - 1)
-        window_len = int(200. / filter_dt)
-        gamma_filter = signal.firwin(window_len, [30., 100.], nyq=1000. / 2., pass_zero=False)
-        gamma_E = signal.filtfilt(gamma_filter, [1.], gauss_E, padtype='even', padlen=window_len)
-        gamma_I = signal.filtfilt(gamma_filter, [1.], gauss_I, padtype='even', padlen=window_len)
-        if plot:
-            plt.plot([i for i in range(len(gamma_E))], gamma_E)
-            plt.title('gamma')
-            plt.show()
-
+        network.py_summation(all_spikes_dict)
+        theta_E, theta_I, gamma_E, gamma_I = network.get_bands_of_interest(plot)
         peak_theta_osc_E = network.compute_peak_osc_freq(theta_E, 'theta')
         peak_theta_osc_I = network.compute_peak_osc_freq(theta_I, 'theta')
         peak_gamma_osc_E = network.compute_peak_osc_freq(gamma_E, 'gamma')
         peak_gamma_osc_I = network.compute_peak_osc_freq(gamma_I, 'gamma')
-
-
         # rec = {key: value for dict in all_dicts for key, value in dict['rec'].iteritems()}
         return {'E_mean_rate': E_mean, 'E_peak_rate': E_max, 'I_mean_rate': I_mean, "I_peak_rate": I_max, \
-                'peak': peak_voltage, 'peak_theta_osc_E': peak_theta_osc_E, 'peak_theta_osc_I': \
-                    peak_theta_osc_I, 'peak_gamma_osc_E': peak_gamma_osc_E, 'peak_gamma_osc_I': peak_gamma_osc_I, \
-                "event": all_events, 'osc_E': network.osc_E}
+                'peak_theta_osc_E': peak_theta_osc_E, 'peak_theta_osc_I': peak_theta_osc_I,
+                'peak_gamma_osc_E': peak_gamma_osc_E, 'peak_gamma_osc_I': peak_gamma_osc_I, \
+                'event': all_spikes_dict, 'osc_E': network.E_sum}
+        
 
 
 # ==================== cell class                                                                                                                                                                                                                                                                                                                                                        # single cell
@@ -536,7 +571,7 @@ class FFCell(object):
         print spikes"""
         if random.random() <= frac_active:  #vec = h.Vector([5, 200])
             self.pp.play(vec)
-            network.FF_firing[gid] = spikes
+            network.FF_firing[gid] = np.array(spikes)
         else:
             network.FF_firing[gid] = []
 
