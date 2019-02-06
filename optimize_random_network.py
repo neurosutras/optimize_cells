@@ -133,12 +133,10 @@ def compute_features(x, export=False):
                               ff_frac_active=context.ff_frac_active, ff2i_prob=context.ff2i_prob, ff2e_prob= \
                                   context.ff2e_prob, std_dict=context.weight_std_factors, \
                               tau_E=context.tau_E, tau_I=context.tau_I, local_random=context.local_random)
-    results = run_network(context.network, context.pc, context.comm, context.tstop, context.plot)
+    results = run_network(context.network, context.pc, context.comm, context.tstop, plot=context.plot)
     if int(context.pc.id()) == 0:
         if results is None:
             return dict()
-        context.peak_voltage = results['peak']
-        results.pop('peak', None)
         results.pop('event', None)
         results.pop('osc_E')
         return results
@@ -157,7 +155,7 @@ def get_objectives(features, export=False):
                              'peak_theta_osc_I']:
             objective_name = feature_name
             if features[feature_name] == 0.:
-                objectives[objective_name] = (context.peak_voltage - 30.) ** 2
+                objectives[objective_name] = 1000. 
             else:
                 objectives[objective_name] = ((context.target_val[objective_name] - features[feature_name]) /
                                                       context.target_range[objective_name]) ** 2.
