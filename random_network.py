@@ -69,7 +69,7 @@ class Network(object):
         self.gids = []
         for i in range(rank, ncell * NUM_POP, nhost):
             if i < ncell:
-                cell = FFCell(self.tstop, self.ff_meanfreq, self.ff_frac_active, self, i, random=self.random)
+                cell = FFCell(self.tstop, self.ff_meanfreq, self.ff_frac_active, self, i, local_random=self.random)
             else: 
                 if i not in list(range(ncell * 2, ncell * 3)):
                     cell_type = 'RS'
@@ -561,11 +561,11 @@ class IzhiCell(object):
 
 
 class FFCell(object):
-    def __init__(self, tstop, mean_freq, frac_active, network, gid, random=None):
+    def __init__(self, tstop, mean_freq, frac_active, network, gid, local_random=None):
         self.pp = h.VecStim()
         #tstop in ms and mean_rate in s
         spikes = get_inhom_poisson_spike_times_by_thinning([mean_freq, mean_freq], [0, tstop], dt=0.025,
-                                                           generator=random)
+                                                           generator=local_random)
         vec = h.Vector(spikes)
         """self.pp.play(vec)
         print spikes"""

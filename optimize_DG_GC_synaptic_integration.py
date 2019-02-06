@@ -326,7 +326,10 @@ def shutdown_worker():
     """
 
     """
-    context.temp_model_data_file.close()
+    # context.temp_model_data_file.close()
+    if context.temp_model_data_file is not None:
+        context.temp_model_data_file.close()
+    time.sleep(2.)
     if context.interface.global_comm.rank == 0 and not context.debug:
         os.remove(context.temp_model_data_file_path)
 
@@ -452,12 +455,6 @@ def export_unitary_EPSP_traces():
                         dict_merge(context.temp_model_data[model_key], element)
             context.interface.worker_comm.barrier()
 
-        model_keys = context.temp_model_data.keys()
-        model_keys = context.interface.worker_comm.gather(model_keys, root=0)
-
-        if context.interface.worker_comm.rank == 0:
-            print 'gathered model keys: %s' % str(model_keys)
-
         for model_key in context.temp_model_data:
             context.temp_model_data[model_key][description] = \
                 consolidate_unitary_EPSP_traces(context.temp_model_data[model_key][description])
@@ -478,6 +475,7 @@ def export_unitary_EPSP_traces():
     if context.interface.global_comm.rank == 0:
         context.interface.pc.take('merge2')
         context.temp_model_data_file_path = context.interface.pc.upkpyobj()[0]
+        context.temp_model_data_file = None
         context.interface.pc.take('merge3')
         context.temp_model_data_legend = context.interface.pc.upkpyobj()
     elif context.interface.global_comm.rank == 1:
@@ -541,12 +539,6 @@ def export_compound_EPSP_traces():
                         dict_merge(context.temp_model_data[model_key], element)
             context.interface.worker_comm.barrier()
 
-        model_keys = context.temp_model_data.keys()
-        model_keys = context.interface.worker_comm.gather(model_keys, root=0)
-
-        if context.interface.worker_comm.rank == 0:
-            print 'gathered model keys: %s' % str(model_keys)
-
         for model_key in context.temp_model_data:
             context.temp_model_data[model_key][description] = \
                 consolidate_compound_EPSP_traces(context.temp_model_data[model_key][description])
@@ -567,8 +559,6 @@ def export_compound_EPSP_traces():
     if context.interface.global_comm.rank == 0:
         context.interface.pc.take('merge5')
         handshake = context.interface.pc.upkscalar()
-        if 'temp_model_data_file' not in context() or context.temp_model_data_file is None:
-            context.temp_model_data_file = h5py.File(context.temp_model_data_file_path, 'r')
     elif context.interface.global_comm.rank == 1:
         context.interface.pc.post('merge5', 0)
 
@@ -924,23 +914,25 @@ def get_objectives_synaptic_integration(features, export=False):
     compound_EPSP_traces_dict = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
 
     description = 'unitary_EPSP_traces'
-    for syn_group in context.temp_model_data_file[group_key][description]:
-        syn_id_list = context.syn_id_dict[syn_group]
-        for syn_condition in context.temp_model_data_file[group_key][description][syn_group]:
-            this_group = context.temp_model_data_file[group_key][description][syn_group][syn_condition]
-            for rec_name in context.sim.recs:
-                for i, syn_id in enumerate(syn_id_list):
-                    unitary_EPSP_traces_dict[syn_group][syn_condition][syn_id][rec_name] = this_group[rec_name][i,:]
+    with h5py.File(context.temp_model_data_file_path, 'r') as temp_model_data_file:
+        for syn_group in temp_model_data_file[group_key][description]:
+            syn_id_list = context.syn_id_dict[syn_group]
+            for syn_condition in temp_model_data_file[group_key][description][syn_group]:
+                this_group = temp_model_data_file[group_key][description][syn_group][syn_condition]
+                for rec_name in context.sim.recs:
+                    for i, syn_id in enumerate(syn_id_list):
+                        unitary_EPSP_traces_dict[syn_group][syn_condition][syn_id][rec_name] = this_group[rec_name][i,:]
 
-    description = 'compound_EPSP_traces'
-    for syn_group in context.temp_model_data_file[group_key][description]:
-        num_syn_ids = len(context.syn_id_dict[syn_group])
-        for syn_condition in context.temp_model_data_file[group_key][description][syn_group]:
-            this_group = context.temp_model_data_file[group_key][description][syn_group][syn_condition]
-            for rec_name in context.sim.recs:
-                for i in xrange(num_syn_ids):
-                    num_syns = i + 1
-                    compound_EPSP_traces_dict[syn_group][syn_condition][num_syns][rec_name] = this_group[rec_name][i,:]
+        description = 'compound_EPSP_traces'
+        for syn_group in temp_model_data_file[group_key][description]:
+            num_syn_ids = len(context.syn_id_dict[syn_group])
+            for syn_condition in temp_model_data_file[group_key][description][syn_group]:
+                this_group = temp_model_data_file[group_key][description][syn_group][syn_condition]
+                for rec_name in context.sim.recs:
+                    for i in xrange(num_syn_ids):
+                        num_syns = i + 1
+                        compound_EPSP_traces_dict[syn_group][syn_condition][num_syns][rec_name] = \
+                            this_group[rec_name][i,:]
 
     control_EPSP_amp_list = []
     NMDA_contribution_list = []
