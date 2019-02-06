@@ -60,7 +60,7 @@ kwargs:
   dataset_prefix: ../dentate/datasets
   results_path: data
   cache_queries: True
-  debug: True  # False  # True
+  debug: False  # True
 objective_names:
 - mean_unitary_EPSP_amp_residuals
 - mean_NMDA_contribution_residuals
@@ -93,10 +93,10 @@ target_val:
   initial_gain_control: 1.
   initial_gain_AP5: 1.
 x0:
-  AMPA.tau: 3.589608E+02
-  AMPA.slope: 3.548587E-06
-  AMPA.g0: 1.423032E-04
-  NMDA.g_unit: 2.172663E-03
-  NMDA.gamma: 9.233136E-02
-  NMDA.Kd: 6.055083E+00
-  NMDA.vshift: -3.167129E+00
+  AMPA.tau: 1.868088E+02
+  AMPA.slope: 3.293672E-06
+  AMPA.g0: 1.464409E-04
+  NMDA.g_unit: 4.316527E-03
+  NMDA.gamma: 8.130658E-02
+  NMDA.Kd: 4.331929E+00
+  NMDA.vshift: 9.592656E+00

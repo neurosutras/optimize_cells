@@ -26,7 +26,8 @@ context = Context()
 @click.option("--plot", is_flag=True)
 @click.option("--debug", is_flag=True)
 @click.option("--run-tests", is_flag=True)
-def main(config_file_path, output_dir, export, export_file_path, label, verbose, plot, debug, run_tests):
+@click.option("--interactive", is_flag=True)
+def main(config_file_path, output_dir, export, export_file_path, label, verbose, plot, debug, run_tests, interactive):
     """
 
     :param config_file_path: str (path)
@@ -38,6 +39,7 @@ def main(config_file_path, output_dir, export, export_file_path, label, verbose,
     :param plot: bool
     :param debug: bool
     :param run_tests: bool
+    :param interactive: bool
     """
     # requires a global variable context: :class:'Context'
     context.update(locals())
@@ -54,7 +56,8 @@ def main(config_file_path, output_dir, export, export_file_path, label, verbose,
     if run_tests:
         unit_tests_synaptic_integration()
 
-    context.interface.stop()
+    if not interactive:
+        context.interface.stop()
 
 
 def unit_tests_synaptic_integration():
