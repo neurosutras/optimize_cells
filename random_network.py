@@ -12,19 +12,43 @@ h.load_file('stdrun.hoc')
 
 
 # adopted from ring_network.py and ring_cell.py
+# populations: FF; I, E
 NUM_POP = 3
 
 
-"""FF ; I ; E"""
-
-
-# =================== network class
 class Network(object):
 
-    def __init__(self, ncell, delay, pc, tstop, dt=None, e2e_prob=.05, e2i_prob=.05, \
-                 i2i_prob=.05, i2e_prob=.05, ff2i_weight=1., ff2e_weight=2., e2e_weight=1., e2i_weight=1., \
-                 i2i_weight=.5, i2e_weight=.5, ff_meanfreq=100, ff_frac_active=.8, ff2i_prob=.5, ff2e_prob=.5, \
-                 std_dict=None, tau_E=2., tau_I=5., local_random=None):
+    def __init__(self, ncell, delay, pc, tstop, dt=None, e2e_prob=.05, e2i_prob=.05, i2i_prob=.05, i2e_prob=.05,
+                 ff2i_weight=1., ff2e_weight=2., e2e_weight=1., e2i_weight=1., i2i_weight=.5, i2e_weight=.5,
+                 ff_meanfreq=100, ff_frac_active=.8, ff2i_prob=.5, ff2e_prob=.5, std_dict=None, tau_E=2., tau_I=5.,
+                 connection_seed=0, spikes_seed=1):
+        """
+
+        :param ncell:
+        :param delay:
+        :param pc:
+        :param tstop:
+        :param dt:
+        :param e2e_prob:
+        :param e2i_prob:
+        :param i2i_prob:
+        :param i2e_prob:
+        :param ff2i_weight:
+        :param ff2e_weight:
+        :param e2e_weight:
+        :param e2i_weight:
+        :param i2i_weight:
+        :param i2e_weight:
+        :param ff_meanfreq:
+        :param ff_frac_active:
+        :param ff2i_prob:
+        :param ff2e_prob:
+        :param std_dict:
+        :param tau_E:
+        :param tau_I:
+        :param connection_seed: int
+        :param spikes_seed: int
+        """
         self.pc = pc
         self.delay = delay
         self.ncell = int(ncell)
@@ -32,9 +56,9 @@ class Network(object):
         self.ff_frac_active = ff_frac_active
         self.tau_E = tau_E
         self.tau_I = tau_I
-        self.prob_dict = {'e2e': e2e_prob, 'e2i': e2i_prob, 'i2i': i2i_prob, 'i2e': i2e_prob, \
-                          'ff2i': ff2i_prob, 'ff2e': ff2e_prob}
-        self.weight_dict = {'ff2i': ff2i_weight, 'ff2e': ff2e_weight, 'e2e': e2e_weight, 'e2i': e2i_weight, \
+        self.prob_dict = {'e2e': e2e_prob, 'e2i': e2i_prob, 'i2i': i2i_prob, 'i2e': i2e_prob, 'ff2i': ff2i_prob,
+                          'ff2e': ff2e_prob}
+        self.weight_dict = {'ff2i': ff2i_weight, 'ff2e': ff2e_weight, 'e2e': e2e_weight, 'e2i': e2i_weight,
                             'i2i': i2i_weight, 'i2e': i2e_weight}
         self.weight_std_dict = std_dict
         self.index_dict = {'ff2i': ((0, ncell), (ncell, ncell * 2)),  # exclusive [x, y)
@@ -47,10 +71,9 @@ class Network(object):
         self.ff_meanfreq = ff_meanfreq
         self.event_rec = {}
 
-        if local_random is None:
-            self.random = random.Random()
-        else:
-            self.random = random
+        self.local_random = random.Random()
+        self.connection_seed = connection_seed
+        self.spikes_seed = spikes_seed
 
         self.mknetwork(self.ncell)
         #self.mkstim(self.ncell)
@@ -69,7 +92,9 @@ class Network(object):
         self.gids = []
         for i in range(rank, ncell * NUM_POP, nhost):
             if i < ncell:
-                cell = FFCell(self.tstop, self.ff_meanfreq, self.ff_frac_active, self, i, local_random=self.random)
+                self.local_random.seed(self.spikes_seed + i)
+                cell = FFCell(self.tstop, self.ff_meanfreq, self.ff_frac_active, self, i,
+                              local_random=self.local_random)
             else: 
                 if i not in list(range(ncell * 2, ncell * 3)):
                     cell_type = 'RS'
@@ -91,7 +116,7 @@ class Network(object):
         pair_list = []
         for i in input_indices:
             for o in output_indices:
-                if self.random.random() <= prob:
+                if self.local_random.random() <= prob:
                     pair_list.append((i, o))
         for elem in pair_list:
             x, y = elem
@@ -109,23 +134,23 @@ class Network(object):
     def connectcells(self, ncell):
         rank = int(self.pc.id())
         nhost = int(self.pc.nhost())
+        self.local_random.seed(self.connection_seed + rank)
         self.ncdict = {}  # not efficient but demonstrates use of pc.gid_exists
 
         for connection in ['ff2i', 'ff2e', 'e2e', 'e2i', 'i2i', 'i2e']:
 
             mu = self.weight_dict[connection]
-            std_factor = self.weight_std_dict[connection]
-            if std_factor >= 2. / 3. / np.sqrt(2.):
+            if self.weight_std_dict[connection] >= 2. / 3. / np.sqrt(2.):
                 print 'network.connectcells: connection: %s; reducing std to avoid negative weights: %.2f' % \
                       (connection, self.weight_std_dict[connection])
                 self.weight_std_dict[connection] = 2. / 3. / np.sqrt(2.)
+            std_factor = self.weight_std_dict[connection]
 
             indices = self.index_dict[connection]
             inp = indices[0]
             out = indices[1]
-            pair_list = self.createpairs(self.prob_dict[connection], list(range(inp[0], \
-                                                                                inp[1])), list(range(out[0], out[1])))
-            std_factor = self.weight_std_dict[connection]
+            pair_list = self.createpairs(self.prob_dict[connection], list(range(inp[0], inp[1])),
+                                         list(range(out[0], out[1])))
             for pair in pair_list:
                 presyn_gid = pair[0]
                 target_gid = pair[1]
@@ -160,8 +185,8 @@ class Network(object):
                         syn = target.synlist[1]
                     nc = self.pc.gid_connect(presyn_gid, syn)
                     nc.delay = self.delay
-                    weight = self.random.gauss(mu, mu * std_factor)
-                    while weight < 0.: weight = self.random.gauss(mu, mu * std_factor)
+                    weight = self.local_random.gauss(mu, mu * std_factor)
+                    while weight < 0.: weight = self.local_random.gauss(mu, mu * std_factor)
                     nc.weight[0] = weight
                     self.ncdict[pair] = nc
 
@@ -320,12 +345,13 @@ class Network(object):
         return mean, max_firing
 
     def plot_voltage_trace(self, vecdict, all_events, dt=.025):
-        ms_step = int(1. / dt)
+        down_dt = 1.
+        ms_step = int(down_dt / dt)
         for i in range(self.ncell * 2, self.ncell * NUM_POP):
             ms_rec = []
             for j, v in enumerate(vecdict[i]):
                 if j % ms_step == 0: ms_rec.append(v)
-            ev = list(all_events[i])
+            ev = [int(event/down_dt) for event in all_events[i]]
             plt.plot(range(len(ms_rec)), ms_rec, '-gD', markevery=ev)
             plt.title('v trace')
             plt.show()
@@ -346,7 +372,7 @@ class Network(object):
         plt.plot(range(len(gauss_E)), gauss_E)
         plt.title('gauss smoothing - E pop')
         plt.show()
-        plt.plot(range(len(network.E_sum)), self.E_sum)
+        plt.plot(range(len(self.E_sum)), self.E_sum)
         plt.title('spike counts - E pop')
         plt.show()
 
@@ -371,8 +397,8 @@ class Network(object):
         gamma_E, gamma_I = filter_band(gauss_E, gauss_I, window_len, gamma_band)
 
         if plot:
-            network.plot_smoothing(gauss_E)
-            network.plot_bands(theta_E, gamma_E)
+            self.plot_smoothing(gauss_E)
+            self.plot_bands(theta_E, gamma_E)
 
         return theta_E, theta_I, gamma_E, gamma_I
 
@@ -383,6 +409,74 @@ class Network(object):
                 self.ncdict.pop(pair)
                 #print pair
         self.connectcells(self.ncell)"""
+
+
+class IzhiCell(object):
+    # derived from modelDB
+    def __init__(self, tau_E, tau_I, type='RS'):  # RS = excit or FS = inhib
+        self.type = type
+        self.sec = h.Section(cell=self)
+        self.sec.L, self.sec.diam, self.sec.cm = 10, 10, 31.831
+        self.izh = h.Izhi2007b(.5, sec=self.sec)
+        self.vinit = -60
+        self.sec(0.5).v = self.vinit
+        self.sec.insert('pas')
+
+        if type == 'RS': self.izh.a = .1
+        if type == 'FS': self.izh.a = .02
+
+        self.synapses(tau_E, tau_I)
+
+    def __del__(self):
+        # print 'delete ', self
+        pass
+
+    # from Ball_Stick
+    def synapses(self, tau_E, tau_I):
+        synlist = []
+        s = h.ExpSyn(self.sec(0.8))  # E
+        s.tau = tau_E
+        synlist.append(s)
+        s = h.ExpSyn(self.sec(0.1))  # I1
+        s.tau = tau_I
+        s.e = -80
+        synlist.append(s)
+
+        self.synlist = synlist
+
+    # also from Ball Stick
+    def connect2target(self, target):
+        nc = h.NetCon(self.sec(1)._ref_v, target, sec=self.sec)
+        nc.threshold = 10
+        return nc
+
+    def is_art(self):
+        return 0
+
+
+class FFCell(object):
+    def __init__(self, tstop, mean_freq, frac_active, network, gid, local_random=None):
+        if local_random is None:
+            local_random = random.Random()
+        self.pp = h.VecStim()
+        #tstop in ms and mean_rate in Hz
+        spikes = get_inhom_poisson_spike_times_by_thinning([mean_freq, mean_freq], [0, tstop], dt=0.025,
+                                                           generator=local_random)
+        vec = h.Vector(spikes)
+        """self.pp.play(vec)
+        print spikes"""
+        if local_random.random() <= frac_active:  #vec = h.Vector([5, 200])
+            self.pp.play(vec)
+            network.FF_firing[gid] = np.array(spikes)
+        else:
+            network.FF_firing[gid] = []
+
+    def connect2target(self, target):
+        nc = h.NetCon(self.pp, target)
+        return nc
+
+    def is_art(self):
+        return 1
 
 
 def gauss(spikes, dt, tstop, filter_duration=100):
@@ -406,6 +500,7 @@ def filter_band(E, I, window_len, band):
 
     return E_band, I_band
 
+
 def smooth_peaks(x, window_len=101):
     """smoothing to denoise peaks"""
     window = signal.general_gaussian(window_len, p=1, sig=20)
@@ -413,6 +508,7 @@ def smooth_peaks(x, window_len=101):
     filtered = (np.average(x) / np.average(filtered)) * filtered
     filtered = np.roll(filtered, -25)
     return filtered
+
 
 def boxcar(x, window_len=101):
     x = np.array(x)
@@ -498,8 +594,8 @@ def run_network(network, pc, comm, tstop, dt=.025, plot=False):
             network.plot_cell_activity(all_spikes_dict)
         #window_len = min(int(2000./down_dt), len(down_t) - 1)
         E_mean, E_max = network.compute_pop_firing_rates(network.ncell, network.ncell * 2, rate_dict, peak_dict)
-        I_mean, I_max = network.compute_pop_firing_rates(network.ncell * 2, network.ncell * NUM_POP, \
-                                                         rate_dict, peak_dict)
+        I_mean, I_max = network.compute_pop_firing_rates(network.ncell * 2, network.ncell * NUM_POP, rate_dict,
+                                                         peak_dict)
 
         network.py_summation(all_spikes_dict)
         theta_E, theta_I, gamma_E, gamma_I = network.get_bands_of_interest(plot)
@@ -508,87 +604,16 @@ def run_network(network, pc, comm, tstop, dt=.025, plot=False):
         peak_gamma_osc_E = network.compute_peak_osc_freq(gamma_E, 'gamma')
         peak_gamma_osc_I = network.compute_peak_osc_freq(gamma_I, 'gamma')
         # rec = {key: value for dict in all_dicts for key, value in dict['rec'].iteritems()}
-        return {'E_mean_rate': E_mean, 'E_peak_rate': E_max, 'I_mean_rate': I_mean, "I_peak_rate": I_max, \
+        return {'E_mean_rate': E_mean, 'E_peak_rate': E_max, 'I_mean_rate': I_mean, "I_peak_rate": I_max,
                 'peak_theta_osc_E': peak_theta_osc_E, 'peak_theta_osc_I': peak_theta_osc_I,
-                'peak_gamma_osc_E': peak_gamma_osc_E, 'peak_gamma_osc_I': peak_gamma_osc_I, \
-                'event': all_spikes_dict, 'osc_E': network.E_sum}
-        
-
-
-# ==================== cell class                                                                                                                                                                                                                                                                                                                                                        # single cell
-
-class IzhiCell(object):
-    # derived from modelDB
-    def __init__(self, tau_E, tau_I, type='RS'):  # RS = excit or FS = inhib
-        self.type = type
-        self.sec = h.Section(cell=self)
-        self.sec.L, self.sec.diam, self.sec.cm = 10, 10, 31.831
-        self.izh = h.Izhi2007b(.5, sec=self.sec)
-        self.vinit = -60
-        self.sec(0.5).v = self.vinit
-        self.sec.insert('pas')
-
-        if type == 'RS': self.izh.a = .1
-        if type == 'FS': self.izh.a = .02
-
-        self.synapses(tau_E, tau_I)
-
-    def __del__(self):
-        # print 'delete ', self
-        pass
-
-    # from Ball_Stick
-    def synapses(self, tau_E, tau_I):
-        synlist = []
-        s = h.ExpSyn(self.sec(0.8))  # E
-        s.tau = tau_E
-        synlist.append(s)
-        s = h.ExpSyn(self.sec(0.1))  # I1
-        s.tau = tau_I
-        s.e = -80
-        synlist.append(s)
-
-        self.synlist = synlist
-
-    # also from Ball Stick
-    def connect2target(self, target):
-        nc = h.NetCon(self.sec(1)._ref_v, target, sec=self.sec)
-        nc.threshold = 10
-        return nc
-
-    def is_art(self):
-        return 0
-
-
-class FFCell(object):
-    def __init__(self, tstop, mean_freq, frac_active, network, gid, local_random=None):
-        self.pp = h.VecStim()
-        #tstop in ms and mean_rate in s
-        spikes = get_inhom_poisson_spike_times_by_thinning([mean_freq, mean_freq], [0, tstop], dt=0.025,
-                                                           generator=local_random)
-        vec = h.Vector(spikes)
-        """self.pp.play(vec)
-        print spikes"""
-        if random.random() <= frac_active:  #vec = h.Vector([5, 200])
-            self.pp.play(vec)
-            network.FF_firing[gid] = np.array(spikes)
-        else:
-            network.FF_firing[gid] = []
-
-    def connect2target(self, target):
-        nc = h.NetCon(self.pp, target)
-        return nc
-
-    def is_art(self):
-        return 1
+                'peak_gamma_osc_E': peak_gamma_osc_E, 'peak_gamma_osc_I': peak_gamma_osc_I, 'event': all_spikes_dict,
+                'osc_E': network.E_sum}
 
 
 """from dentate > stgen.py. temporary. personal issues with importing dentate -S"""
-
-
 def get_inhom_poisson_spike_times_by_thinning(rate, t, dt=0.02, refractory=3., generator=None):
     if generator is None:
-        generator = random
+        generator = random.Random()
     interp_t = np.arange(t[0], t[-1] + dt, dt)
     interp_rate = np.interp(interp_t, t, rate)
     interp_rate /= 1000.

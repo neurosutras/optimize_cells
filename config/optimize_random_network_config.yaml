@@ -82,6 +82,8 @@ get_objectives:
   optimize_random_network: get_objectives
 kwargs:
   verbose: True
+  connection_seed: 0
+  spikes_seed: 1000000
 objective_names:
 - E_peak_rate
 - I_peak_rate
