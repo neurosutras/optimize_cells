@@ -148,11 +148,12 @@ def get_objectives(features, export=False):
     """
     if int(context.pc.id()) == 0:
         objectives = {}
-        for feature_name in ['E_peak_rate', 'I_peak_rate', 'E_mean_rate', 'I_mean_rate', 'peak_theta_osc_E', \
-                             'peak_theta_osc_I']:
+        for feature_name in ['E_peak_rate', 'I_peak_rate', 'E_mean_rate', 'I_mean_rate', 'peak_theta_osc_E',
+                             'peak_theta_osc_I', 'E_frac_active', 'I_frac_active', 'theta_E_envelope_ratio',
+                             'theta_I_envelope_ratio', 'gamma_E_envelope_ratio', 'gamma_I_envelope_ratio']:
             objective_name = feature_name
             if features[feature_name] == 0.:
-                objectives[objective_name] = 1000. 
+                objectives[objective_name] = 200. 
             else:
                 objectives[objective_name] = ((context.target_val[objective_name] - features[feature_name]) /
                                                       context.target_range[objective_name]) ** 2.

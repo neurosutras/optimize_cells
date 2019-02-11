@@ -70,6 +70,12 @@ feature_names:
 - I_peak_rate
 - E_mean_rate
 - I_mean_rate
+- E_frac_active
+- I_frac_active
+- theta_E_envelope_ratio
+- theta_I_envelope_ratio
+- gamma_E_envelope_ratio
+- gamma_I_envelope_ratio
 - peak_theta_osc_E
 - peak_theta_osc_I
 update_context:
@@ -89,6 +95,12 @@ objective_names:
 - I_peak_rate
 - E_mean_rate
 - I_mean_rate
+- E_frac_active
+- I_frac_active
+- theta_E_envelope_ratio
+- theta_I_envelope_ratio
+- gamma_E_envelope_ratio
+- gamma_I_envelope_ratio
 - peak_theta_osc_E
 - peak_theta_osc_I
 optimization_title: random_network
@@ -121,6 +133,12 @@ target_range:
   I_peak_rate: 7.
   E_mean_rate: 3.
   I_mean_rate: 5.
+  E_frac_active: .2
+  I_frac_active: .2
+  theta_E_envelope_ratio: .2
+  theta_I_envelope_ratio: .2
+  gamma_E_envelope_ratio: .2
+  gamma_I_envelope_ratio: .2
   peak_theta_osc_E: 2.5
   peak_theta_osc_I: 2.5
 target_val:
@@ -128,6 +146,12 @@ target_val:
   I_peak_rate: 40.
   E_mean_rate: 10.
   I_mean_rate: 30.
+  E_frac_active: .1
+  I_frac_active: .9
+  theta_E_envelope_ratio: .5
+  theta_I_envelope_ratio: .5
+  gamma_E_envelope_ratio: .5
+  gamma_I_envelope_ratio: .5
   peak_theta_osc_E: 8.
   peak_theta_osc_I: 8.
 x0:

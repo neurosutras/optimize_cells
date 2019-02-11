@@ -322,17 +322,22 @@ class Network(object):
             plt.title('v trace')
             plt.show()
 
-    def plot_cell_activity(self, all_spikes_dict):
+    def plot_cell_activity(self, gauss_firing_rates):
         import seaborn as sns
 
-        hm = np.zeros((self.ncell * NUM_POP, self.tstop))
-        for key, val in all_spikes_dict.iteritems():
-            x = np.zeros(self.tstop)
+        hm = np.zeros((self.ncell, self.tstop))
+        for key, val in gauss_firing_rates.iteritems():
+            """x = np.zeros(self.tstop)
             for t in val: x[int(t)] = 1
-            smoothed = boxcar(x)
-            hm[key] = smoothed
-        sns.heatmap(hm)
-        plt.show()
+            smoothed = boxcar(x)"""
+            wrap = key % self.ncell
+            if len(gauss_firing_rates[key]) != 0:
+                hm[wrap] = gauss_firing_rates[key]
+            if key != 0 and wrap == self.ncell - 1:
+                sns.heatmap(hm)
+                plt.title(str(key))
+                plt.show()
+                hm = np.zeros((self.ncell, self.tstop))
 
     def plot_smoothing(self, gauss_E):
         plt.plot(range(len(gauss_E)), gauss_E)
@@ -367,11 +372,6 @@ class Network(object):
         gamma_band = [30., 100.]
         gamma_E, gamma_I = filter_band(gauss_E, gauss_I, window_len, gamma_band)
 
-        """test = signal.hilbert(theta_E)
-        plt.plot(range(len(test)), np.abs(test))
-        plt.plot(range(len(theta_E)), theta_E)
-        plt.show()"""
-
         if plot:
             self.plot_smoothing(gauss_E)
             self.plot_bands(theta_E, gamma_E, gauss_E)
@@ -399,20 +399,59 @@ class Network(object):
             active_loc = [i for i, hz in enumerate(val) if hz > 1.]
             active_dict[key] = active_loc
 
-        self.I_frac_active = self.count_active_cells(active_dict, self.ncell, self.ncell * 2)
-        self.E_frac_active = self.count_active_cells(active_dict, self.ncell * 2, self.ncell * NUM_POP)
-
+        self.I_frac_active, self.I_mean_firing_active = self.count_active_cells(active_dict, firing_rates_dict,
+                                                                                self.ncell, self.ncell * 2)
+        self.E_frac_active, self.E_mean_firing_active = self.count_active_cells(active_dict, firing_rates_dict,
+                                                                                self.ncell * 2, self.ncell * NUM_POP)
+        
         if plot:
             plt.plot(range(self.tstop), self.E_frac_active)
             plt.title('frac active E cells')
             plt.show()
+            plt.plot(range(self.tstop), self.E_mean_firing_active)
+            plt.title('mean firing over active E cells')
+            plt.show()
 
-    def count_active_cells(self, active_dict, lower_bound, upper_bound):
+    def count_active_cells(self, active_dict, firing_rates_dict, lower_bound, upper_bound):
         frac_active = [0] * self.tstop
+        mean_firing_active = [0] * self.tstop
         for i in range(self.tstop):
             for j in range(lower_bound, upper_bound):
-                if i in active_dict[j]: frac_active[i] += 1
+                if i in active_dict[j]:
+                    frac_active[i] += 1
+                    mean_firing_active[i] += firing_rates_dict[j][i]
+
+        for i in range(self.tstop):
+            if frac_active[i] != 0.:
+                mean_firing_active[i] /= float(frac_active[i])
         frac_active = np.divide(frac_active, float(self.ncell))
+
+        return frac_active, mean_firing_active
+
+    def compute_pop_firing(self, firing_rates_dict, lower_bound, upper_bound):
+        pop_rate = [0] * self.tstop
+        for i in range(lower_bound, upper_bound):
+            if len(firing_rates_dict[i]) == 0: continue
+            for j in range(self.tstop):
+                if firing_rates_dict[i][j] > 1.: pop_rate[j] += firing_rates_dict[i][j]
+        return pop_rate
+
+    def compute_envelope_ratio(self, band, pop_rate, plot):
+        hilb_transform = np.abs(signal.hilbert(band))
+        if np.mean(pop_rate) > 0.:
+            ratio = np.mean(hilb_transform) / np.mean(pop_rate)
+            if plot:
+                plt.plot(range(len(hilb_transform)), hilb_transform, label='hilbert transform')
+                plt.plot(range(len(pop_rate)), pop_rate, label='pop firing rate')
+                plt.axhline(y=np.mean(hilb_transform), color='red')
+                plt.axhline(y=np.mean(pop_rate), color='red')
+                plt.legend(loc=1)
+                plt.title(str(ratio))
+                plt.show()
+        else:
+            ratio = 0.
+        return ratio
+
 
 class IzhiCell(object):
     # derived from modelDB
@@ -565,7 +604,7 @@ def run_network(network, pc, comm, tstop, dt=.025, plot=False):
         #x = range(len(E_test))
         if plot:
             network.plot_voltage_trace(all_V_dict, all_spikes_dict, dt)
-            network.plot_cell_activity(all_spikes_dict)
+            network.plot_cell_activity(gauss_firing_rates)
         #window_len = min(int(2000./down_dt), len(down_t) - 1)
         E_mean, E_max = network.compute_pop_firing_rates(network.ncell, network.ncell * 2, rate_dict, peak_dict)
         I_mean, I_max = network.compute_pop_firing_rates(network.ncell * 2, network.ncell * NUM_POP, rate_dict,
@@ -577,11 +616,21 @@ def run_network(network, pc, comm, tstop, dt=.025, plot=False):
         peak_theta_osc_I = network.compute_peak_osc_freq(theta_I, 'theta')
         peak_gamma_osc_E = network.compute_peak_osc_freq(gamma_E, 'gamma')
         peak_gamma_osc_I = network.compute_peak_osc_freq(gamma_I, 'gamma')
-        # rec = {key: value for dict in all_dicts for key, value in dict['rec'].iteritems()}
+
+        I_pop_rate = network.compute_pop_firing(gauss_firing_rates, network.ncell, network.ncell * 2)
+        E_pop_rate = network.compute_pop_firing(gauss_firing_rates, network.ncell * 2, network.ncell * NUM_POP)
+        theta_E_ratio = network.compute_envelope_ratio(theta_E, E_pop_rate, plot)
+        theta_I_ratio = network.compute_envelope_ratio(theta_I, I_pop_rate, plot)
+        gamma_E_ratio = network.compute_envelope_ratio(gamma_E, E_pop_rate, plot)
+        gamma_I_ratio = network.compute_envelope_ratio(gamma_I, I_pop_rate, plot)
+
         return {'E_mean_rate': E_mean, 'E_peak_rate': E_max, 'I_mean_rate': I_mean, "I_peak_rate": I_max,
-                'peak_theta_osc_E': peak_theta_osc_E, 'peak_theta_osc_I': peak_theta_osc_I,
+                'peak_theta_osc_E': peak_theta_osc_E, 'peak_theta_osc_I': peak_theta_osc_I, 
                 'peak_gamma_osc_E': peak_gamma_osc_E, 'peak_gamma_osc_I': peak_gamma_osc_I, 'event': all_spikes_dict,
-                'osc_E': network.E_sum}
+                'osc_E': network.E_sum, 'E_frac_active': np.average(network.E_frac_active),
+                'I_frac_active': np.average(network.I_frac_active), 'theta_E_envelope_ratio': theta_E_ratio,
+                'theta_I_envelope_ratio': theta_I_ratio, 'gamma_E_envelope_ratio': gamma_E_ratio,
+                'gamma_I_envelope_ratio': gamma_I_ratio}
 
 
 """from dentate > stgen.py. temporary. personal issues with importing dentate -S"""
