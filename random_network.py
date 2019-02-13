@@ -5,6 +5,8 @@ import random
 import sys, time
 import scipy.signal as signal
 import matplotlib.pyplot as plt
+
+np.seterr(divide='print')
 # for h.lambda_f
 h.load_file('stdlib.hoc')
 # for h.stdinit
@@ -246,20 +248,26 @@ class Network(object):
         size = self.tstop
         self.E_sum = np.zeros(size)
         self.I_sum = np.zeros(size)
-        for i in range(self.ncell, self.ncell * NUM_POP):
+        self.FF_sum = np.zeros(size)
+        for i in range(self.ncell * NUM_POP):
             cell_type = self.get_cell_type(i)
             vec = map(int, vecdict[i])
+            if len(vec) == 0: continue
             t = np.arange(0., self.tstop, 1.)
             spike_indexes = [np.where(t >= time)[0][0] for time in vec]
             spike_count = np.zeros_like(t)
             spike_count[spike_indexes] = 1.
             if cell_type == 'RS':
                 self.E_sum = np.add(self.E_sum, spike_count)
-            else:
+            elif cell_type == 'FS':
                 self.I_sum = np.add(self.I_sum, spike_count)
+            else:
+                self.FF_sum = np.add(self.FF_sum, spike_count)
 
-    def compute_peak_osc_freq(self, osc, freq, plot=False):
+    """def compute_peak_osc_freq(self, osc, freq, plot=False):
         sub_osc = osc[int(len(osc) / 6):]
+        if not np.any(sub_osc > 0): return 0.
+        
         filtered = smooth_peaks(sub_osc)
         if freq == 'theta':
             widths = np.arange(50, 200)
@@ -276,22 +284,15 @@ class Network(object):
                 plt.show()
         else:
             peak = 0.
-        return peak
+        return peak"""
 
     def compute_mean_max_firing_per_cell(self, gauss_firing_rates):
-        widths = np.arange(50, 200)
         rate_dict = {}
         peak_dict = {}
         for key, val in gauss_firing_rates.iteritems():
             if len(val) > 0:
-                peak_loc = signal.find_peaks_cwt(val, widths)
-                c_sum = 0
-                peak = float("-inf")
-                for loc in peak_loc:
-                    c_sum += val[loc]
-                    peak = max(peak, val[loc])
-                    rate_dict[key] = c_sum / float(len(peak_loc))
-                    peak_dict[key] = peak
+                rate_dict[key] = np.mean(val)
+                peak_dict[key] = np.max(val)
         return rate_dict, peak_dict
     
     def compute_pop_firing_rates(self, lower, upper, rate_dict, peak_dict):
@@ -327,9 +328,6 @@ class Network(object):
 
         hm = np.zeros((self.ncell, self.tstop))
         for key, val in gauss_firing_rates.iteritems():
-            """x = np.zeros(self.tstop)
-            for t in val: x[int(t)] = 1
-            smoothed = boxcar(x)"""
             wrap = key % self.ncell
             if len(gauss_firing_rates[key]) != 0:
                 hm[wrap] = gauss_firing_rates[key]
@@ -347,7 +345,7 @@ class Network(object):
         plt.title('spike counts - E pop')
         plt.show()
 
-    def plot_bands(self, theta_E, gamma_E, gauss_E):
+    def plot_bands(self, theta_E, gamma_E, gauss_E, theta_FF, gamma_FF, gauss_FF):
         plt.plot(range(len(theta_E)), theta_E, label="theta E")
         gauss_E = np.subtract(gauss_E, np.mean(gauss_E))
         plt.plot(range(len(gauss_E)), gauss_E, label="smoothed spike rate")
@@ -360,21 +358,34 @@ class Network(object):
         plt.title('gamma E')
         plt.show()
 
+        plt.plot(range(len(theta_FF)), theta_FF, label="theta FF")
+        gauss_FF = np.subtract(gauss_FF, np.mean(gauss_FF))
+        plt.plot(range(len(gauss_FF)), gauss_FF, label="smoothed spike rate")
+        plt.legend(loc=1)
+        plt.title('theta FF')
+        plt.show()
+        plt.plot(range(len(gamma_FF)), gamma_FF, label="gamma FF")
+        plt.plot(range(len(gauss_FF)), gauss_FF, label="smothed spike rate")
+        plt.legend(loc=1)
+        plt.title('gamma FF')
+        plt.show()
+
     def get_bands_of_interest(self, plot):
         gauss_E = gauss(self.E_sum, 1., self.tstop)
         gauss_I = gauss(self.I_sum, 1., self.tstop)
+        gauss_FF = gauss(self.FF_sum, 1., self.tstop)
 
         filter_dt = 1.  # ms
         window_len = int(2000. / filter_dt)
         theta_band = [5., 10.]
-        theta_E, theta_I = filter_band(gauss_E, gauss_I, window_len, theta_band)
+        theta_E, theta_I, theta_FF = filter_band(gauss_E, gauss_I, gauss_FF, window_len, theta_band)
         window_len = int(200. / filter_dt)
         gamma_band = [30., 100.]
-        gamma_E, gamma_I = filter_band(gauss_E, gauss_I, window_len, gamma_band)
+        gamma_E, gamma_I, gamma_FF = filter_band(gauss_E, gauss_I, gauss_FF, window_len, gamma_band)
 
         if plot:
             self.plot_smoothing(gauss_E)
-            self.plot_bands(theta_E, gamma_E, gauss_E)
+            self.plot_bands(theta_E, gamma_E, gauss_E, theta_FF, gamma_FF, gauss_FF)
 
         return theta_E, theta_I, gamma_E, gamma_I
 
@@ -417,11 +428,11 @@ class Network(object):
         mean_firing_active = [0] * self.tstop
         for i in range(self.tstop):
             for j in range(lower_bound, upper_bound):
-                if i in active_dict[j]:
+                if i in active_dict[j]: 
                     frac_active[i] += 1
                     mean_firing_active[i] += firing_rates_dict[j][i]
 
-        for i in range(self.tstop):
+        for i in range(self.tstop): 
             if frac_active[i] != 0.:
                 mean_firing_active[i] /= float(frac_active[i])
         frac_active = np.divide(frac_active, float(self.ncell))
@@ -433,7 +444,7 @@ class Network(object):
         for i in range(lower_bound, upper_bound):
             if len(firing_rates_dict[i]) == 0: continue
             for j in range(self.tstop):
-                if firing_rates_dict[i][j] > 1.: pop_rate[j] += firing_rates_dict[i][j]
+                if firing_rates_dict[i][j] > 1.: pop_rate[j] += firing_rates_dict[i][j] 
         return pop_rate
 
     def compute_envelope_ratio(self, band, pop_rate, plot):
@@ -517,25 +528,30 @@ class FFCell(object):
 
 
 def gauss(spikes, dt, tstop, filter_duration=100):
+    pad_len = 250
     filter_duration = filter_duration  # ms
     filter_t = np.arange(-filter_duration, filter_duration, dt)
     sigma = filter_duration / 3. / np.sqrt(2.)
     gaussian_filter = np.exp(-(filter_t / sigma) ** 2.)
     gaussian_filter /= np.trapz(gaussian_filter, dx=dt / 1000)
 
-    signal = np.convolve(spikes, gaussian_filter)
-    signal_t = np.arange(0., len(signal) * dt, dt)
-    signal = signal[int(filter_duration / dt):][:len(spikes)]
+    mirror_beginning = spikes[:pad_len][::-1]
+    mirror_end = spikes[-pad_len:][::-1]
+    modified_spikes = np.append(np.append(mirror_beginning, spikes), mirror_end)
 
+    signal = np.convolve(modified_spikes, gaussian_filter)
+    signal_t = np.arange(0., len(signal) * dt, dt)
+    signal = signal[int(filter_duration / dt) + pad_len:][:len(spikes)]
     return signal
 
 
-def filter_band(E, I, window_len, band):
+def filter_band(E, I, FF, window_len, band):
     filt = signal.firwin(window_len, band, nyq=1000. / 2., pass_zero=False)
     E_band = signal.filtfilt(filt, [1.], E, padtype='even', padlen=window_len)
     I_band = signal.filtfilt(filt, [1.], I, padtype='even', padlen=window_len)
+    FF_band = signal.filtfilt(filt, [1.], FF, padtype='even', padlen=window_len)
 
-    return E_band, I_band
+    return E_band, I_band, FF_band
 
 
 def smooth_peaks(x, window_len=101):
@@ -547,20 +563,32 @@ def smooth_peaks(x, window_len=101):
     return filtered
 
 
-def boxcar(x, window_len=101):
+"""def boxcar(x, window_len=101):
     x = np.array(x)
     y = np.zeros((len(x) + window_len,))
     x = np.append(x[:window_len], x)
     for i in range(len(x)):
         y[i] = y[i - 1] + x[i] - x[i - window_len]
 
-    """for i in range(window_len):
-        y[i] = x[i]
-    for i in range(window_len, len(x)):
-        y[i] = y[i - 1] + x[i] - x[i - window_len]"""
+    #for i in range(window_len):
+    #    y[i] = x[i]
+    #for i in range(window_len, len(x)):
+    #    y[i] = y[i - 1] + x[i] - x[i - window_len]
     y = y * 1 / float(window_len)
-    return y[window_len:]
+    return y[window_len:]"""
 
+
+def peak_from_spectrogram(freq, title='not specified', dt=1., plot=False):
+    freq, density = signal.periodogram(freq, 1000. / dt)
+    if plot:
+        plt.plot(freq, density)
+        plt.title(title)
+        plt.show()
+    locs = np.where(density > 1.)
+    if len(locs[0]) > 0:
+        largest_idx = locs[0][-1]
+        return freq[largest_idx]
+    return 0.
 
 def run_network(network, pc, comm, tstop, dt=.025, plot=False):
     pc.set_maxstep(10)
@@ -599,6 +627,7 @@ def run_network(network, pc, comm, tstop, dt=.025, plot=False):
     """
 
     if comm.rank == 0:
+        filter_dt = 1.
         network.get_frac_active(gauss_firing_rates, plot)
         network.py_summation(all_spikes_dict)
         #x = range(len(E_test))
@@ -610,12 +639,11 @@ def run_network(network, pc, comm, tstop, dt=.025, plot=False):
         I_mean, I_max = network.compute_pop_firing_rates(network.ncell * 2, network.ncell * NUM_POP, rate_dict,
                                                          peak_dict)
 
-        network.py_summation(all_spikes_dict)
         theta_E, theta_I, gamma_E, gamma_I = network.get_bands_of_interest(plot)
-        peak_theta_osc_E = network.compute_peak_osc_freq(theta_E, 'theta')
-        peak_theta_osc_I = network.compute_peak_osc_freq(theta_I, 'theta')
-        peak_gamma_osc_E = network.compute_peak_osc_freq(gamma_E, 'gamma')
-        peak_gamma_osc_I = network.compute_peak_osc_freq(gamma_I, 'gamma')
+        peak_theta_osc_E = peak_from_spectrogram(theta_E, 'theta E', filter_dt, plot)
+        peak_theta_osc_I = peak_from_spectrogram(theta_I, 'theta I', filter_dt, plot)
+        peak_gamma_osc_E = peak_from_spectrogram(gamma_E, 'gamma E', filter_dt, plot)
+        peak_gamma_osc_I = peak_from_spectrogram(gamma_I, 'gamma I', filter_dt, plot)
 
         I_pop_rate = network.compute_pop_firing(gauss_firing_rates, network.ncell, network.ncell * 2)
         E_pop_rate = network.compute_pop_firing(gauss_firing_rates, network.ncell * 2, network.ncell * NUM_POP)
