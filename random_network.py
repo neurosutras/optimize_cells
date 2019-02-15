@@ -5,7 +5,6 @@ import random
 import sys, time
 import scipy.signal as signal
 import matplotlib.pyplot as plt
-
 np.seterr(divide='print')
 # for h.lambda_f
 h.load_file('stdlib.hoc')
@@ -20,13 +19,13 @@ NUM_POP = 3
 
 class Network(object):
 
-    def __init__(self, ncell, delay, pc, tstop, dt=None, e2e_prob=.05, e2i_prob=.05, i2i_prob=.05, i2e_prob=.05,
-                 ff2i_weight=1., ff2e_weight=2., e2e_weight=1., e2i_weight=1., i2i_weight=.5, i2e_weight=.5,
-                 ff_meanfreq=100, ff_frac_active=.8, ff2i_prob=.5, ff2e_prob=.5, std_dict=None, tau_E=2., tau_I=5.,
-                 connection_seed=0, spikes_seed=1):
+    def __init__(self, FF_ncell, E_ncell, I_ncell, delay, pc, tstop, dt=None, e2e_prob=.05, e2i_prob=.05, i2i_prob=.05,
+                 i2e_prob=.05, ff2i_weight=1., ff2e_weight=2., e2e_weight=1., e2i_weight=1., i2i_weight=.5,
+                 i2e_weight=.5, ff_meanfreq=100, ff_frac_active=.8, ff2i_prob=.5, ff2e_prob=.5, std_dict=None, tau_E=2.,
+                 tau_I=5., connection_seed=0, spikes_seed=1):
         """
 
-        :param ncell: int, number of cells in each population
+        :param FF_ncell: int, number of cells in FF population
         :param delay: 
         :param pc: ParallelContext object
         :param tstop: int, duration of sim
@@ -53,7 +52,9 @@ class Network(object):
         """
         self.pc = pc
         self.delay = delay
-        self.ncell = int(ncell)
+        self.FF_ncell = int(FF_ncell)
+        self.E_ncell = int(E_ncell)
+        self.I_ncell = int(I_ncell)
         self.FF_firing = {}
         self.ff_frac_active = ff_frac_active
         self.tau_E = tau_E
@@ -63,12 +64,15 @@ class Network(object):
         self.weight_dict = {'ff2i': ff2i_weight, 'ff2e': ff2e_weight, 'e2e': e2e_weight, 'e2i': e2i_weight,
                             'i2i': i2i_weight, 'i2e': i2e_weight}
         self.weight_std_dict = std_dict
-        self.index_dict = {'ff2i': ((0, ncell), (ncell, ncell * 2)),  # exclusive [x, y)
-                           'ff2e': ((0, ncell), (ncell * 2, ncell * NUM_POP)),
-                           'e2e': ((ncell, ncell * 2), (ncell, ncell * 2)),
-                           'e2i': ((ncell, ncell * 2), (ncell * 2, ncell * NUM_POP)),
-                           'i2i': ((ncell * 2, ncell * NUM_POP), (ncell * 2, ncell * NUM_POP)),
-                           'i2e': ((ncell * 2, ncell * NUM_POP), (ncell, ncell * 2))}
+        self.total_cells = FF_ncell + I_ncell + E_ncell
+        self.cell_index = {'FF': (0, FF_ncell), 'I': (FF_ncell, FF_ncell + I_ncell),
+                           'E': (FF_ncell + I_ncell, self.total_cells)}
+        self.connectivity_index_dict = {'ff2i': (self.cell_index['FF'], self.cell_index['I']),  # exclusive [x, y)
+                                        'ff2e': (self.cell_index['FF'], self.cell_index['E']),
+                                        'e2e': (self.cell_index['E'], self.cell_index['E']),
+                                        'e2i': (self.cell_index['E'], self.cell_index['I']),
+                                        'i2i': (self.cell_index['I'], self.cell_index['I']),
+                                        'i2e': (self.cell_index['I'], self.cell_index['E'])}
         self.tstop = tstop
         self.ff_meanfreq = ff_meanfreq
         self.event_rec = {}
@@ -77,28 +81,27 @@ class Network(object):
         self.connection_seed = connection_seed
         self.spikes_seed = spikes_seed
 
-        self.mknetwork(self.ncell)
-        #self.mkstim(self.ncell)
+        self.mknetwork()
         self.voltage_record(dt)
         self.spike_record()
         self.pydicts = {}
 
-    def mknetwork(self, ncell):
-        self.mkcells(ncell)
-        self.connectcells(ncell)
+    def mknetwork(self):
+        self.mkcells()
+        self.connectcells()
 
-    def mkcells(self, ncell):
+    def mkcells(self):
         rank = int(self.pc.id())
         nhost = int(self.pc.nhost())
         self.cells = []
         self.gids = []
-        for i in range(rank, ncell * NUM_POP, nhost):
-            if i < ncell:
+        for i in range(rank, self.total_cells, nhost):
+            if i < self.FF_ncell:
                 self.local_random.seed(self.spikes_seed + i)
                 cell = FFCell(self.tstop, self.ff_meanfreq, self.ff_frac_active, self, i,
                               local_random=self.local_random)
-            else: 
-                if i not in list(range(ncell * 2, ncell * 3)):
+            else:
+                if i in range(self.cell_index['E'][0], self.cell_index['E'][1]):
                     cell_type = 'RS'
                 else:
                     cell_type = 'FS'
@@ -109,10 +112,6 @@ class Network(object):
             nc = cell.connect2target(None)
             self.pc.cell(i, nc)
             test = self.pc.gid2cell(i)
-            if not cell.is_art():
-                rec = h.Vector()
-                nc.record(rec)
-                self.event_rec[i] = rec
 
     def createpairs(self, prob, input_indices, output_indices):
         pair_list = []
@@ -126,14 +125,14 @@ class Network(object):
         return pair_list
 
     def get_cell_type(self, gid):
-        if gid < self.ncell:
+        if gid in range(self.cell_index['FF'][1]):
             return None
-        elif gid < self.ncell * 2:
+        elif gid in range(self.cell_index['I'][0], self.cell_index['I'][1]):
             return 'FS'
         else:
             return 'RS'
 
-    def connectcells(self, ncell):
+    def connectcells(self):
         rank = int(self.pc.id())
         nhost = int(self.pc.nhost())
         self.local_random.seed(self.connection_seed + rank)
@@ -148,20 +147,19 @@ class Network(object):
                 self.weight_std_dict[connection] = 2. / 3. / np.sqrt(2.)
             std_factor = self.weight_std_dict[connection]
 
-            indices = self.index_dict[connection]
+            indices = self.connectivity_index_dict[connection]
             inp = indices[0]
             out = indices[1]
-            pair_list = self.createpairs(self.prob_dict[connection], list(range(inp[0], inp[1])),
-                                         list(range(out[0], out[1])))
+            pair_list = self.createpairs(self.prob_dict[connection], range(inp[0], inp[1]), range(out[0], out[1]))
             for pair in pair_list:
                 presyn_gid = pair[0]
                 target_gid = pair[1]
                 if self.pc.gid_exists(target_gid):
                     target = self.pc.gid2cell(target_gid)
-                    if connection[-1] == 'e':
-                        syn = target.synlist[0]
-                    else:
+                    if connection[0] == 'i':
                         syn = target.synlist[1]
+                    else:
+                        syn = target.synlist[0]
                     nc = self.pc.gid_connect(presyn_gid, syn)
                     nc.delay = self.delay
                     weight = self.local_random.gauss(mu, mu * std_factor)
@@ -204,32 +202,6 @@ class Network(object):
         for key, value in vecdict.iteritems():
             this_pydict[key] = np.array(value)
         return this_pydict
-
-    """def compute_isi(self, vecdict):  # vecdict is an event dict
-        self.ratedict = {}
-        self.peakdict = {}
-        for key, vec in vecdict.iteritems():
-            isivec = h.Vector()
-            if len(vec) > 1:
-                isivec.deriv(vec, 1, 1)
-                rate = 1. / (isivec.mean() / 1000)
-                self.ratedict[key] = rate
-                if isivec.min() > 0:
-                    self.peakdict[key] = 1. / (isivec.min() / 1000)"""
-
-    def py_compute_isi(self, vecdict):
-        self.rate_dict = {}
-        self.peak_dict = {}
-        for key, vec in vecdict.iteritems():
-            if len(vec) > 1:
-                isi = []
-                for i in range(len(vec) - 1):
-                    isi.append(vec[i + 1] - vec[i])
-                isi = np.array(isi)
-                rate = 1. / (isi.mean() / 1000.)
-                self.rate_dict[key] = rate
-                self.peak_dict[key] = 1. / (isi.min() / 1000.)
-
     
     def summation(self, vecdict, dt=.025):
         size = self.tstop + 2  #* (1 / dt) + 1
@@ -249,7 +221,7 @@ class Network(object):
         self.E_sum = np.zeros(size)
         self.I_sum = np.zeros(size)
         self.FF_sum = np.zeros(size)
-        for i in range(self.ncell * NUM_POP):
+        for i in range(self.total_cells):
             cell_type = self.get_cell_type(i)
             vec = map(int, vecdict[i])
             if len(vec) == 0: continue
@@ -264,28 +236,6 @@ class Network(object):
             else:
                 self.FF_sum = np.add(self.FF_sum, spike_count)
 
-    """def compute_peak_osc_freq(self, osc, freq, plot=False):
-        sub_osc = osc[int(len(osc) / 6):]
-        if not np.any(sub_osc > 0): return 0.
-        
-        filtered = smooth_peaks(sub_osc)
-        if freq == 'theta':
-            widths = np.arange(50, 200)
-        else:
-            widths = np.arange(5, 50)
-        peak_loc = signal.find_peaks_cwt(filtered, widths)
-        tmp = h.Vector()
-        x = [i for i in range(len(sub_osc) + 100)]
-        if len(peak_loc) > 1:
-            tmp.deriv(h.Vector(peak_loc), 1, 1)
-            peak = 1 / (tmp.min() / 1000.)
-            if plot:
-                plt.plot(x, filtered, '-gD', markevery=peak_loc)
-                plt.show()
-        else:
-            peak = 0.
-        return peak"""
-
     def compute_mean_max_firing_per_cell(self, gauss_firing_rates):
         rate_dict = {}
         peak_dict = {}
@@ -294,48 +244,56 @@ class Network(object):
                 rate_dict[key] = np.mean(val)
                 peak_dict[key] = np.max(val)
         return rate_dict, peak_dict
-    
-    def compute_pop_firing_rates(self, lower, upper, rate_dict, peak_dict):
+
+    def compute_pop_firing_features(self, bounds, rate_dict, peak_dict):
         uncounted = 0
-        mean = 0;
+        mean = 0
         max_firing = 0
-        for i in range(lower, upper):
+        for i in range(bounds[0], bounds[1]):
             if i not in rate_dict:
                 uncounted += 1
                 continue
             mean += rate_dict[i]
             max_firing += peak_dict[i]
-        if self.ncell - uncounted != 0:
-            mean = mean / float(self.ncell - uncounted)
-            max_firing = max_firing / float(self.ncell - uncounted)
+        ncell = bounds[1] - bounds[0]
+        if ncell - uncounted != 0:
+            mean = mean / float(ncell - uncounted)
+            max_firing = max_firing / float(ncell - uncounted)
 
         return mean, max_firing
 
     def plot_voltage_trace(self, vecdict, all_events, dt=.025):
         down_dt = 1.
         ms_step = int(down_dt / dt)
-        for i in range(self.ncell * 2, self.ncell * NUM_POP):
+        for i in range(self.cell_index['I'][0], self.cell_index['I'][1]):
             ms_rec = []
             for j, v in enumerate(vecdict[i]):
                 if j % ms_step == 0: ms_rec.append(v)
             ev = [int(event/down_dt) for event in all_events[i]]
             plt.plot(range(len(ms_rec)), ms_rec, '-gD', markevery=ev)
-            plt.title('v trace')
+            plt.title('v trace' + str(i))
             plt.show()
 
     def plot_cell_activity(self, gauss_firing_rates):
         import seaborn as sns
 
-        hm = np.zeros((self.ncell, self.tstop))
+        counter = 0
+        wrap = 0
+        populations = ['FF', 'I', 'E']
+        ncell = [self.FF_ncell, self.I_ncell, self.E_ncell]
+        last_idx = [self.FF_ncell - 1, self.cell_index['I'][1] - 1, self.cell_index['E'][1] - 1]
+        hm = np.zeros((ncell[counter], self.tstop))
         for key, val in gauss_firing_rates.iteritems():
-            wrap = key % self.ncell
             if len(gauss_firing_rates[key]) != 0:
                 hm[wrap] = gauss_firing_rates[key]
-            if key != 0 and wrap == self.ncell - 1:
+            wrap += 1
+            if key == last_idx[counter]:
                 sns.heatmap(hm)
-                plt.title(str(key))
+                plt.title(populations[counter])
                 plt.show()
-                hm = np.zeros((self.ncell, self.tstop))
+                counter += 1
+                wrap = 0
+                if counter < len(ncell): hm = np.zeros((ncell[counter], self.tstop))
 
     def plot_smoothing(self, gauss_E):
         plt.plot(range(len(gauss_E)), gauss_E)
@@ -393,12 +351,8 @@ class Network(object):
         gauss_firing_rates = {}
         for key, val in spike_dict.iteritems():
             if len(val) > 0:
-                val = map(int, val)
-                t = np.arange(0., self.tstop, 1.)
-                spike_indexes = [np.where(t >= time)[0][0] for time in val]
-                spike_count = np.zeros_like(t)
-                spike_count[spike_indexes] = 1.
-                smoothed = gauss(spike_count, 1., self.tstop)
+                spikes_t = convert_sparse_arr_to_binary(val, self.tstop)
+                smoothed = gauss(spikes_t, 1., self.tstop)
                 gauss_firing_rates[key] = smoothed
             else:
                 gauss_firing_rates[key] = []
@@ -411,9 +365,9 @@ class Network(object):
             active_dict[key] = active_loc
 
         self.I_frac_active, self.I_mean_firing_active = self.count_active_cells(active_dict, firing_rates_dict,
-                                                                                self.ncell, self.ncell * 2)
+                                                                                self.cell_index['I'])
         self.E_frac_active, self.E_mean_firing_active = self.count_active_cells(active_dict, firing_rates_dict,
-                                                                                self.ncell * 2, self.ncell * NUM_POP)
+                                                                                self.cell_index['E'])
         
         if plot:
             plt.plot(range(self.tstop), self.E_frac_active)
@@ -423,11 +377,11 @@ class Network(object):
             plt.title('mean firing over active E cells')
             plt.show()
 
-    def count_active_cells(self, active_dict, firing_rates_dict, lower_bound, upper_bound):
+    def count_active_cells(self, active_dict, firing_rates_dict, bounds):
         frac_active = [0] * self.tstop
         mean_firing_active = [0] * self.tstop
         for i in range(self.tstop):
-            for j in range(lower_bound, upper_bound):
+            for j in range(bounds[0], bounds[1]):
                 if i in active_dict[j]: 
                     frac_active[i] += 1
                     mean_firing_active[i] += firing_rates_dict[j][i]
@@ -435,13 +389,13 @@ class Network(object):
         for i in range(self.tstop): 
             if frac_active[i] != 0.:
                 mean_firing_active[i] /= float(frac_active[i])
-        frac_active = np.divide(frac_active, float(self.ncell))
+        frac_active = np.divide(frac_active, float(bounds[1] - bounds[0]))
 
         return frac_active, mean_firing_active
 
-    def compute_pop_firing(self, firing_rates_dict, lower_bound, upper_bound):
+    def compute_pop_firing(self, firing_rates_dict, bounds):
         pop_rate = [0] * self.tstop
-        for i in range(lower_bound, upper_bound):
+        for i in range(bounds[0], bounds[1]):
             if len(firing_rates_dict[i]) == 0: continue
             for j in range(self.tstop):
                 if firing_rates_dict[i][j] > 1.: pop_rate[j] += firing_rates_dict[i][j] 
@@ -544,7 +498,6 @@ def gauss(spikes, dt, tstop, filter_duration=100):
     signal = signal[int(filter_duration / dt) + pad_len:][:len(spikes)]
     return signal
 
-
 def filter_band(E, I, FF, window_len, band):
     filt = signal.firwin(window_len, band, nyq=1000. / 2., pass_zero=False)
     E_band = signal.filtfilt(filt, [1.], E, padtype='even', padlen=window_len)
@@ -553,49 +506,39 @@ def filter_band(E, I, FF, window_len, band):
 
     return E_band, I_band, FF_band
 
-
-def smooth_peaks(x, window_len=101):
-    """smoothing to denoise peaks"""
-    window = signal.general_gaussian(window_len, p=1, sig=20)
-    filtered = signal.fftconvolve(window, x)
-    filtered = (np.average(x) / np.average(filtered)) * filtered
-    filtered = np.roll(filtered, -25)
-    return filtered
-
-
-"""def boxcar(x, window_len=101):
-    x = np.array(x)
-    y = np.zeros((len(x) + window_len,))
-    x = np.append(x[:window_len], x)
-    for i in range(len(x)):
-        y[i] = y[i - 1] + x[i] - x[i - window_len]
-
-    #for i in range(window_len):
-    #    y[i] = x[i]
-    #for i in range(window_len, len(x)):
-    #    y[i] = y[i - 1] + x[i] - x[i - window_len]
-    y = y * 1 / float(window_len)
-    return y[window_len:]"""
-
-
 def peak_from_spectrogram(freq, title='not specified', dt=1., plot=False):
     freq, density = signal.periodogram(freq, 1000. / dt)
     if plot:
         plt.plot(freq, density)
         plt.title(title)
         plt.show()
-    locs = np.where(density > 1.)
-    if len(locs[0]) > 0:
-        largest_idx = locs[0][-1]
-        return freq[largest_idx]
+    max_dens = np.max(density)
+    loc = np.where(density == max_dens)
+    if len(loc[0]) > 0:
+        peak_idx = loc[0][0]
+        return freq[peak_idx]
     return 0.
+
+
+def convert_sparse_arr_to_binary(arr, tstop):
+    arr = map(int, arr)  # elements may be floats rather than ints
+    t = np.arange(0., tstop, 1.)
+    spikes_t = np.zeros(tstop)
+    spike_idx = [np.where(t >= time)[0][0] for time in arr]
+    spikes_t[spike_idx] = 1.
+    return spikes_t
 
 def run_network(network, pc, comm, tstop, dt=.025, plot=False):
     pc.set_maxstep(10)
     h.stdinit()
     pc.psolve(tstop)
     nhost = int(pc.nhost())
-    # hoc vec to np
+    for key, val in network.event_rec.iteritems():
+        if key in range(12, 24):
+            li = []
+            for i in val: li.append(i)
+            print li
+
     py_spike_dict = network.vecdict_to_pydict(network.spike_tvec)
     py_V_dict = network.vecdict_to_pydict(network.voltage_recvec)
     gauss_firing_rates = network.event_dict_to_firing_rate(py_spike_dict)
@@ -611,20 +554,13 @@ def run_network(network, pc, comm, tstop, dt=.025, plot=False):
         for ff_dict in ff_spikes:
             for key, val in ff_dict.iteritems():
                 all_spikes_dict[key] = val
+                if len(val) > 0:
+                    spikes_t = convert_sparse_arr_to_binary(val, network.tstop)
+                    ff_smoothed = gauss(spikes_t, 1., network.tstop)
+                    gauss_firing_rates[key] = ff_smoothed
+                else:
+                    gauss_firing_rates[key] = []
         rate_dict, peak_dict = network.compute_mean_max_firing_per_cell(gauss_firing_rates)
-
-    """
-    #old method is being commented out. kept for comparison purposes. new method (not using
-    hoc vec.deriv()) seems more biologically accurate
-    network.py_compute_isi(py_spike_dict)
-    rate_dicts = comm.gather(network.rate_dict, root=0)
-    peak_dicts = comm.gather(network.peak_dict, root=0)
-    if comm.rank == 0:
-        rate_dicts = {key: val for r_dict in rate_dicts for key, val in r_dict.iteritems()}
-        peak_dicts = {key: val for p_dict in peak_dicts for key, val in p_dict.iteritems()}#
-        print "old method", rate_dicts
-        print "old method", peak_dicts
-    """
 
     if comm.rank == 0:
         filter_dt = 1.
@@ -635,27 +571,26 @@ def run_network(network, pc, comm, tstop, dt=.025, plot=False):
             network.plot_voltage_trace(all_V_dict, all_spikes_dict, dt)
             network.plot_cell_activity(gauss_firing_rates)
         #window_len = min(int(2000./down_dt), len(down_t) - 1)
-        E_mean, E_max = network.compute_pop_firing_rates(network.ncell, network.ncell * 2, rate_dict, peak_dict)
-        I_mean, I_max = network.compute_pop_firing_rates(network.ncell * 2, network.ncell * NUM_POP, rate_dict,
-                                                         peak_dict)
-
+        E_mean, E_max = network.compute_pop_firing_features(network.cell_index['E'], rate_dict, peak_dict)
+        I_mean, I_max = network.compute_pop_firing_features(network.cell_index['I'], rate_dict, peak_dict)
+     
         theta_E, theta_I, gamma_E, gamma_I = network.get_bands_of_interest(plot)
         peak_theta_osc_E = peak_from_spectrogram(theta_E, 'theta E', filter_dt, plot)
         peak_theta_osc_I = peak_from_spectrogram(theta_I, 'theta I', filter_dt, plot)
         peak_gamma_osc_E = peak_from_spectrogram(gamma_E, 'gamma E', filter_dt, plot)
         peak_gamma_osc_I = peak_from_spectrogram(gamma_I, 'gamma I', filter_dt, plot)
 
-        I_pop_rate = network.compute_pop_firing(gauss_firing_rates, network.ncell, network.ncell * 2)
-        E_pop_rate = network.compute_pop_firing(gauss_firing_rates, network.ncell * 2, network.ncell * NUM_POP)
+        I_pop_rate = network.compute_pop_firing(gauss_firing_rates, network.cell_index['I'])
+        E_pop_rate = network.compute_pop_firing(gauss_firing_rates, network.cell_index['E'])
         theta_E_ratio = network.compute_envelope_ratio(theta_E, E_pop_rate, plot)
         theta_I_ratio = network.compute_envelope_ratio(theta_I, I_pop_rate, plot)
         gamma_E_ratio = network.compute_envelope_ratio(gamma_E, E_pop_rate, plot)
         gamma_I_ratio = network.compute_envelope_ratio(gamma_I, I_pop_rate, plot)
 
         return {'E_mean_rate': E_mean, 'E_peak_rate': E_max, 'I_mean_rate': I_mean, "I_peak_rate": I_max,
-                'peak_theta_osc_E': peak_theta_osc_E, 'peak_theta_osc_I': peak_theta_osc_I, 
-                'peak_gamma_osc_E': peak_gamma_osc_E, 'peak_gamma_osc_I': peak_gamma_osc_I, 'event': all_spikes_dict,
-                'osc_E': network.E_sum, 'E_frac_active': np.average(network.E_frac_active),
+                'peak_theta_osc_E': peak_theta_osc_E, 'peak_theta_osc_I': peak_theta_osc_I,
+                'peak_gamma_osc_E': peak_gamma_osc_E, 'peak_gamma_osc_I': peak_gamma_osc_I,
+                'E_frac_active': np.average(network.E_frac_active),
                 'I_frac_active': np.average(network.I_frac_active), 'theta_E_envelope_ratio': theta_E_ratio,
                 'theta_I_envelope_ratio': theta_I_ratio, 'gamma_E_envelope_ratio': gamma_E_ratio,
                 'gamma_I_envelope_ratio': gamma_I_ratio}

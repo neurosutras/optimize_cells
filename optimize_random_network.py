@@ -72,7 +72,9 @@ def init_context():
     """
     TODO: Define each population size separately here.
     """
-    ncell = 12
+    FF_ncell = 12
+    E_ncell = 12
+    I_ncell = 12
     delay = 1  # ms
     tstop = 3000  # ms
     context.update(locals())
@@ -120,13 +122,13 @@ def compute_features(x, export=False):
     """
     update_source_contexts(x, context)
     context.pc.gid_clear()
-    context.network = Network(context.ncell, context.delay, context.pc, e2e_prob=context.e2e_prob,
-                              e2i_prob=context.e2i_prob, i2i_prob=context.i2i_prob, i2e_prob=context.i2e_prob,
-                              ff2i_weight=context.ff2i_weight, ff2e_weight=context.ff2e_weight,
-                              e2e_weight=context.e2e_weight, e2i_weight=context.e2i_weight,
-                              i2i_weight=context.i2i_weight, i2e_weight=context.i2e_weight,
-                              ff_meanfreq=context.ff_meanfreq, tstop=context.tstop,
-                              ff_frac_active=context.ff_frac_active, ff2i_prob=context.ff2i_prob,
+    context.network = Network(context.FF_ncell, context.E_ncell, context.I_ncell, context.delay, context.pc,
+                              e2e_prob=context.e2e_prob, e2i_prob=context.e2i_prob, i2i_prob=context.i2i_prob,
+                              i2e_prob=context.i2e_prob, ff2i_weight=context.ff2i_weight,
+                              ff2e_weight=context.ff2e_weight, e2e_weight=context.e2e_weight,
+                              e2i_weight=context.e2i_weight, i2i_weight=context.i2i_weight,
+                              i2e_weight=context.i2e_weight, ff_meanfreq=context.ff_meanfreq,
+                              tstop=context.tstop, ff_frac_active=context.ff_frac_active, ff2i_prob=context.ff2i_prob,
                               ff2e_prob=context.ff2e_prob, std_dict=context.weight_std_factors, tau_E=context.tau_E,
                               tau_I=context.tau_I, connection_seed=context.connection_seed,
                               spikes_seed=context.spikes_seed)
@@ -134,8 +136,6 @@ def compute_features(x, export=False):
     if int(context.pc.id()) == 0:
         if results is None:
             return dict()
-        results.pop('event', None)
-        results.pop('osc_E')
         return results
 
 
@@ -148,7 +148,7 @@ def get_objectives(features, export=False):
     """
     if int(context.pc.id()) == 0:
         objectives = {}
-        for feature_name in ['E_peak_rate', 'I_peak_rate', 'E_mean_rate', 'I_mean_rate', 'peak_theta_osc_E',
+        for feature_name in ['E_peak_rate', 'I_peak_rate', 'E_mean_rate', 'I_mean_rate', 'peak_theta_osc_E', 
                              'peak_theta_osc_I', 'E_frac_active', 'I_frac_active', 'theta_E_envelope_ratio',
                              'theta_I_envelope_ratio', 'gamma_E_envelope_ratio', 'gamma_I_envelope_ratio']:
             objective_name = feature_name

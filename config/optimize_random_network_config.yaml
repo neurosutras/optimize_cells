@@ -13,10 +13,10 @@ bounds:
   - .8
   FF2E_connection_weight: !!python/tuple
   - 0.
-  - 2.
+  - .5
   FF2I_connection_weight: !!python/tuple
   - 0.
-  - 2.
+  - .5
   EE_connection_weight: !!python/tuple
   - 0.
   - 5.
@@ -159,8 +159,8 @@ x0:
   EI_connection_prob: 0.1
   IE_connection_prob: 0.1
   II_connection_prob: 0.1
-  FF2I_connection_weight: .05
-  FF2E_connection_weight: .05
+  FF2I_connection_weight: .02
+  FF2E_connection_weight: .02
   EE_connection_weight: 2.
   EI_connection_weight: 2.
   IE_connection_weight: .2
