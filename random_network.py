@@ -76,6 +76,7 @@ class Network(object):
         self.tstop = tstop
         self.ff_meanfreq = ff_meanfreq
         self.event_rec = {}
+        self.ncdict = {}
 
         self.local_random = random.Random()
         self.connection_seed = connection_seed
@@ -100,7 +101,7 @@ class Network(object):
                 self.local_random.seed(self.spikes_seed + i)
                 cell = FFCell(self.tstop, self.ff_meanfreq, self.ff_frac_active, self, i,
                               local_random=self.local_random)
-            else:
+            else: 
                 if i in range(self.cell_index['E'][0], self.cell_index['E'][1]):
                     cell_type = 'RS'
                 else:
@@ -135,8 +136,7 @@ class Network(object):
     def connectcells(self):
         rank = int(self.pc.id())
         nhost = int(self.pc.nhost())
-        self.local_random.seed(self.connection_seed + rank)
-        self.ncdict = {}  # not efficient but demonstrates use of pc.gid_exists
+        self.local_random.seed(self.connection_seed + rank)  # not efficient but demonstrates use of pc.gid_exists
 
         for connection in ['ff2i', 'ff2e', 'e2e', 'e2i', 'i2i', 'i2e']:
 
@@ -278,7 +278,7 @@ class Network(object):
         import seaborn as sns
 
         counter = 0
-        wrap = 0
+        wrap = 0 
         populations = ['FF', 'I', 'E']
         ncell = [self.FF_ncell, self.I_ncell, self.E_ncell]
         last_idx = [self.FF_ncell - 1, self.cell_index['I'][1] - 1, self.cell_index['E'][1] - 1]
@@ -417,9 +417,54 @@ class Network(object):
             ratio = 0.
         return ratio
 
+    def convert_ncdict_to_weights(self):
+        connections = {}
+        for pair, nc in self.ncdict.iteritems():
+            connections[pair] = nc.weight[0]
+        return connections
+
+    def print_connections(self, connections):
+        connections_per_cell = {}
+        for pair, weight in connections.iteritems():
+            pre, post = pair
+            if pre not in connections_per_cell:
+                connections_per_cell[pre] = [post]
+            else:
+                li = connections_per_cell[pre]
+                li.append(post)
+                connections_per_cell[pre] = li
+        print "connections and weights: \n", connections
+        print "connections by presynaptic cell: \n", connections_per_cell
+
+    def plot_adj_matrix(self, connections):
+        import seaborn as sns
+        if self.total_cells > 100: return
+        """source = row; target = col"""
+        matrixmap = np.zeros((self.total_cells, self.total_cells))
+        for pair, weight in connections.iteritems():
+            source, target = pair
+            matrixmap[source][target] = weight
+        ax = sns.heatmap(matrixmap)
+        ax.hlines([self.FF_ncell - 1, self.FF_ncell + self.I_ncell - 1], color='white', *ax.get_xlim())
+        ax.vlines([self.FF_ncell - 1, self.FF_ncell + self.I_ncell - 1], color='white', *ax.get_ylim())
+        plt.show()
+
+    def check_cell_type_correct(self):
+        for cell in self.gids:
+            cell_type = self.get_cell_type(cell)
+            if cell_type is None and isinstance(self.pc.gid2cell(cell), IzhiCell):
+                print cell, " is not a FF cell but a ", type(self.pc.gid2cell(cell))
+            elif cell_type in ['FS', 'RS'] and not isinstance(self.pc.gid2cell(cell), IzhiCell):
+                print cell, " is not a Izhi cell but a ", type(self.pc.gid2cell(cell))
+            elif cell_type is 'FS' and self.pc.gid2cell(cell).izh.a != .02:
+                print cell, " is not a inhibitory Izhi cell but an excitatory one"
+            elif cell_type is 'RS' and self.pc.gid2cell(cell).izh.a != .1:
+                print cell, " is not an excitatory Izhi cell but an inhibitory one"
+                    
+
 
 class IzhiCell(object):
-    # derived from modelDB
+    # derived from mDB
     def __init__(self, tau_E, tau_I, type='RS'):  # RS = excit or FS = inhib
         self.type = type
         self.sec = h.Section(cell=self)
@@ -519,13 +564,13 @@ def peak_from_spectrogram(freq, title='not specified', dt=1., plot=False):
         return freq[peak_idx]
     return 0.
 
-
 def convert_sparse_arr_to_binary(arr, tstop):
-    arr = map(int, arr)  # elements may be floats rather than ints
-    t = np.arange(0., tstop, 1.)
-    spikes_t = np.zeros(tstop)
-    spike_idx = [np.where(t >= time)[0][0] for time in arr]
-    spikes_t[spike_idx] = 1.
+    spikes_t = np.zeros(tstop)  # e
+    if len(arr) != 0:
+        t = np.arange(0., tstop, 1.)
+        arr = map(int, arr)
+        spike_idx = [np.where(t >= time)[0][0] for time in arr]
+        spikes_t[spike_idx] = 1.
     return spikes_t
 
 def run_network(network, pc, comm, tstop, dt=.025, plot=False):
@@ -533,21 +578,20 @@ def run_network(network, pc, comm, tstop, dt=.025, plot=False):
     h.stdinit()
     pc.psolve(tstop)
     nhost = int(pc.nhost())
-    for key, val in network.event_rec.iteritems():
-        if key in range(12, 24):
-            li = []
-            for i in val: li.append(i)
-            print li
-
+    network.check_cell_type_correct()
+    
     py_spike_dict = network.vecdict_to_pydict(network.spike_tvec)
     py_V_dict = network.vecdict_to_pydict(network.voltage_recvec)
     gauss_firing_rates = network.event_dict_to_firing_rate(py_spike_dict)
+    connection_dict = network.convert_ncdict_to_weights()
     
     all_spikes_dict = comm.gather(py_spike_dict, root=0)
     all_V_dict = comm.gather(py_V_dict, root=0)
     ff_spikes = comm.gather(network.FF_firing, root=0)
     gauss_firing_rates = comm.gather(gauss_firing_rates, root=0)
+    connection_dict = comm.gather(connection_dict, root=0)
     if comm.rank == 0:
+        connection_dict = {key: val for connect_dict in connection_dict for key, val in connect_dict.iteritems()}
         gauss_firing_rates = {key: val for fire_dict in gauss_firing_rates for key, val in fire_dict.iteritems()}
         all_V_dict = {key: val for V_dict in all_V_dict for key, val in V_dict.iteritems()}
         all_spikes_dict = {key: val for spike_dict in all_spikes_dict for key, val in spike_dict.iteritems()}
@@ -568,6 +612,7 @@ def run_network(network, pc, comm, tstop, dt=.025, plot=False):
         network.py_summation(all_spikes_dict)
         #x = range(len(E_test))
         if plot:
+            network.plot_adj_matrix(connection_dict)
             network.plot_voltage_trace(all_V_dict, all_spikes_dict, dt)
             network.plot_cell_activity(gauss_firing_rates)
         #window_len = min(int(2000./down_dt), len(down_t) - 1)
