@@ -26,7 +26,7 @@ class Network(object):
         """
 
         :param FF_ncell: int, number of cells in FF population
-        :param delay: 
+        :param delay:
         :param pc: ParallelContext object
         :param tstop: int, duration of sim
         :param dt: float, timestep in ms. default is .025
@@ -40,7 +40,7 @@ class Network(object):
         :param e2i_weight: E -> I
         :param i2i_weight: I -> I
         :param i2e_weight: I -> E
-        :param ff_meanfreq: int, mean frequency (lambda) for FF cells. spikes modeled as a poisson 
+        :param ff_meanfreq: int, mean frequency (lambda) for FF cells. spikes modeled as a poisson
         :param ff_frac_active: float, fraction active of FF cells
         :param ff2i_prob: float, connection probability for FF cell -> I cell
         :param ff2e_prob: FF -> E
@@ -113,16 +113,16 @@ class Network(object):
             self.pc.cell(i, nc)
             test = self.pc.gid2cell(i)
 
-    def createpairs(self, prob, input_indices, output_indices):
-        pair_list = []
-        for i in input_indices:
-            for o in output_indices:
-                if self.local_random.random() <= prob:
-                    pair_list.append((i, o))
-        for elem in pair_list:
-            x, y = elem
-            if x == y: pair_list.remove(elem)
-        return pair_list
+    # def createpairs(self, prob, input_indices, output_indices):
+    #     pair_list = []
+    #     for i in input_indices:
+    #         for o in output_indices:
+    #             if self.local_random.random() <= prob:
+    #                 pair_list.append((i, o))
+    #     for elem in pair_list:
+    #         x, y = elem
+    #         if x == y: pair_list.remove(elem)
+    #     return pair_list
 
     def get_cell_type(self, gid):
         if gid in range(self.cell_index['FF'][1]):
@@ -150,22 +150,25 @@ class Network(object):
             indices = self.connectivity_index_dict[connection]
             inp = indices[0]
             out = indices[1]
-            pair_list = self.createpairs(self.prob_dict[connection], range(inp[0], inp[1]), range(out[0], out[1]))
-            for pair in pair_list:
-                presyn_gid = pair[0]
-                target_gid = pair[1]
-                if self.pc.gid_exists(target_gid):
-                    target = self.pc.gid2cell(target_gid)
-                    if connection[0] == 'i':
-                        syn = target.synlist[1]
-                    else:
-                        syn = target.synlist[0]
-                    nc = self.pc.gid_connect(presyn_gid, syn)
-                    nc.delay = self.delay
-                    weight = self.local_random.gauss(mu, mu * std_factor)
-                    while weight < 0.: weight = self.local_random.gauss(mu, mu * std_factor)
-                    nc.weight[0] = weight
-                    self.ncdict[pair] = nc
+            rank_subset_gids = [i for i in self.gids if i in range(inp[0], inp[1])]
+            for presyn_gid in rank_subset_gids:
+                for target_gid in range(out[0], out[1]):
+                    if presyn_gid == target_gid:
+                        continue
+                    if self.local_random.random() <= self.prob_dict[connection]:
+                        if self.pc.gid_exists(target_gid):
+                            target = self.pc.gid2cell(target_gid)
+                            if connection[0] == 'i':
+                                syn = target.synlist[1]
+                            else:
+                                syn = target.synlist[0]
+                            nc = self.pc.gid_connect(presyn_gid, syn)
+                            nc.delay = self.delay
+                            weight = self.local_random.gauss(mu, mu * std_factor)
+                            while weight < 0.: weight = self.local_random.gauss(mu, mu * std_factor)
+                            nc.weight[0] = weight
+                            self.ncdict[(presyn_gid, target_gid)] = nc
+
 
     # Instrumentation - stimulation and recordi
     def spike_record(self):
@@ -202,7 +205,7 @@ class Network(object):
         for key, value in vecdict.iteritems():
             this_pydict[key] = np.array(value)
         return this_pydict
-    
+
     def summation(self, vecdict, dt=.025):
         size = self.tstop + 2  #* (1 / dt) + 1
         self.osc_E = h.Vector(size)
@@ -368,7 +371,7 @@ class Network(object):
                                                                                 self.cell_index['I'])
         self.E_frac_active, self.E_mean_firing_active = self.count_active_cells(active_dict, firing_rates_dict,
                                                                                 self.cell_index['E'])
-        
+
         if plot:
             plt.plot(range(self.tstop), self.E_frac_active)
             plt.title('frac active E cells')
@@ -382,11 +385,11 @@ class Network(object):
         mean_firing_active = [0] * self.tstop
         for i in range(self.tstop):
             for j in range(bounds[0], bounds[1]):
-                if i in active_dict[j]: 
+                if i in active_dict[j]:
                     frac_active[i] += 1
                     mean_firing_active[i] += firing_rates_dict[j][i]
 
-        for i in range(self.tstop): 
+        for i in range(self.tstop):
             if frac_active[i] != 0.:
                 mean_firing_active[i] /= float(frac_active[i])
         frac_active = np.divide(frac_active, float(bounds[1] - bounds[0]))
@@ -398,7 +401,7 @@ class Network(object):
         for i in range(bounds[0], bounds[1]):
             if len(firing_rates_dict[i]) == 0: continue
             for j in range(self.tstop):
-                if firing_rates_dict[i][j] > 1.: pop_rate[j] += firing_rates_dict[i][j] 
+                if firing_rates_dict[i][j] > 1.: pop_rate[j] += firing_rates_dict[i][j]
         return pop_rate
 
     def compute_envelope_ratio(self, band, pop_rate, plot):
@@ -542,7 +545,9 @@ def run_network(network, pc, comm, tstop, dt=.025, plot=False):
     py_spike_dict = network.vecdict_to_pydict(network.spike_tvec)
     py_V_dict = network.vecdict_to_pydict(network.voltage_recvec)
     gauss_firing_rates = network.event_dict_to_firing_rate(py_spike_dict)
-    
+    py_spike_dict.update(network.FF_firing)
+    gauss_firing_rates.update(network.event_dict_to_firing_rate(network.FF_firing))
+
     all_spikes_dict = comm.gather(py_spike_dict, root=0)
     all_V_dict = comm.gather(py_V_dict, root=0)
     ff_spikes = comm.gather(network.FF_firing, root=0)
@@ -551,15 +556,6 @@ def run_network(network, pc, comm, tstop, dt=.025, plot=False):
         gauss_firing_rates = {key: val for fire_dict in gauss_firing_rates for key, val in fire_dict.iteritems()}
         all_V_dict = {key: val for V_dict in all_V_dict for key, val in V_dict.iteritems()}
         all_spikes_dict = {key: val for spike_dict in all_spikes_dict for key, val in spike_dict.iteritems()}
-        for ff_dict in ff_spikes:
-            for key, val in ff_dict.iteritems():
-                all_spikes_dict[key] = val
-                if len(val) > 0:
-                    spikes_t = convert_sparse_arr_to_binary(val, network.tstop)
-                    ff_smoothed = gauss(spikes_t, 1., network.tstop)
-                    gauss_firing_rates[key] = ff_smoothed
-                else:
-                    gauss_firing_rates[key] = []
         rate_dict, peak_dict = network.compute_mean_max_firing_per_cell(gauss_firing_rates)
 
     if comm.rank == 0:
@@ -573,7 +569,7 @@ def run_network(network, pc, comm, tstop, dt=.025, plot=False):
         #window_len = min(int(2000./down_dt), len(down_t) - 1)
         E_mean, E_max = network.compute_pop_firing_features(network.cell_index['E'], rate_dict, peak_dict)
         I_mean, I_max = network.compute_pop_firing_features(network.cell_index['I'], rate_dict, peak_dict)
-     
+
         theta_E, theta_I, gamma_E, gamma_I = network.get_bands_of_interest(plot)
         peak_theta_osc_E = peak_from_spectrogram(theta_E, 'theta E', filter_dt, plot)
         peak_theta_osc_I = peak_from_spectrogram(theta_I, 'theta I', filter_dt, plot)
