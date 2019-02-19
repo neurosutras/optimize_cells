@@ -2,6 +2,7 @@ from nested.optimize_utils import *
 from random_network import *
 import click
 import matplotlib.pyplot as plt
+import time
 
 
 context = Context()
@@ -122,6 +123,7 @@ def compute_features(x, export=False):
     """
     update_source_contexts(x, context)
     context.pc.gid_clear()
+    start = time.time()
     context.network = Network(context.FF_ncell, context.E_ncell, context.I_ncell, context.delay, context.pc,
                               e2e_prob=context.e2e_prob, e2i_prob=context.e2i_prob, i2i_prob=context.i2i_prob,
                               i2e_prob=context.i2e_prob, ff2i_weight=context.ff2i_weight,
@@ -132,6 +134,9 @@ def compute_features(x, export=False):
                               ff2e_prob=context.ff2e_prob, std_dict=context.weight_std_factors, tau_E=context.tau_E,
                               tau_I=context.tau_I, connection_seed=context.connection_seed,
                               spikes_seed=context.spikes_seed)
+    context.comm.barrier()
+    end = time.time()
+    print("NETWORK BUILD RUNTIME: " + str(end - start))
     results = run_network(context.network, context.pc, context.comm, context.tstop, plot=context.plot)
     if int(context.pc.id()) == 0:
         if results is None:
@@ -148,12 +153,12 @@ def get_objectives(features, export=False):
     """
     if int(context.pc.id()) == 0:
         objectives = {}
-        for feature_name in ['E_peak_rate', 'I_peak_rate', 'E_mean_rate', 'I_mean_rate', 'peak_theta_osc_E', 
+        for feature_name in ['E_peak_rate', 'I_peak_rate', 'E_mean_rate', 'I_mean_rate', 'peak_theta_osc_E',
                              'peak_theta_osc_I', 'E_frac_active', 'I_frac_active', 'theta_E_envelope_ratio',
                              'theta_I_envelope_ratio', 'gamma_E_envelope_ratio', 'gamma_I_envelope_ratio']:
             objective_name = feature_name
             if features[feature_name] == 0.:
-                objectives[objective_name] = 200. 
+                objectives[objective_name] = 200.
             else:
                 objectives[objective_name] = ((context.target_val[objective_name] - features[feature_name]) /
                                                       context.target_range[objective_name]) ** 2.
