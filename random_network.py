@@ -6,6 +6,7 @@ import sys, time
 import scipy.signal as signal
 import matplotlib.pyplot as plt
 import seaborn as sns
+from baks import baks
 # for h.lambda_f
 h.load_file('stdlib.hoc')
 # for h.stdinit

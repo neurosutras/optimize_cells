@@ -83,6 +83,8 @@ def init_context():
     binned_dt = 1.  # ms
     filter_dt = 1.  # ms
     active_rate_threshold = 1.  # Hz
+    baks_alpha = 3.714383
+    baks_beta = 5.327364E-01
     context.update(locals())
 
 
