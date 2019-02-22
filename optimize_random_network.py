@@ -132,7 +132,7 @@ def analyze_network_output(network, export=False, plot=False):
     py_spike_dict = network.vecdict_to_pydict(network.spike_tvec)
     py_spike_dict.update(network.FF_firing)
     py_V_dict = network.vecdict_to_pydict(network.voltage_recvec)
-    gauss_firing_rates = network.event_dict_to_firing_rate(py_spike_dict, context.binned_dt)
+    gauss_firing_rates = network.event_dict_to_firing_rate(py_spike_dict, context.binned_dt, context.baks_alpha, context.baks_beta, plot=plot)
     connection_dict = network.convert_ncdict_to_weights()
 
     all_spikes_dict = context.comm.gather(py_spike_dict, root=0)
@@ -204,16 +204,18 @@ def compute_features(x, export=False):
                               ff2e_prob=context.ff2e_prob, std_dict=context.weight_std_factors, tau_E=context.tau_E,
                               tau_I=context.tau_I, connection_seed=context.connection_seed,
                               spikes_seed=context.spikes_seed)
-    context.comm.barrier()
-
     if context.disp and int(context.pc.id()) == 0:
         print('NETWORK BUILD RUNTIME: %.2f s' % (time.time() - start_time))
     current_time = time.time()
     context.network.run()
-    results = analyze_network_output(context.network, export=export, plot=context.plot)
     if int(context.pc.id()) == 0:
         if context.disp:
             print('NETWORK SIMULATION RUNTIME: %.2f s' % (time.time() - current_time))
+    current_time = time.time()
+    results = analyze_network_output(context.network, export=export, plot=context.plot)
+    if int(context.pc.id()) == 0:
+        if context.disp:
+            print('NETWORK ANALYSIS RUNTIME: %.2f s' % (time.time() - current_time))
         if results is None:
             return dict()
         return results
