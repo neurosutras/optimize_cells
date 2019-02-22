@@ -72,6 +72,7 @@ feature_names:
 - I_mean_rate
 - E_frac_active
 - I_frac_active
+- FF_frac_active
 - theta_E_envelope_ratio
 - theta_I_envelope_ratio
 - gamma_E_envelope_ratio
@@ -165,7 +166,7 @@ x0:
   EI_connection_weight: 2.
   IE_connection_weight: .2
   II_connection_weight: .5
-  FF_mean_freq: 20
+  FF_mean_freq: 20.
   FF_frac_active: .8
   FF2I_connection_probability: .5
   FF2E_connection_probability: .5
