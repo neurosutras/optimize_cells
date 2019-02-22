@@ -5,7 +5,7 @@ import random
 import sys, time
 import scipy.signal as signal
 import matplotlib.pyplot as plt
-np.seterr(divide='print')
+import seaborn as sns
 # for h.lambda_f
 h.load_file('stdlib.hoc')
 # for h.stdinit
@@ -101,7 +101,7 @@ class Network(object):
                 cell = FFCell(self.tstop, self.ff_meanfreq, self.ff_frac_active, self, i,
                               local_random=self.local_random)
             else:
-                if i in range(self.cell_index['E'][0], self.cell_index['E'][1]):
+                if i in range(self.cell_index['E'][0], self.cell_index['E'][1]): 
                     cell_type = 'RS'
                 else:
                     cell_type = 'FS'
@@ -148,26 +148,24 @@ class Network(object):
             std_factor = self.weight_std_dict[connection]
 
             indices = self.connectivity_index_dict[connection]
-            inp = indices[0]
-            out = indices[1]
-            rank_subset_gids = [i for i in self.gids if i in range(inp[0], inp[1])]
-            for presyn_gid in rank_subset_gids:
-                for target_gid in range(out[0], out[1]):
+            inp, out = indices
+            rank_subset_gids = [i for i in self.gids if i in range(out[0], out[1])]
+            for presyn_gid in range(inp[0], inp[1]):
+                for target_gid in rank_subset_gids:
                     if presyn_gid == target_gid:
                         continue
                     if self.local_random.random() <= self.prob_dict[connection]:
-                        if self.pc.gid_exists(target_gid):
-                            target = self.pc.gid2cell(target_gid)
-                            if connection[0] == 'i':
-                                syn = target.synlist[1]
-                            else:
-                                syn = target.synlist[0]
-                            nc = self.pc.gid_connect(presyn_gid, syn)
-                            nc.delay = self.delay
-                            weight = self.local_random.gauss(mu, mu * std_factor)
-                            while weight < 0.: weight = self.local_random.gauss(mu, mu * std_factor)
-                            nc.weight[0] = weight
-                            self.ncdict[(presyn_gid, target_gid)] = nc
+                        target = self.pc.gid2cell(target_gid)
+                        if connection[0] == 'i':
+                            syn = target.synlist[1]
+                        else:
+                            syn = target.synlist[0]
+                        nc = self.pc.gid_connect(presyn_gid, syn)
+                        nc.delay = self.delay
+                        weight = self.local_random.gauss(mu, mu * std_factor)
+                        while weight < 0.: weight = self.local_random.gauss(mu, mu * std_factor)
+                        nc.weight[0] = weight
+                        self.ncdict[(presyn_gid, target_gid)] = nc
 
 
     # Instrumentation - stimulation and recordi
@@ -278,8 +276,6 @@ class Network(object):
             plt.show()
 
     def plot_cell_activity(self, gauss_firing_rates):
-        import seaborn as sns
-
         counter = 0
         wrap = 0
         populations = ['FF', 'I', 'E']
@@ -436,20 +432,24 @@ class Network(object):
                 li = connections_per_cell[pre]
                 li.append(post)
                 connections_per_cell[pre] = li
-        print "connections and weights: \n", connections
+        # print "connections and weights: \n", connections
         print "connections by presynaptic cell: \n", connections_per_cell
 
     def plot_adj_matrix(self, connections):
-        import seaborn as sns
         if self.total_cells > 100: return
-        """source = row; target = col"""
+        #source = row; target = col
         matrixmap = np.zeros((self.total_cells, self.total_cells))
         for pair, weight in connections.iteritems():
             source, target = pair
             matrixmap[source][target] = weight
         ax = sns.heatmap(matrixmap)
-        ax.hlines([self.FF_ncell - 1, self.FF_ncell + self.I_ncell - 1], color='white', *ax.get_xlim())
-        ax.vlines([self.FF_ncell - 1, self.FF_ncell + self.I_ncell - 1], color='white', *ax.get_ylim())
+        ax.hlines([self.FF_ncell, self.FF_ncell + self.I_ncell], color='white', *ax.get_xlim())
+        ax.vlines([self.FF_ncell, self.FF_ncell + self.I_ncell], color='white', *ax.get_ylim())
+        plt.show()
+
+        FF_matrixmap = matrixmap[:self.FF_ncell]
+        ax = sns.heatmap(FF_matrixmap)
+        ax.vlines([self.FF_ncell, self.FF_ncell + self.I_ncell], color='white', *ax.get_ylim())
         plt.show()
 
     def check_cell_type_correct(self):
@@ -607,12 +607,12 @@ def run_network(network, pc, comm, tstop, dt=.025, plot=False):
         filter_dt = 1.
         network.get_frac_active(gauss_firing_rates, plot)
         network.py_summation(all_spikes_dict)
-        #x = range(len(E_test))
+        network.plot_adj_matrix(connection_dict)  #x = range(len(E_test))
         if plot:
             network.plot_adj_matrix(connection_dict)
             network.plot_voltage_trace(all_V_dict, all_spikes_dict, dt)
             network.plot_cell_activity(gauss_firing_rates)
-        #window_len = min(int(2000./down_dt), len(down_t) - 1)
+        #network.print_connections(connection_dict)
         E_mean, E_max = network.compute_pop_firing_features(network.cell_index['E'], rate_dict, peak_dict)
         I_mean, I_max = network.compute_pop_firing_features(network.cell_index['I'], rate_dict, peak_dict)
 
