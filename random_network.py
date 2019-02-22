@@ -299,6 +299,13 @@ class Network(object):
         plt.title('spike counts - E pop')
         plt.show()
 
+    ## Could probably be combined with plot_smoothing; Sarah?
+    def plot_two_traces(self, one, two, title):
+        plt.plot(range(len(one)), one)
+        plt.plot(range(len(two)), two)
+        plt.title(title)
+        plt.show()
+
     def plot_bands(self, theta_E, gamma_E, gauss_E, theta_FF, gamma_FF, gauss_FF):
         plt.plot(range(len(theta_E)), theta_E, label="theta E")
         gauss_E = np.subtract(gauss_E, np.mean(gauss_E))
@@ -325,31 +332,41 @@ class Network(object):
         plt.show()
 
     def get_bands_of_interest(self, binned_dt, plot):
-        gauss_E = gauss(self.E_sum, binned_dt)
-        gauss_I = gauss(self.I_sum, binned_dt)
-        gauss_FF = gauss(self.FF_sum, binned_dt)
+        # gauss_E = gauss(self.E_sum, binned_dt)
+        # gauss_I = gauss(self.I_sum, binned_dt)
+        # gauss_FF = gauss(self.FF_sum, binned_dt)
+        # t = np.arange(0., self.tstop + binned_dt, binned_dt)
+        # gauss_E, _ = baks(self.E_sum, t, self.baks_alpha, self.baks_beta)
+        # gauss_I, _ = baks(self.I_sum, t, self.baks_alpha, self.baks_beta)
+        # gauss_FF, _ = baks(self.FF_sum, t, self.baks_alpha, self.baks_beta)
 
         filter_dt = 1.  # ms
         window_len = int(2000. / filter_dt)
         theta_band = [5., 10.]
-        theta_E, theta_I, theta_FF = filter_band(gauss_E, gauss_I, gauss_FF, window_len, theta_band)
+        #theta_E, theta_I, theta_FF = filter_band(gauss_E, gauss_I, gauss_FF, window_len, theta_band)
+        theta_E, theta_I, theta_FF = filter_band(self.E_sum, self.I_sum, self.FF_sum, window_len, theta_band)
         window_len = int(200. / filter_dt)
         gamma_band = [30., 100.]
-        gamma_E, gamma_I, gamma_FF = filter_band(gauss_E, gauss_I, gauss_FF, window_len, gamma_band)
+        #gamma_E, gamma_I, gamma_FF = filter_band(gauss_E, gauss_I, gauss_FF, window_len, gamma_band)
+        gamma_E, gamma_I, gamma_FF = filter_band(self.E_sum, self.I_sum, self.FF_sum, window_len, gamma_band)
 
         if plot:
             self.plot_smoothing(gauss_E)
-            self.plot_bands(theta_E, gamma_E, gauss_E, theta_FF, gamma_FF, gauss_FF)
+            # self.plot_bands(theta_E, gamma_E, gauss_E, theta_FF, gamma_FF, gauss_FF)
+            self.plot_bands(theta_E, gamma_E, self.E_sum, theta_FF, gamma_FF, self.FF_sum)
 
         return theta_E, theta_I, gamma_E, gamma_I
 
-    def event_dict_to_firing_rate(self, spike_dict, binned_dt=1.):
+    def event_dict_to_firing_rate(self, spike_dict, binned_dt=1., baks_alpha=4., baks_beta=0.8, plot=False):
         gauss_firing_rates = {}
         t = np.arange(0., self.tstop + binned_dt, binned_dt)
         for key, val in spike_dict.iteritems():
             if len(val) > 0:
                 spikes_t = get_binned_spike_train(val, t)
-                smoothed = gauss(spikes_t, binned_dt)
+                #smoothed = gauss(spikes_t, binned_dt)
+                smoothed, _ = baks(spikes_t, t, baks_alpha, baks_beta)
+                if plot:
+                    self.plot_two_traces(spikes_t, smoothed, 'smoothed spikes ' + str(key))
                 gauss_firing_rates[key] = smoothed
             else:
                 gauss_firing_rates[key] = np.zeros_like(t)
