@@ -161,10 +161,10 @@ def analyze_network_output(network, export=False, plot=False):
         I_mean, I_max = network.compute_pop_firing_features(network.cell_index['I'], rate_dict, peak_dict)
 
         theta_E, theta_I, gamma_E, gamma_I = network.get_bands_of_interest(binned_dt=context.binned_dt, plot=plot)
-        peak_theta_osc_E = peak_from_spectrogram(theta_E, 'theta E', context.filter_dt, plot)
-        peak_theta_osc_I = peak_from_spectrogram(theta_I, 'theta I', context.filter_dt, plot)
-        peak_gamma_osc_E = peak_from_spectrogram(gamma_E, 'gamma E', context.filter_dt, plot)
-        peak_gamma_osc_I = peak_from_spectrogram(gamma_I, 'gamma I', context.filter_dt, plot)
+        peak_theta_freq_E = peak_from_spectrogram(theta_E, 'theta E', context.filter_dt, plot)
+        peak_theta_freq_I = peak_from_spectrogram(theta_I, 'theta I', context.filter_dt, plot)
+        peak_gamma_freq_E = peak_from_spectrogram(gamma_E, 'gamma E', context.filter_dt, plot)
+        peak_gamma_freq_I = peak_from_spectrogram(gamma_I, 'gamma I', context.filter_dt, plot)
 
         I_pop_rate = mean_firing_active['I']
         E_pop_rate = mean_firing_active['E']
@@ -176,8 +176,8 @@ def analyze_network_output(network, export=False, plot=False):
         context.update(locals())
 
         return {'E_mean_rate': E_mean, 'E_peak_rate': E_max, 'I_mean_rate': I_mean, "I_peak_rate": I_max,
-                'peak_theta_osc_E': peak_theta_osc_E, 'peak_theta_osc_I': peak_theta_osc_I,
-                'peak_gamma_osc_E': peak_gamma_osc_E, 'peak_gamma_osc_I': peak_gamma_osc_I,
+                'peak_theta_freq_E': peak_theta_freq_E, 'peak_theta_freq_I': peak_theta_freq_I,
+                'peak_gamma_freq_E': peak_gamma_freq_E, 'peak_gamma_freq_I': peak_gamma_freq_I,
                 'E_frac_active': np.mean(frac_active['E']), 'I_frac_active': np.mean(frac_active['I']),
                 'FF_frac_active': np.mean(frac_active['FF']), 'theta_E_envelope_ratio': theta_E_ratio,
                 'theta_I_envelope_ratio': theta_I_ratio, 'gamma_E_envelope_ratio': gamma_E_ratio,
@@ -228,15 +228,13 @@ def get_objectives(features, export=False):
     """
     if int(context.pc.id()) == 0:
         objectives = {}
-        for feature_name in ['E_peak_rate', 'I_peak_rate', 'E_mean_rate', 'I_mean_rate', 'peak_theta_osc_E',
-                             'peak_theta_osc_I', 'E_frac_active', 'I_frac_active', 'theta_E_envelope_ratio',
-                             'theta_I_envelope_ratio', 'gamma_E_envelope_ratio', 'gamma_I_envelope_ratio']:
+        for feature_name in ['E_peak_rate', 'I_peak_rate', 'E_mean_rate', 'I_mean_rate', 'peak_theta_freq_E',
+                             'peak_theta_freq_I', 'peak_gamma_freq_E', 'peak_gamma_freq_I', 'E_frac_active',
+                             'I_frac_active', 'theta_E_envelope_ratio', 'theta_I_envelope_ratio',
+                             'gamma_E_envelope_ratio', 'gamma_I_envelope_ratio']:
             objective_name = feature_name
-            if features[feature_name] == 0.:
-                objectives[objective_name] = 200.
-            else:
-                objectives[objective_name] = ((context.target_val[objective_name] - features[feature_name]) /
-                                                      context.target_range[objective_name]) ** 2.
+            objectives[objective_name] = ((context.target_val[objective_name] - features[feature_name]) /
+                                                  context.target_range[objective_name]) ** 2.
         return features, objectives
 
 
