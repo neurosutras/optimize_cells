@@ -86,6 +86,7 @@ def init_context():
     baks_alpha = 3.714383
     baks_beta = 5.327364E-01
     pad_dur = 500.  # ms
+    throwaway = 250.  # ms
     context.update(locals())
 
 
@@ -130,10 +131,13 @@ def analyze_network_output(network, export=False, plot=False):
     :param plot: bool
     :return: dict
     """
-    binned_t = np.arange(0., context.tstop + context.binned_dt, context.binned_dt)
+    binned_t = np.arange(0., context.tstop + context.binned_dt - context.throwaway, context.binned_dt)
     spikes_dict = network.get_spikes_dict()
     spikes_dict.update(network.FF_spikes_dict)
+    spikes_dict = prune_and_shift_spikes(spikes_dict, context.throwaway)
+
     voltage_rec_dict = network.get_voltage_rec_dict()
+    voltage_rec_dict = prune_voltages(voltage_rec_dict, context.dt, context.throwaway)
     inferred_firing_rates = infer_firing_rates(spikes_dict, binned_t, alpha=context.baks_alpha, beta=context.baks_beta,
                                                pad_dur=context.pad_dur, plot=plot)
     connection_dict = network.convert_ncdict_to_weights()
