@@ -77,8 +77,10 @@ feature_names:
 - theta_I_envelope_ratio
 - gamma_E_envelope_ratio
 - gamma_I_envelope_ratio
-- peak_theta_osc_E
-- peak_theta_osc_I
+- peak_theta_freq_E
+- peak_theta_freq_I
+- peak_gamma_freq_E
+- peak_gamma_freq_I
 update_context:
 - - optimize_random_network
   - update_context
@@ -102,8 +104,10 @@ objective_names:
 - theta_I_envelope_ratio
 - gamma_E_envelope_ratio
 - gamma_I_envelope_ratio
-- peak_theta_osc_E
-- peak_theta_osc_I
+- peak_theta_freq_E
+- peak_theta_freq_I
+- peak_gamma_freq_E
+- peak_gamma_freq_I
 optimization_title: random_network
 param_gen: PopulationAnnealing
 param_names:
@@ -140,8 +144,10 @@ target_range:
   theta_I_envelope_ratio: .2
   gamma_E_envelope_ratio: .2
   gamma_I_envelope_ratio: .2
-  peak_theta_osc_E: 2.5
-  peak_theta_osc_I: 2.5
+  peak_theta_freq_E: .5
+  peak_theta_freq_I: .5
+  peak_gamma_freq_E: 2.5
+  peak_gamma_freq_I: 2.5
 target_val:
   E_peak_rate: 30.
   I_peak_rate: 40.
@@ -151,10 +157,12 @@ target_val:
   I_frac_active: .9
   theta_E_envelope_ratio: .5
   theta_I_envelope_ratio: .5
-  gamma_E_envelope_ratio: .5
-  gamma_I_envelope_ratio: .5
-  peak_theta_osc_E: 8.
-  peak_theta_osc_I: 8.
+  gamma_E_envelope_ratio: .25
+  gamma_I_envelope_ratio: .25
+  peak_theta_freq_E: 8.
+  peak_theta_freq_I: 8.
+  peak_gamma_freq_E: 50.
+  peak_gamma_freq_I: 50.
 x0:
   EE_connection_prob: 0.8
   EI_connection_prob: 0.1

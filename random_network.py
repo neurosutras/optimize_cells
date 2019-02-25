@@ -55,7 +55,7 @@ class Network(object):
         self.FF_ncell = int(FF_ncell)
         self.E_ncell = int(E_ncell)
         self.I_ncell = int(I_ncell)
-        self.FF_firing = {}
+        self.FF_spikes_dict = {}
         self.ff_frac_active = ff_frac_active
         self.tau_E = tau_E
         self.tau_I = tau_I
@@ -178,7 +178,7 @@ class Network(object):
             tvec = h.Vector()
             idvec = h.Vector()
             nc = self.cells[i].connect2target(None)
-            self.pc.spike_record(nc.srcgid(), tvec, idvec)# Alternatively, could use nc.record(tvec)
+            self.pc.spike_record(nc.srcgid(), tvec, idvec)  # Alternatively, could use nc.record(tvec)
             self.spike_tvec[gid] = tvec
             self.spike_idvec[gid] = idvec
 
@@ -194,11 +194,17 @@ class Network(object):
             self.voltage_tvec[self.gids[i]] = tvec
             self.voltage_recvec[self.gids[i]] = rec
 
-    def vecdict_to_pydict(self, vecdict):
-        this_pydict = dict()
-        for key, value in vecdict.iteritems():
-            this_pydict[key] = np.array(value)
-        return this_pydict
+    def convert_hoc_vec_dict(self, hoc_vec_dict):
+        this_array_dict = dict()
+        for key, value in hoc_vec_dict.iteritems():
+            this_array_dict[key] = np.array(value)
+        return this_array_dict
+
+    def get_spikes_dict(self):
+        return self.convert_hoc_vec_dict(self.spike_tvec)
+
+    def get_voltage_rec_dict(self):
+        return self.convert_hoc_vec_dict(self.voltage_recvec)
 
     def summation(self, vecdict, dt=.025):
         size = self.tstop + 2  #* (1 / dt) + 1
@@ -285,16 +291,21 @@ class Network(object):
             plt.title('v trace ' + self.get_cell_type(i) + str(i))
             plt.show()
 
-    def plot_cell_activity(self, gauss_firing_rates, t):
+    def plot_population_firing_rates(self, firing_rates, t):
+        """
+
+        :param firing_rates: dict of array
+        :param t: array
+        """
         counter = 0
         wrap = 0
         populations = ['FF', 'I', 'E']
         ncell = [self.FF_ncell, self.I_ncell, self.E_ncell]
         last_idx = [self.FF_ncell - 1, self.cell_index['I'][1] - 1, self.cell_index['E'][1] - 1]
         hm = np.zeros((ncell[counter], len(t)))
-        for key, val in gauss_firing_rates.iteritems():
-            if len(gauss_firing_rates[key]) != 0:
-                hm[wrap] = gauss_firing_rates[key]
+        for key, val in firing_rates.iteritems():
+            if len(firing_rates[key]) != 0:
+                hm[wrap] = firing_rates[key]
             wrap += 1
             if key == last_idx[counter]:
                 sns.heatmap(hm)
@@ -312,61 +323,79 @@ class Network(object):
         plt.title('raw spike count - E pop')
         plt.show()
 
-    def plot_bands(self, theta_E, gamma_E, gauss_E, theta_FF, gamma_FF, gauss_FF):
-        plt.plot(range(len(theta_E)), theta_E, label="theta E")
-        gauss_E = np.subtract(gauss_E, np.mean(gauss_E))
-        plt.plot(range(len(gauss_E)), gauss_E, label="smoothed spike rate")
+    ## Could probably be combined with plot_smoothing; Sarah?
+    def plot_two_traces(self, one, two, title):
+        plt.plot(range(len(one)), one)
+        plt.plot(range(len(two)), two)
+        plt.title(title)
+        plt.show()
+
+    def plot_bands(self, t, theta_E, gamma_E, input_E, theta_FF, gamma_FF, input_FF):
+        """
+
+        :param t: array
+        :param theta_E: array
+        :param gamma_E: array
+        :param input_E: array
+        :param theta_FF: array
+        :param gamma_FF: array
+        :param input_FF: array
+        """
+        plt.plot(t, theta_E, label="theta")
+        input_E = np.subtract(input_E, np.mean(input_E))
+        plt.plot(t, input_E, label="input rate")
         plt.legend(loc=1)
         plt.title('theta E')
         plt.show()
-        plt.plot(range(len(gamma_E)), gamma_E, label="gamma E")
-        plt.plot(range(len(gauss_E)), gauss_E, label="smothed spike rate")
+        plt.plot(t, gamma_E, label="gamma")
+        plt.plot(t, input_E, label="input rate")
         plt.legend(loc=1)
         plt.title('gamma E')
         plt.show()
 
-        plt.plot(range(len(theta_FF)), theta_FF, label="theta FF")
-        gauss_FF = np.subtract(gauss_FF, np.mean(gauss_FF))
-        plt.plot(range(len(gauss_FF)), gauss_FF, label="smoothed spike rate")
+        plt.plot(t, theta_FF, label="theta")
+        input_FF = np.subtract(input_FF, np.mean(input_FF))
+        plt.plot(t, input_FF, label="input rate")
         plt.legend(loc=1)
         plt.title('theta FF')
         plt.show()
-        plt.plot(range(len(gamma_FF)), gamma_FF, label="gamma FF")
-        plt.plot(range(len(gauss_FF)), gauss_FF, label="smothed spike rate")
+        plt.plot(t, gamma_FF, label="gamma")
+        plt.plot(t, input_FF, label="input rate")
         plt.legend(loc=1)
         plt.title('gamma FF')
         plt.show()
 
-    def get_bands_of_interest(self, binned_dt, plot):
-        gauss_E = gauss(self.E_sum, binned_dt)
-        gauss_I = gauss(self.I_sum, binned_dt)
-        gauss_FF = gauss(self.FF_sum, binned_dt)
+    def get_bands_of_interest(self, t, filter_dt, plot=False):
+        """
 
-        filter_dt = 1.  # ms
+        :param t: array
+        :param filter_dt: float
+        :param plot: bool
+        :return: tuple of array
+        """
+        # gauss_E = gauss(self.E_sum, binned_dt)
+        # gauss_I = gauss(self.I_sum, binned_dt)
+        # gauss_FF = gauss(self.FF_sum, binned_dt)
+        # t = np.arange(0., self.tstop + binned_dt, binned_dt)
+        # gauss_E, _ = baks(self.E_sum, t, self.baks_alpha, self.baks_beta)
+        # gauss_I, _ = baks(self.I_sum, t, self.baks_alpha, self.baks_beta)
+        # gauss_FF, _ = baks(self.FF_sum, t, self.baks_alpha, self.baks_beta)
+
         window_len = int(2000. / filter_dt)
         theta_band = [5., 10.]
-        theta_E, theta_I, theta_FF = filter_band(gauss_E, gauss_I, gauss_FF, window_len, theta_band)
+        #theta_E, theta_I, theta_FF = filter_band(gauss_E, gauss_I, gauss_FF, window_len, theta_band)
+        theta_E, theta_I, theta_FF = filter_band(self.E_sum, self.I_sum, self.FF_sum, window_len, theta_band)
         window_len = int(200. / filter_dt)
         gamma_band = [30., 100.]
-        gamma_E, gamma_I, gamma_FF = filter_band(gauss_E, gauss_I, gauss_FF, window_len, gamma_band)
+        #gamma_E, gamma_I, gamma_FF = filter_band(gauss_E, gauss_I, gauss_FF, window_len, gamma_band)
+        gamma_E, gamma_I, gamma_FF = filter_band(self.E_sum, self.I_sum, self.FF_sum, window_len, gamma_band)
 
         if plot:
-            self.plot_smoothing(gauss_E)
-            self.plot_bands(theta_E, gamma_E, gauss_E, theta_FF, gamma_FF, gauss_FF)
+            # self.plot_smoothing(gauss_E)
+            # self.plot_bands(theta_E, gamma_E, gauss_E, theta_FF, gamma_FF, gauss_FF)
+            self.plot_bands(t, theta_E, gamma_E, self.E_sum, theta_FF, gamma_FF, self.FF_sum)
 
         return theta_E, theta_I, gamma_E, gamma_I
-
-    def event_dict_to_firing_rate(self, spike_dict, binned_dt=1.):
-        gauss_firing_rates = {}
-        t = np.arange(0., self.tstop + binned_dt, binned_dt)
-        for key, val in spike_dict.iteritems():
-            if len(val) > 0:
-                spikes_t = get_binned_spike_train(val, t)
-                smoothed = gauss(spikes_t, binned_dt)
-                gauss_firing_rates[key] = smoothed
-            else:
-                gauss_firing_rates[key] = np.zeros_like(t)
-        return gauss_firing_rates
 
     def get_active_pop_stats(self, firing_rates_dict, t, threshold=1., plot=False):
         frac_active = {}
@@ -535,9 +564,9 @@ class FFCell(object):
         vec = h.Vector(spikes)
         if local_random.random() <= frac_active:  #vec = h.Vector([5, 200])
             self.pp.play(vec)
-            network.FF_firing[gid] = np.array(spikes)
+            network.FF_spikes_dict[gid] = np.array(spikes)
         else:
-            network.FF_firing[gid] = []
+            network.FF_spikes_dict[gid] = []
 
     def connect2target(self, target):
         nc = h.NetCon(self.pp, target)
@@ -545,6 +574,64 @@ class FFCell(object):
 
     def is_art(self):
         return 1
+
+
+def infer_firing_rates(spike_times_dict, t, alpha, beta, pad_dur, plot=False):
+    """
+
+    :param spike_times_dict: dict of array
+    :param t: array
+    :param baks_alpha: float
+    :param baks_beta: float
+    :param pad_dur: float
+    :param plot: bool
+    :return: dict of array
+    """
+    inferred_firing_rates = {}
+    for gid, spike_train in spike_times_dict.iteritems():
+        if len(spike_train) > 0:
+            # spikes_t = get_binned_spike_train(val, t)
+            # smoothed = gauss(spikes_t, binned_dt)
+            smoothed = padded_baks(spike_train, t, alpha=alpha, beta=beta, pad_dur=pad_dur)
+            if plot:
+                fig = plt.figure()
+                plt.plot(spike_train, np.ones_like(spike_train), 'k.')
+                plt.plot(t, smoothed)
+                plt.title('Inferred firing rate - cell: %i' % gid)
+                fig.show()
+            inferred_firing_rates[gid] = smoothed
+        else:
+            inferred_firing_rates[gid] = np.zeros_like(t)
+    return inferred_firing_rates
+
+
+def padded_baks(spike_times, t, alpha, beta, pad_dur=500.):
+    """
+    Expects spike times in ms. Uses mirroring to pad the edges to avoid edge artifacts. Converts ms to ms for baks
+    filtering, then returns the properly truncated estimated firing rate.
+    :param spike_times: array
+    :param t: array
+    :param baks_alpha: float
+    :param baks_beta: float
+    :param pad_dur: float (ms)
+    :return: array
+    """
+    dt = t[1] - t[0]
+    pad_dur = min(pad_dur, len(t)*dt)
+    pad_len = int(pad_dur/dt)
+    padded_spike_times = np.array(spike_times)
+    r_pad_indexes = np.where((spike_times > t[0]) & (spike_times <= t[pad_len]))[0]
+    if np.any(r_pad_indexes):
+        r_pad_spike_times = np.add(t[0], np.subtract(t[0], spike_times[r_pad_indexes])[::-1])
+        padded_spike_times = np.append(r_pad_spike_times, padded_spike_times)
+    l_pad_indexes = np.where((spike_times >= t[-pad_len]) & (spike_times < t[-1]))[0]
+    if np.any(l_pad_indexes):
+        l_pad_spike_times = np.add(t[-1]+dt, np.subtract(t[-1]+dt, spike_times[l_pad_indexes])[::-1])
+        padded_spike_times = np.append(padded_spike_times, l_pad_spike_times)
+    padded_t = np.concatenate((np.arange(-pad_dur, 0., dt), t, np.arange(t[-1] + dt, t[-1] + pad_dur + dt / 2., dt)))
+    padded_rate, h = baks(padded_spike_times/1000., padded_t/1000., alpha, beta)
+
+    return padded_rate[pad_len:-pad_len]
 
 
 def gauss(spikes, dt, filter_duration=100.):
@@ -586,6 +673,7 @@ def peak_from_spectrogram(freq, title='not specified', dt=1., plot=False):
         peak_idx = loc[0][0]
         return freq[peak_idx]
     return 0.
+
 
 def get_binned_spike_train(spikes, t):
     binned_spikes = np.zeros_like(t)

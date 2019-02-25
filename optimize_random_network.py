@@ -85,6 +85,7 @@ def init_context():
     active_rate_threshold = 1.  # Hz
     baks_alpha = 3.714383
     baks_beta = 5.327364E-01
+    pad_dur = 500.  # ms
     context.update(locals())
 
 
@@ -129,42 +130,43 @@ def analyze_network_output(network, export=False, plot=False):
     :param plot: bool
     :return: dict
     """
-    py_spike_dict = network.vecdict_to_pydict(network.spike_tvec)
-    py_spike_dict.update(network.FF_firing)
-    py_V_dict = network.vecdict_to_pydict(network.voltage_recvec)
-    gauss_firing_rates = network.event_dict_to_firing_rate(py_spike_dict, context.binned_dt)
+    binned_t = np.arange(0., context.tstop + context.binned_dt, context.binned_dt)
+    spikes_dict = network.get_spikes_dict()
+    spikes_dict.update(network.FF_spikes_dict)
+    voltage_rec_dict = network.get_voltage_rec_dict()
+    inferred_firing_rates = infer_firing_rates(spikes_dict, binned_t, alpha=context.baks_alpha, beta=context.baks_beta,
+                                               pad_dur=context.pad_dur, plot=plot)
     connection_dict = network.convert_ncdict_to_weights()
 
-    all_spikes_dict = context.comm.gather(py_spike_dict, root=0)
-    all_V_dict = context.comm.gather(py_V_dict, root=0)
-    gauss_firing_rates = context.comm.gather(gauss_firing_rates, root=0)
+    spikes_dict = context.comm.gather(spikes_dict, root=0)
+    voltage_rec_dict = context.comm.gather(voltage_rec_dict, root=0)
+    inferred_firing_rates = context.comm.gather(inferred_firing_rates, root=0)
     connection_dict = context.comm.gather(connection_dict, root=0)
     if context.comm.rank == 0:
         connection_dict = {key: val for connect_dict in connection_dict for key, val in connect_dict.iteritems()}
-        gauss_firing_rates = {key: val for fire_dict in gauss_firing_rates for key, val in fire_dict.iteritems()}
-        all_V_dict = {key: val for V_dict in all_V_dict for key, val in V_dict.iteritems()}
-        all_spikes_dict = {key: val for spike_dict in all_spikes_dict for key, val in spike_dict.iteritems()}
-        rate_dict, peak_dict = network.compute_mean_max_firing_per_cell(gauss_firing_rates)
+        inferred_firing_rates = {key: val for fire_dict in inferred_firing_rates for key, val in fire_dict.iteritems()}
+        voltage_rec_dict = {key: val for V_dict in voltage_rec_dict for key, val in V_dict.iteritems()}
+        spikes_dict = {key: val for spike_dict in spikes_dict for key, val in spike_dict.iteritems()}
+        rate_dict, peak_dict = network.compute_mean_max_firing_per_cell(inferred_firing_rates)
 
     if context.comm.rank == 0:
-        binned_t = np.arange(0., context.tstop + context.binned_dt, context.binned_dt)
-        frac_active, mean_firing_active = network.get_active_pop_stats(gauss_firing_rates, binned_t,
-                                                                  threshold=context.active_rate_threshold, plot=plot)
-        network.py_summation(all_spikes_dict, binned_t)
+        frac_active, mean_firing_active = network.get_active_pop_stats(inferred_firing_rates, binned_t,
+                                                                       threshold=context.active_rate_threshold, plot=plot)
+        network.py_summation(spikes_dict, binned_t)
 
         if plot:
             network.plot_adj_matrix(connection_dict)
-            network.plot_voltage_trace(all_V_dict, all_spikes_dict, context.dt)
-            network.plot_cell_activity(gauss_firing_rates, binned_t)
+            network.plot_voltage_trace(voltage_rec_dict, spikes_dict, context.dt)
+            network.plot_population_firing_rates(inferred_firing_rates, binned_t)
 
         E_mean, E_max = network.compute_pop_firing_features(network.cell_index['E'], rate_dict, peak_dict)
         I_mean, I_max = network.compute_pop_firing_features(network.cell_index['I'], rate_dict, peak_dict)
 
-        theta_E, theta_I, gamma_E, gamma_I = network.get_bands_of_interest(binned_dt=context.binned_dt, plot=plot)
-        peak_theta_osc_E = peak_from_spectrogram(theta_E, 'theta E', context.filter_dt, plot)
-        peak_theta_osc_I = peak_from_spectrogram(theta_I, 'theta I', context.filter_dt, plot)
-        peak_gamma_osc_E = peak_from_spectrogram(gamma_E, 'gamma E', context.filter_dt, plot)
-        peak_gamma_osc_I = peak_from_spectrogram(gamma_I, 'gamma I', context.filter_dt, plot)
+        theta_E, theta_I, gamma_E, gamma_I = network.get_bands_of_interest(binned_t, context.filter_dt, plot=plot)
+        peak_theta_freq_E = peak_from_spectrogram(theta_E, 'theta E', context.filter_dt, plot)
+        peak_theta_freq_I = peak_from_spectrogram(theta_I, 'theta I', context.filter_dt, plot)
+        peak_gamma_freq_E = peak_from_spectrogram(gamma_E, 'gamma E', context.filter_dt, plot)
+        peak_gamma_freq_I = peak_from_spectrogram(gamma_I, 'gamma I', context.filter_dt, plot)
 
         I_pop_rate = mean_firing_active['I']
         E_pop_rate = mean_firing_active['E']
@@ -176,8 +178,8 @@ def analyze_network_output(network, export=False, plot=False):
         context.update(locals())
 
         return {'E_mean_rate': E_mean, 'E_peak_rate': E_max, 'I_mean_rate': I_mean, "I_peak_rate": I_max,
-                'peak_theta_osc_E': peak_theta_osc_E, 'peak_theta_osc_I': peak_theta_osc_I,
-                'peak_gamma_osc_E': peak_gamma_osc_E, 'peak_gamma_osc_I': peak_gamma_osc_I,
+                'peak_theta_freq_E': peak_theta_freq_E, 'peak_theta_freq_I': peak_theta_freq_I,
+                'peak_gamma_freq_E': peak_gamma_freq_E, 'peak_gamma_freq_I': peak_gamma_freq_I,
                 'E_frac_active': np.mean(frac_active['E']), 'I_frac_active': np.mean(frac_active['I']),
                 'FF_frac_active': np.mean(frac_active['FF']), 'theta_E_envelope_ratio': theta_E_ratio,
                 'theta_I_envelope_ratio': theta_I_ratio, 'gamma_E_envelope_ratio': gamma_E_ratio,
@@ -204,16 +206,18 @@ def compute_features(x, export=False):
                               ff2e_prob=context.ff2e_prob, std_dict=context.weight_std_factors, tau_E=context.tau_E,
                               tau_I=context.tau_I, connection_seed=context.connection_seed,
                               spikes_seed=context.spikes_seed)
-    context.comm.barrier()
-
     if context.disp and int(context.pc.id()) == 0:
         print('NETWORK BUILD RUNTIME: %.2f s' % (time.time() - start_time))
     current_time = time.time()
     context.network.run()
-    results = analyze_network_output(context.network, export=export, plot=context.plot)
     if int(context.pc.id()) == 0:
         if context.disp:
             print('NETWORK SIMULATION RUNTIME: %.2f s' % (time.time() - current_time))
+    current_time = time.time()
+    results = analyze_network_output(context.network, export=export, plot=context.plot)
+    if int(context.pc.id()) == 0:
+        if context.disp:
+            print('NETWORK ANALYSIS RUNTIME: %.2f s' % (time.time() - current_time))
         if results is None:
             return dict()
         return results
@@ -228,15 +232,13 @@ def get_objectives(features, export=False):
     """
     if int(context.pc.id()) == 0:
         objectives = {}
-        for feature_name in ['E_peak_rate', 'I_peak_rate', 'E_mean_rate', 'I_mean_rate', 'peak_theta_osc_E',
-                             'peak_theta_osc_I', 'E_frac_active', 'I_frac_active', 'theta_E_envelope_ratio',
-                             'theta_I_envelope_ratio', 'gamma_E_envelope_ratio', 'gamma_I_envelope_ratio']:
+        for feature_name in ['E_peak_rate', 'I_peak_rate', 'E_mean_rate', 'I_mean_rate', 'peak_theta_freq_E',
+                             'peak_theta_freq_I', 'peak_gamma_freq_E', 'peak_gamma_freq_I', 'E_frac_active',
+                             'I_frac_active', 'theta_E_envelope_ratio', 'theta_I_envelope_ratio',
+                             'gamma_E_envelope_ratio', 'gamma_I_envelope_ratio']:
             objective_name = feature_name
-            if features[feature_name] == 0.:
-                objectives[objective_name] = 200.
-            else:
-                objectives[objective_name] = ((context.target_val[objective_name] - features[feature_name]) /
-                                                      context.target_range[objective_name]) ** 2.
+            objectives[objective_name] = ((context.target_val[objective_name] - features[feature_name]) /
+                                                  context.target_range[objective_name]) ** 2.
         return features, objectives
 
 
