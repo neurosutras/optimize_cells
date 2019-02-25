@@ -281,7 +281,6 @@ class Network(object):
         down_dt = 1.
         ms_step = int(down_dt / dt)
         sampled_cells = self.sample_cells_for_plotting()
-        print list(vecdict.keys())
         for i in sampled_cells:
             ms_rec = []
             for j, v in enumerate(vecdict[i]):
@@ -341,26 +340,26 @@ class Network(object):
         :param gamma_FF: array
         :param input_FF: array
         """
-        plt.plot(t, theta_E, label="theta")
         input_E = np.subtract(input_E, np.mean(input_E))
         plt.plot(t, input_E, label="input rate")
+        plt.plot(t, theta_E, label="theta")
         plt.legend(loc=1)
         plt.title('theta E')
         plt.show()
-        plt.plot(t, gamma_E, label="gamma")
         plt.plot(t, input_E, label="input rate")
+        plt.plot(t, gamma_E, label="gamma")
         plt.legend(loc=1)
         plt.title('gamma E')
         plt.show()
 
-        plt.plot(t, theta_FF, label="theta")
         input_FF = np.subtract(input_FF, np.mean(input_FF))
         plt.plot(t, input_FF, label="input rate")
+        plt.plot(t, theta_FF, label="theta")
         plt.legend(loc=1)
         plt.title('theta FF')
         plt.show()
-        plt.plot(t, gamma_FF, label="gamma")
         plt.plot(t, input_FF, label="input rate")
+        plt.plot(t, gamma_FF, label="gamma")
         plt.legend(loc=1)
         plt.title('gamma FF')
         plt.show()
@@ -373,7 +372,7 @@ class Network(object):
         :param plot: bool
         :return: tuple of array
         """
-        # gauss_E = gauss(self.E_sum, binned_dt)
+        #   gauss_E = gauss(self.E_sum, binned_dt)
         # gauss_I = gauss(self.I_sum, binned_dt)
         # gauss_FF = gauss(self.FF_sum, binned_dt)
         # t = np.arange(0., self.tstop + binned_dt, binned_dt)
@@ -674,6 +673,23 @@ def peak_from_spectrogram(freq, title='not specified', dt=1., plot=False):
         return freq[peak_idx]
     return 0.
 
+
+def prune_and_shift_spikes(spike_dict, throwaway):
+    prune_dict = {}
+    for key, val in spike_dict.iteritems():
+        val = np.array(val)
+        idx = np.where(val <= throwaway)[0]
+        new = np.subtract(np.delete(val, idx), throwaway)
+        prune_dict[key] = new
+    return prune_dict
+
+
+def prune_voltages(v_dict, dt, throwaway):
+    prune_dict = {}
+    toss = int(throwaway * (1 / dt))
+    for key, val in v_dict.iteritems():
+        prune_dict[key] = val[toss:]
+    return prune_dict
 
 def get_binned_spike_train(spikes, t):
     binned_spikes = np.zeros_like(t)
