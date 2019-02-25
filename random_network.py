@@ -260,19 +260,32 @@ class Network(object):
 
         return mean, max_firing
 
+    def sample_cells_for_plotting(self):
+        sample_count = 5
+
+        I_sample = range(self.cell_index['I'][0], self.cell_index['I'][1])
+        E_sample = range(self.cell_index['E'][0], self.cell_index['E'][1])
+        if self.I_ncell > sample_count:
+            I_sample = self.local_random.sample(I_sample, sample_count)
+        if self.E_ncell > sample_count:
+            E_sample = self.local_random.sample(E_sample, sample_count)
+        return I_sample + E_sample
+
     def plot_voltage_trace(self, vecdict, all_events, dt=.025):
         down_dt = 1.
         ms_step = int(down_dt / dt)
-        for i in range(self.cell_index['I'][0], self.cell_index['I'][1]):
+        sampled_cells = self.sample_cells_for_plotting()
+        print list(vecdict.keys())
+        for i in sampled_cells:
             ms_rec = []
             for j, v in enumerate(vecdict[i]):
                 if j % ms_step == 0: ms_rec.append(v)
             ev = [int(event/down_dt) for event in all_events[i]]
             plt.plot(range(len(ms_rec)), ms_rec, '-gD', markevery=ev)
-            plt.title('v trace' + str(i))
+            plt.title('v trace ' + self.get_cell_type(i) + str(i))
             plt.show()
 
-    def plot_cell_activity(self, gauss_firing_rates):
+    def plot_cell_activity(self, gauss_firing_rates, t):
         counter = 0
         wrap = 0
         populations = ['FF', 'I', 'E']
@@ -296,7 +309,7 @@ class Network(object):
         plt.title('gauss smoothing - E pop')
         plt.show()
         plt.plot(range(len(self.E_sum)), self.E_sum)
-        plt.title('spike counts - E pop')
+        plt.title('raw spike count - E pop')
         plt.show()
 
     def plot_bands(self, theta_E, gamma_E, gauss_E, theta_FF, gamma_FF, gauss_FF):
@@ -573,7 +586,6 @@ def peak_from_spectrogram(freq, title='not specified', dt=1., plot=False):
         peak_idx = loc[0][0]
         return freq[peak_idx]
     return 0.
-
 
 def get_binned_spike_train(spikes, t):
     binned_spikes = np.zeros_like(t)
