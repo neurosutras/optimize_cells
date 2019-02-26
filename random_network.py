@@ -75,7 +75,6 @@ class Network(object):
                                         'i2e': (self.cell_index['I'], self.cell_index['E'])}
 
         self.ff_meanfreq = ff_meanfreq
-        self.event_rec = {}
 
         self.local_random = random.Random()
         self.connection_seed = connection_seed
@@ -84,7 +83,6 @@ class Network(object):
         self.mknetwork()
         self.voltage_record()
         self.spike_record()
-        self.pydicts = {}
 
     def mknetwork(self):
         self.mkcells()
@@ -112,18 +110,6 @@ class Network(object):
             self.pc.set_gid2node(i, rank)
             nc = cell.connect2target(None)
             self.pc.cell(i, nc)
-            test = self.pc.gid2cell(i)
-
-    # def createpairs(self, prob, input_indices, output_indices):
-    #     pair_list = []
-    #     for i in input_indices:
-    #         for o in output_indices:
-    #             if self.local_random.random() <= prob:
-    #                 pair_list.append((i, o))
-    #     for elem in pair_list:
-    #         x, y = elem
-    #         if x == y: pair_list.remove(elem)
-    #     return pair_list
 
     def get_cell_type(self, gid):
         if gid in range(self.cell_index['FF'][1]):
@@ -133,25 +119,38 @@ class Network(object):
         else:
             return 'RS'
 
+    def get_weight(self, connection):
+        """
+        want to reduce std if std is problematic, i.e, makes it possible to sample a negative weight
+        :param connection: str
+        """
+        mu = self.weight_dict[connection]
+        if self.weight_std_dict[connection] >= 2. / 3. / np.sqrt(2.):
+            print 'network.connectcells: connection: %s; reducing std to avoid negative weights: %.2f' % \
+                  (connection, self.weight_std_dict[connection])
+            self.weight_std_dict[connection] = 2. / 3. / np.sqrt(2.)
+        std_factor = self.weight_std_dict[connection]
+        return mu, std_factor
+
     def connectcells(self):
+        """
+        if the pre-synaptic neuron is E/FF - connect to 1st synapse (excitatory), otherwise connect to
+        2nd synapse (inhibitory) -- see IzhiCell
+        connections based on connection probability dict and weight of connection is based on a gaussian distribution
+        
+        restrictions: cells cannot connect with themselves, weights cannot be negative, and the presynaptic cell 
+        needs to live on this rank. (also, FF cells should not connect with other FF cells.)
+        """
         rank = int(self.pc.id())
-        nhost = int(self.pc.nhost())
         self.local_random.seed(self.connection_seed + rank)
         self.ncdict = {}  # not efficient but demonstrates use of pc.gid_exists
 
         for connection in ['ff2i', 'ff2e', 'e2e', 'e2i', 'i2i', 'i2e']:
+            mu, std_factor = self.get_weight(connection)
+            pre_gids, post_gids = self.connectivity_index_dict[connection]
+            rank_subset_gids = [i for i in self.gids if i in range(post_gids[0], post_gids[1])]
 
-            mu = self.weight_dict[connection]
-            if self.weight_std_dict[connection] >= 2. / 3. / np.sqrt(2.):
-                print 'network.connectcells: connection: %s; reducing std to avoid negative weights: %.2f' % \
-                      (connection, self.weight_std_dict[connection])
-                self.weight_std_dict[connection] = 2. / 3. / np.sqrt(2.)
-            std_factor = self.weight_std_dict[connection]
-
-            indices = self.connectivity_index_dict[connection]
-            inp, out = indices
-            rank_subset_gids = [i for i in self.gids if i in range(out[0], out[1])]
-            for presyn_gid in range(inp[0], inp[1]):
+            for presyn_gid in range(pre_gids[0], pre_gids[1]):
                 for target_gid in rank_subset_gids:
                     if presyn_gid == target_gid:
                         continue
@@ -167,7 +166,6 @@ class Network(object):
                         while weight < 0.: weight = self.local_random.gauss(mu, mu * std_factor)
                         nc.weight[0] = weight
                         self.ncdict[(presyn_gid, target_gid)] = nc
-
 
     # Instrumentation - stimulation and recordi
     def spike_record(self):
@@ -206,20 +204,12 @@ class Network(object):
     def get_voltage_rec_dict(self):
         return self.convert_hoc_vec_dict(self.voltage_recvec)
 
-    def summation(self, vecdict, dt=.025):
-        size = self.tstop + 2  #* (1 / dt) + 1
-        self.osc_E = h.Vector(size)
-        self.osc_I = h.Vector(size)
-        for key, vec in vecdict.iteritems():
-            cell_type = self.get_cell_type(key)
-            binned = vec.histogram(0, self.tstop, 1)
-            # for i in binned: print i
-            if cell_type == 'RS':  #E
-                self.osc_E.add(binned)
-            elif cell_type == 'FS':  #F
-                self.osc_I.add(binned)
-
-    def py_summation(self, spikes_dict, t):
+    def summation(self, spikes_dict, t):
+        """
+        sums up spikes per population
+        :param spikes_dict: dict s.t. key = gid, val = array of spike times
+        :param t: array
+        """
         self.E_sum = np.zeros_like(t)
         self.I_sum = np.zeros_like(t)
         self.FF_sum = np.zeros_like(t)
@@ -240,16 +230,27 @@ class Network(object):
         h.dt = self.dt
         self.pc.psolve(self.tstop)
 
-    def compute_mean_max_firing_per_cell(self, gauss_firing_rates):
+    def compute_mean_max_firing_per_cell(self, smoothed_firing_rates):
+        """
+        computes mean and max firing rate (Hz) per cell.
+        :return: dict of rates, and dict of peaks s.t. key = gid, val = scalar
+        """
         rate_dict = {}
         peak_dict = {}
-        for key, val in gauss_firing_rates.iteritems():
+        for key, val in smoothed_firing_rates.iteritems():
             if len(val) > 0:
                 rate_dict[key] = np.mean(val)
                 peak_dict[key] = np.max(val)
         return rate_dict, peak_dict
 
     def compute_pop_firing_features(self, bounds, rate_dict, peak_dict):
+        """
+        from dictionaries containing the mean rate and peaks of each cell, returns
+        a value for the mean and peak firing rate (Hz) for the specified population
+        :param bounds: a tuple representing the contiguous range of gids associated with the population
+        :param rate_dict: dict, key = gid, val = scalar
+        :param peak_dict: dict, key = gid, val = scalar
+        """
         uncounted = 0
         mean = 0
         max_firing = 0
@@ -267,6 +268,10 @@ class Network(object):
         return mean, max_firing
 
     def sample_cells_for_plotting(self):
+        """
+        for plot_voltage_trace. sample a number of cells from the E and I populations to be plotted
+        :return: list of gids
+        """
         sample_count = 5
 
         I_sample = range(self.cell_index['I'][0], self.cell_index['I'][1])
@@ -277,32 +282,38 @@ class Network(object):
             E_sample = self.local_random.sample(E_sample, sample_count)
         return I_sample + E_sample
 
-    def plot_voltage_trace(self, vecdict, all_events, dt=.025):
+    def plot_voltage_trace(self, v_dict, spikes_dict, dt=.025):
+        """
+        plots voltage trace for a random subset of E and I cells. downsamples to 1 ms for plotting.
+        markers represent spikes
+        """
         down_dt = 1.
         ms_step = int(down_dt / dt)
         sampled_cells = self.sample_cells_for_plotting()
         for i in sampled_cells:
             ms_rec = []
-            for j, v in enumerate(vecdict[i]):
+            for j, v in enumerate(v_dict[i]):
                 if j % ms_step == 0: ms_rec.append(v)
-            ev = [int(event/down_dt) for event in all_events[i]]
+            ev = [int(event / down_dt) for event in spikes_dict[i]]
             plt.plot(range(len(ms_rec)), ms_rec, '-gD', markevery=ev)
             plt.title('v trace ' + self.get_cell_type(i) + str(i))
             plt.show()
 
     def plot_population_firing_rates(self, firing_rates, t):
         """
+        relies on the fact that populations have continuous gids. go through all the gids, and when
+        we've hit an end of a population, plot the colormap
 
         :param firing_rates: dict of array
         :param t: array
         """
-        counter = 0
         wrap = 0
+        counter = 0
         populations = ['FF', 'I', 'E']
         ncell = [self.FF_ncell, self.I_ncell, self.E_ncell]
         last_idx = [self.FF_ncell - 1, self.cell_index['I'][1] - 1, self.cell_index['E'][1] - 1]
         hm = np.zeros((ncell[counter], len(t)))
-        for key, val in firing_rates.iteritems():
+        for key in range(self.total_cells):
             if len(firing_rates[key]) != 0:
                 hm[wrap] = firing_rates[key]
             wrap += 1
@@ -310,19 +321,13 @@ class Network(object):
                 sns.heatmap(hm)
                 plt.title(populations[counter])
                 plt.show()
-                counter += 1
                 wrap = 0
-                if counter < len(ncell): hm = np.zeros((ncell[counter], len(t)))
+                counter += 1
+                if key < len(ncell): hm = np.zeros((ncell[counter], len(t)))
 
     def plot_smoothing(self, gauss_E):
-        plt.plot(range(len(gauss_E)), gauss_E)
-        plt.title('gauss smoothing - E pop')
-        plt.show()
-        plt.plot(range(len(self.E_sum)), self.E_sum)
-        plt.title('raw spike count - E pop')
-        plt.show()
-
-    ## Could probably be combined with plot_smoothing; Sarah?
+        self.plot_two_traces(gauss_E, self.E_sum, 'smoothed spike rate vs. population spiking - E')
+    
     def plot_two_traces(self, one, two, title):
         plt.plot(range(len(one)), one)
         plt.plot(range(len(two)), two)
@@ -331,7 +336,7 @@ class Network(object):
 
     def plot_bands(self, t, theta_E, gamma_E, input_E, theta_FF, gamma_FF, input_FF):
         """
-
+        plots filtered bands vs. their input
         :param t: array
         :param theta_E: array
         :param gamma_E: array
@@ -366,16 +371,16 @@ class Network(object):
 
     def get_bands_of_interest(self, t, filter_dt, plot=False):
         """
+        gets gamma and theta bands for all populations
 
         :param t: array
         :param filter_dt: float
         :param plot: bool
         :return: tuple of array
         """
-        #   gauss_E = gauss(self.E_sum, binned_dt)
-        # gauss_I = gauss(self.I_sum, binned_dt)
-        # gauss_FF = gauss(self.FF_sum, binned_dt)
-        # t = np.arange(0., self.tstop + binned_dt, binned_dt)
+        # gauss_E = gauss(self.E_sum, binned_dt)
+        #  gauss_I = gauss(self.I_sum, binned_dt)
+        #  gauss_FF = gauss(self.FF_sum, binned_dt)
         # gauss_E, _ = baks(self.E_sum, t, self.baks_alpha, self.baks_beta)
         # gauss_I, _ = baks(self.I_sum, t, self.baks_alpha, self.baks_beta)
         # gauss_FF, _ = baks(self.FF_sum, t, self.baks_alpha, self.baks_beta)
@@ -383,11 +388,11 @@ class Network(object):
         window_len = int(2000. / filter_dt)
         theta_band = [5., 10.]
         #theta_E, theta_I, theta_FF = filter_band(gauss_E, gauss_I, gauss_FF, window_len, theta_band)
-        theta_E, theta_I, theta_FF = filter_band(self.E_sum, self.I_sum, self.FF_sum, window_len, theta_band)
+        theta_E, theta_I, theta_FF = filter_band(self.E_sum, self.I_sum, self.FF_sum, window_len, theta_band, filter_dt)
         window_len = int(200. / filter_dt)
         gamma_band = [30., 100.]
         #gamma_E, gamma_I, gamma_FF = filter_band(gauss_E, gauss_I, gauss_FF, window_len, gamma_band)
-        gamma_E, gamma_I, gamma_FF = filter_band(self.E_sum, self.I_sum, self.FF_sum, window_len, gamma_band)
+        gamma_E, gamma_I, gamma_FF = filter_band(self.E_sum, self.I_sum, self.FF_sum, window_len, gamma_band, filter_dt)
 
         if plot:
             # self.plot_smoothing(gauss_E)
@@ -397,6 +402,10 @@ class Network(object):
         return theta_E, theta_I, gamma_E, gamma_I
 
     def get_active_pop_stats(self, firing_rates_dict, t, threshold=1., plot=False):
+        """
+        get mean firing for active populations over simulation. plot if needed.
+        :param threshold: Hz, firing rate threshold above which a cell is considered "active"
+        """
         frac_active = {}
         mean_firing_active = {}
 
@@ -416,6 +425,11 @@ class Network(object):
         return frac_active, mean_firing_active
 
     def compute_active_pop_stats(self, firing_rates_dict, t, threshold, bounds):
+        """
+        compute frac active and mean firing for active cells
+        :param threshold: Hz, firing rate threshold above which a cell is considered "active"
+        :param bounds: gid range for population
+        """
         frac_active = np.zeros_like(t)
         mean_firing_active = np.zeros_like(frac_active)
         for j in range(bounds[0], bounds[1]):
@@ -423,16 +437,21 @@ class Network(object):
             if np.any(active_indexes):
                 frac_active[active_indexes] += 1.
                 mean_firing_active[active_indexes] += firing_rates_dict[j][active_indexes]
+
         active_indexes = np.where(frac_active > 0)[0]
         if np.any(active_indexes):
             mean_firing_active[active_indexes] = np.divide(mean_firing_active[active_indexes],
                                                            frac_active[active_indexes])
 
         frac_active = np.divide(frac_active, float(bounds[1] - bounds[0]))
-
         return frac_active, mean_firing_active
 
     def compute_pop_firing(self, firing_rates_dict, bounds):
+        """
+        from individual cell firing rates, compute population firing rate
+        :param firing_rates_dict: dict; key = gid, val = array of firing rates
+        :param bounds: range of gids for population
+        """
         pop_rate = [0] * self.tstop
         for i in range(bounds[0], bounds[1]):
             if len(firing_rates_dict[i]) == 0: continue
@@ -441,6 +460,11 @@ class Network(object):
         return pop_rate
 
     def compute_envelope_ratio(self, band, pop_rate, t, label=None, plot=False):
+        """
+        compute how much of the fluctuation of the cell activity was based on theta/gamma
+        :param band: str, theta or gamma
+        :param pop_rate: array, firing rate of population
+        """
         hilb_transform = np.abs(signal.hilbert(band))
         mean_envelope = np.mean(hilb_transform)
         mean_rate = np.mean(pop_rate)
@@ -463,12 +487,20 @@ class Network(object):
         return ratio
 
     def convert_ncdict_to_weights(self):
+        """
+        can't collapse NCs on each rank onto the master rank. instead, keep track of 
+        connections and their weights to be gathered by the master rank.
+        """
         connections = {}
         for pair, nc in self.ncdict.iteritems():
             connections[pair] = nc.weight[0]
         return connections
 
     def print_connections(self, connections):
+        """
+        prints ALL of the connections, first in (pre, post) : weight format, then
+        pre : [post, ..., post] form.
+        """
         connections_per_cell = {}
         for pair, weight in connections.iteritems():
             pre, post = pair
@@ -482,6 +514,10 @@ class Network(object):
         print "connections by presynaptic cell: \n", connections_per_cell
 
     def plot_adj_matrix(self, connections):
+        """
+        plots connections in a matrix map. color represents weight of connection
+        :param connections: dict, key = (pre, post), val = weight
+        """
         if self.total_cells > 100: return
         #source = row; target = col
         matrixmap = np.zeros((self.total_cells, self.total_cells))
@@ -499,6 +535,10 @@ class Network(object):
         plt.show()
 
     def check_cell_type_correct(self):
+        """
+        goes over each cell and checks whether or not the cell is the cell type it is supposed to be
+        (e.g., cells with gids in a certain range must be FF cells/Hoc object)
+        """
         for cell in self.gids:
             cell_type = self.get_cell_type(cell)
             if cell_type is None and isinstance(self.pc.gid2cell(cell), IzhiCell):
@@ -634,6 +674,7 @@ def padded_baks(spike_times, t, alpha, beta, pad_dur=500.):
 
 
 def gauss(spikes, dt, filter_duration=100.):
+    """gaussian convolving to transform spike counts to firing rate.. mirror padding. """
     pad_len = min(2 * int(filter_duration/dt), len(spikes))
     filter_duration = filter_duration  # ms
     filter_t = np.arange(-filter_duration, filter_duration, dt)
@@ -651,8 +692,9 @@ def gauss(spikes, dt, filter_duration=100.):
     return signal
 
 
-def filter_band(E, I, FF, window_len, band):
-    filt = signal.firwin(window_len, band, nyq=1000. / 2., pass_zero=False)
+def filter_band(E, I, FF, window_len, band, dt=1.):
+    """from input, filter for certain frequencies"""
+    filt = signal.firwin(window_len, band, nyq=1000. / 2. / dt, pass_zero=False)
     E_band = signal.filtfilt(filt, [1.], E, padtype='even', padlen=window_len)
     I_band = signal.filtfilt(filt, [1.], I, padtype='even', padlen=window_len)
     FF_band = signal.filtfilt(filt, [1.], FF, padtype='even', padlen=window_len)
@@ -661,6 +703,7 @@ def filter_band(E, I, FF, window_len, band):
 
 
 def peak_from_spectrogram(freq, title='not specified', dt=1., plot=False):
+    """return the most dense frequency in a certain band (gamma, theta) based on the spectrogram"""
     freq, density = signal.periodogram(freq, 1000. / dt)
     if plot:
         plt.plot(freq, density)
@@ -675,6 +718,11 @@ def peak_from_spectrogram(freq, title='not specified', dt=1., plot=False):
 
 
 def prune_and_shift_spikes(spike_dict, throwaway):
+    """
+    cells equilibriate during the first chunk of the simulation. not useful for analysis, so throw away
+    then shift spikes (in ms) so that the "starting point" is 0 ms
+    :param throwaway: int - how many ms of the simulation to throw away
+    """
     prune_dict = {}
     for key, val in spike_dict.iteritems():
         val = np.array(val)
@@ -685,6 +733,7 @@ def prune_and_shift_spikes(spike_dict, throwaway):
 
 
 def prune_voltages(v_dict, dt, throwaway):
+    """for analysis, only keep voltage recordings after a certain point; discard first bit."""
     prune_dict = {}
     toss = int(throwaway * (1 / dt))
     for key, val in v_dict.iteritems():
@@ -692,6 +741,10 @@ def prune_voltages(v_dict, dt, throwaway):
     return prune_dict
 
 def get_binned_spike_train(spikes, t):
+    """
+    convert spike times to a binned binary spike train
+    :param spikes: array, elements are spike times in ms
+    """
     binned_spikes = np.zeros_like(t)
     if len(spikes) > 0:
         spike_idx = [np.where(t >= spike_time)[0][0] for spike_time in spikes]

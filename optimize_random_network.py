@@ -156,7 +156,7 @@ def analyze_network_output(network, export=False, plot=False):
     if context.comm.rank == 0:
         frac_active, mean_firing_active = network.get_active_pop_stats(inferred_firing_rates, binned_t,
                                                                        threshold=context.active_rate_threshold, plot=plot)
-        network.py_summation(spikes_dict, binned_t)
+        network.summation(spikes_dict, binned_t)
 
         if plot:
             network.plot_adj_matrix(connection_dict)
