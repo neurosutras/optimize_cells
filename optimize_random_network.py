@@ -77,6 +77,35 @@ def init_context():
     FF_ncell = 12
     E_ncell = 12
     I_ncell = 12
+
+    axon_width = {
+        'FF': 3,
+        'E': 5,
+        'I': 12
+    }
+    # synaptic_counts[postsynaptic][presynaptic]
+    # synaptic_counts = {
+    #     'E': {
+    #         'FF': 6,
+    #         'E': 6,
+    #         'I': 6
+    #     },
+    #     'I': {
+    #         'FF': 12,
+    #         'E': 12,
+    #         'I': 12
+    #     }
+    # }
+    synaptic_counts = {
+        'ff2i': 12,
+        'ff2e': 12,
+        'e2e': 6,
+        'e2i': 12,
+        'i2i': 12,
+        'i2e': 6
+    }
+
+
     delay = 1.  # ms
     tstop = 3000  # ms
     dt = 0.025  # ms
@@ -201,7 +230,8 @@ def compute_features(x, export=False):
     context.pc.gid_clear()
     start_time = time.time()
     context.network = Network(context.FF_ncell, context.E_ncell, context.I_ncell, context.delay, context.pc,
-                              tstop=context.tstop, dt=context.dt, e2e_prob=context.e2e_prob, e2i_prob=context.e2i_prob,
+                              tstop=context.tstop, axon_width=context.axon_width, synaptic_counts=context.synaptic_counts,
+                              dt=context.dt, e2e_prob=context.e2e_prob, e2i_prob=context.e2i_prob,
                               i2i_prob=context.i2i_prob, i2e_prob=context.i2e_prob, ff2i_weight=context.ff2i_weight,
                               ff2e_weight=context.ff2e_weight, e2e_weight=context.e2e_weight,
                               e2i_weight=context.e2i_weight, i2i_weight=context.i2i_weight,
@@ -218,7 +248,8 @@ def compute_features(x, export=False):
         if context.disp:
             print('NETWORK SIMULATION RUNTIME: %.2f s' % (time.time() - current_time))
     current_time = time.time()
-    results = analyze_network_output(context.network, export=export, plot=context.plot)
+    #results = analyze_network_output(context.network, export=export, plot=context.plot)
+    results = analyze_network_output(context.network, export=export, plot=True)
     if int(context.pc.id()) == 0:
         if context.disp:
             print('NETWORK ANALYSIS RUNTIME: %.2f s' % (time.time() - current_time))
