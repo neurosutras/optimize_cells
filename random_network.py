@@ -187,10 +187,14 @@ class Network(object):
                     presyn_probs[presyn_gid] = 1./(np.sqrt(2 * np.pi * sigma**2)) * (np.e ** (-(dist ** 2) / (2 * sigma**2)))
                     sum_probs += presyn_probs[presyn_gid]
                 presyn_probs_items = np.array(presyn_probs.items())
-                idxs = np.random.multinomial(self.synaptic_counts[connection], list(presyn_probs_items[:,1] / float(sum_probs)))
+                counts = np.random.multinomial(self.synaptic_counts[connection], list(presyn_probs_items[:,1] / float(sum_probs)))
                 presyn_neurons = list(presyn_probs_items[:,0])
-                for i in idxs:
-                    presyn_gid = int(presyn_neurons[i])
+                idxs = []
+                for i in range(len(counts)):
+                    for _ in range(counts[i]):
+                        idxs.append(i)
+                for i in range(len(idxs)):
+                    presyn_gid = int(presyn_neurons[idxs[i]])
                     nc = self.pc.gid_connect(presyn_gid, target.synlist[presyn_key][i])
                     nc.delay = self.delay
                     weight = self.local_random.gauss(mu, mu * std_factor)
