@@ -46,6 +46,7 @@ class Network(object):
         :param connection_seed: int
         :param spikes_seed: int
         """
+        self.npop = 3
         self.pc = pc
         self.delay = delay
         self.tstop = tstop
@@ -486,6 +487,84 @@ class Network(object):
             ratio = 0.
         return ratio
 
+    def compute_envelope_ratio2(self, pop_rates, t, filter_dt, label=None, plot=False):
+        plot = True
+        basic_rate_E = self.count_to_rate_basic(self.E_sum, self.E_ncell)
+        basic_rate_I = self.count_to_rate_basic(self.I_sum, self.I_ncell)
+        basic_rate_FF = self.count_to_rate_basic(self.FF_sum, self.FF_ncell)
+
+        pad_len = 2000
+        window_len = int(2000. / filter_dt)
+        theta_band = [5., 10.]
+        theta_E, theta_I, theta_FF, E_mir, I_mir = untruncated_filter_band(basic_rate_E, basic_rate_I, basic_rate_FF,
+                                                                           window_len, theta_band, pad_len, filter_dt)
+        window_len = int(200. / filter_dt)
+        gamma_band = [30., 100.]
+        gamma_E, gamma_I, gamma_FF, _, _ = untruncated_filter_band(basic_rate_E, basic_rate_I, basic_rate_FF,
+                                                                   window_len, gamma_band, pad_len, filter_dt)
+        ratios = []
+        band_name = ['theta_FF', 'gamma_FF', 'theta_E', 'gamma_E', 'theta_I', 'gamma_I']
+        bands = [theta_FF, gamma_FF, theta_E, gamma_E, theta_I, gamma_I]
+
+        for i in range(self.npop * 2):
+            label = band_name[i]
+            band = bands[i]
+            if i < 2:
+                pop_rate = pop_rates[0]
+            elif i < 4:
+                pop_rate = pop_rates[2]  # this is 2 on purpose
+            else:
+                pop_rate = pop_rates[1]
+
+            hilb_transform = signal.hilbert(band)
+            # plt.plot(range(len(hilb_transform)), hilb_transform)
+            abs_hilb_transform = np.abs(signal.hilbert(band))
+            # plt.plot(range(pad_len, len(hilb_transform)+pad_len), hilb_transform)
+            if i == 2:  # plt.show()
+                plot_things(E_mir, theta_E, hilb_transform, abs_hilb_transform)
+            if i == 4:
+                plot_things(I_mir, theta_I, hilb_transform, abs_hilb_transform)
+            hilb_transform = np.abs(signal.hilbert(band))[pad_len:][:-pad_len]
+            mean_envelope = np.mean(hilb_transform)
+            mean_rate = np.mean(pop_rate)
+            if mean_rate > 0.:
+                ratio = mean_envelope / mean_rate
+                if plot:
+                    plt.plot(t, hilb_transform, label='hilbert transform')
+                    plt.plot(t, pop_rate, label='pop firing rate')
+                    plt.axhline(y=np.mean(hilb_transform), color='red')
+                    plt.axhline(y=np.mean(pop_rate), color='red')
+                    plt.legend(loc=1)
+                    if label is None:
+                        label = 'ratio: %.3E' % ratio
+                    else:
+                        label += ' ratio: %.3E' % ratio
+                    plt.title(label)
+                    plt.show()
+                ratios.append(ratio)
+            else:
+                ratios.append(0.)
+        theta_FF = theta_FF[pad_len:][:len(t)];
+        gamma_FF = gamma_FF[pad_len:][:len(t)]
+        theta_E = theta_E[pad_len:][:len(t)];
+        gamma_E = gamma_E[pad_len:][:len(t)]
+        theta_I = theta_I[pad_len:][:len(t)];
+        gamma_I = gamma_I[pad_len:][:len(t)]
+
+        if plot:
+            self.plot_bands(t, theta_E, gamma_E, basic_rate_E, theta_FF, gamma_FF, basic_rate_FF)
+
+        return ratios, [theta_E, gamma_E, theta_I, gamma_I]
+
+    """def avg_pop_rate_array(self, pop, t, firing_rates_dict):
+        count = 0
+        c_sum = np.zeros((1, len(t)))
+        for i in range(self.cell_index[pop][0], self.cell_index[pop][1]):
+            if i in firing_rates_dict.keys():
+                c_sum = np.add(c_sum, firing_rates[i])
+        avg_rate = np.divide(csum, count)
+        return avg_rate"""
+
     def convert_ncdict_to_weights(self):
         """
         can't collapse NCs on each rank onto the master rank. instead, keep track of 
@@ -533,6 +612,11 @@ class Network(object):
         ax = sns.heatmap(FF_matrixmap)
         ax.vlines([self.FF_ncell, self.FF_ncell + self.I_ncell], color='white', *ax.get_ylim())
         plt.show()
+
+    def count_to_rate_basic(self, spike_sums, ncell, dt=1.):
+        factor = dt / 1000.
+        rate = np.divide(np.divide(spike_sums, float(ncell)), factor)
+        return rate
 
     def check_cell_type_correct(self):
         """
@@ -692,14 +776,44 @@ def gauss(spikes, dt, filter_duration=100.):
     return signal
 
 
-def filter_band(E, I, FF, window_len, band, dt=1.):
-    """from input, filter for certain frequencies"""
-    filt = signal.firwin(window_len, band, nyq=1000. / 2. / dt, pass_zero=False)
-    E_band = signal.filtfilt(filt, [1.], E, padtype='even', padlen=window_len)
-    I_band = signal.filtfilt(filt, [1.], I, padtype='even', padlen=window_len)
-    FF_band = signal.filtfilt(filt, [1.], FF, padtype='even', padlen=window_len)
+def mirror_signal(signal, pad_len):
+    """np.fliplr hates python 2.7"""
+    mirror_beginning = signal[:pad_len][::-1]
+    mirror_end = signal[-pad_len:][::-1]
+    modified_signal = np.append(np.append(mirror_beginning, signal), mirror_end)
 
-    return E_band, I_band, FF_band
+    return modified_signal
+
+
+def untruncated_filter_band(E, I, FF, window_len, band, padlen=250, dt=1.):
+    """from input, filter for certain frequencies"""
+    E_mir = mirror_signal(E, padlen)
+    I_mir = mirror_signal(I, padlen)
+    FF_mir = mirror_signal(FF, padlen)
+    """E2 = E_mir[padlen:][:len(E)]
+    plt.plot(range(len(E_mir)), E_mir)
+    plt.plot(range(250, len(E) + 250), E)
+    plt.plot(range(250, len(E) + 250), E2, color='red')
+    plt.show()"""
+
+    filt = signal.firwin(window_len, band, nyq=1000. / 2. / dt, pass_zero=False)
+    E_band = signal.filtfilt(filt, [1.], E_mir, padtype=None, padlen=0)
+    I_band = signal.filtfilt(filt, [1.], I_mir, padtype=None, padlen=0)
+    FF_band = signal.filtfilt(filt, [1.], FF_mir, padtype=None, padlen=0)
+
+    print len(E_band), len(I_band), len(FF_band), padlen
+    return E_band, I_band, FF_band, E_mir, I_mir
+
+
+def plot_things(E_mir, E_band, transform, abs_envelope):
+    x = range(len(E_mir))
+    plt.plot(range(len(E_mir)), E_mir, label="mirrored signal")
+    plt.plot(x, E_band, label="theta E", color="black")
+    plt.plot(x, transform, label="hilb transform")
+    plt.plot(x, abs_envelope, label="envelope")
+    plt.legend()
+    plt.show()
+    
 
 
 def peak_from_spectrogram(freq, title='not specified', dt=1., plot=False):
