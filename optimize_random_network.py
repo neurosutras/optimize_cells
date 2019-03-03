@@ -78,7 +78,8 @@ def init_context():
     E_ncell = 12
     I_ncell = 12
     delay = 1.  # ms
-    tstop = 3000  # ms
+    throwaway = 250  # ms
+    tstop = 3000 + throwaway  # ms
     dt = 0.025  # ms
     binned_dt = 1.  # ms
     filter_dt = 1.  # ms
@@ -130,10 +131,13 @@ def analyze_network_output(network, export=False, plot=False):
     :param plot: bool
     :return: dict
     """
-    binned_t = np.arange(0., context.tstop + context.binned_dt, context.binned_dt)
+    binned_t = np.arange(0., context.tstop + context.binned_dt - context.throwaway, context.binned_dt)
     spikes_dict = network.get_spikes_dict()
     spikes_dict.update(network.FF_spikes_dict)
+    spikes_dict = prune_and_shift_spikes(spikes_dict, context.throwaway)
+
     voltage_rec_dict = network.get_voltage_rec_dict()
+    voltage_rec_dict = prune_voltages(voltage_rec_dict, context.dt, context.throwaway)
     inferred_firing_rates = infer_firing_rates(spikes_dict, binned_t, alpha=context.baks_alpha, beta=context.baks_beta,
                                                pad_dur=context.pad_dur, plot=plot)
     connection_dict = network.convert_ncdict_to_weights()
@@ -152,7 +156,7 @@ def analyze_network_output(network, export=False, plot=False):
     if context.comm.rank == 0:
         frac_active, mean_firing_active = network.get_active_pop_stats(inferred_firing_rates, binned_t,
                                                                        threshold=context.active_rate_threshold, plot=plot)
-        network.py_summation(spikes_dict, binned_t)
+        network.summation(spikes_dict, binned_t)
 
         if plot:
             network.plot_adj_matrix(connection_dict)
@@ -161,20 +165,38 @@ def analyze_network_output(network, export=False, plot=False):
 
         E_mean, E_max = network.compute_pop_firing_features(network.cell_index['E'], rate_dict, peak_dict)
         I_mean, I_max = network.compute_pop_firing_features(network.cell_index['I'], rate_dict, peak_dict)
-
-        theta_E, theta_I, gamma_E, gamma_I = network.get_bands_of_interest(binned_t, context.filter_dt, plot=plot)
+        """
+        avg_FF_rate = network.avg_pop_rate_array('FF', binned_t, inferred_firing_rates)
+        avg_I_rate = network.avg_pop_rate_array('I', binned_t, inferred_firing_rates)
+        avg_E_rate = network.avg_pop_rate_array('E', binned_t, inferred_firing_rates)
+        """
+        I_pop_rate = mean_firing_active['I']
+        E_pop_rate = mean_firing_active['E']
+        FF_pop_rate = mean_firing_active['FF']
+        pop_rates = [FF_pop_rate, I_pop_rate, E_pop_rate]
+        ratios, bands = network.compute_envelope_ratio2(pop_rates, binned_t, context.filter_dt, plot=plot)
+        theta_E = bands[0];
+        gamma_E = bands[1];
+        theta_I = bands[2];
+        gamma_I = bands[3]
+        """theta_E, theta_I, gamma_E, gamma_I = network.get_bands_of_interest(binned_t, context.filter_dt, spikes_dict)
+        """
         peak_theta_freq_E = peak_from_spectrogram(theta_E, 'theta E', context.filter_dt, plot)
         peak_theta_freq_I = peak_from_spectrogram(theta_I, 'theta I', context.filter_dt, plot)
         peak_gamma_freq_E = peak_from_spectrogram(gamma_E, 'gamma E', context.filter_dt, plot)
         peak_gamma_freq_I = peak_from_spectrogram(gamma_I, 'gamma I', context.filter_dt, plot)
 
-        I_pop_rate = mean_firing_active['I']
+        """I_pop_rate = mean_firing_active['I']
         E_pop_rate = mean_firing_active['E']
         theta_E_ratio = network.compute_envelope_ratio(theta_E, E_pop_rate, binned_t, label='E theta', plot=plot)
         theta_I_ratio = network.compute_envelope_ratio(theta_I, I_pop_rate, binned_t, label='I theta', plot=plot)
         gamma_E_ratio = network.compute_envelope_ratio(gamma_E, E_pop_rate, binned_t, label='E gamma', plot=plot)
         gamma_I_ratio = network.compute_envelope_ratio(gamma_I, I_pop_rate, binned_t, label='I gamma', plot=plot)
-
+        """
+        theta_E_ratio = ratios[2];
+        gamma_E_ratio = ratios[3];
+        theta_I_ratio = ratios[4];
+        gamma_I_ratio = ratios[5]
         context.update(locals())
 
         return {'E_mean_rate': E_mean, 'E_peak_rate': E_max, 'I_mean_rate': I_mean, "I_peak_rate": I_max,
