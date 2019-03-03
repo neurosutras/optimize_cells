@@ -3,7 +3,7 @@ from neuron import h
 import numpy as np
 import random
 import sys, time
-import scipy.signal as signal
+import scipy.signal
 import matplotlib.pyplot as plt
 import seaborn as sns
 from baks import baks
@@ -354,7 +354,8 @@ class Network(object):
 
     def get_bands_of_interest(self, t, filter_dt, plot=False):
         """
-
+        TODO: If the oscillation analysis operates on the summed binned spikes, we need to sensibly convert the
+        spike counts into rates in  Hz.
         :param t: array
         :param filter_dt: float
         :param plot: bool
@@ -429,7 +430,7 @@ class Network(object):
         return pop_rate
 
     def compute_envelope_ratio(self, band, pop_rate, t, label=None, plot=False):
-        hilb_transform = np.abs(signal.hilbert(band))
+        hilb_transform = np.abs(scipy.signal.hilbert(band))
         mean_envelope = np.mean(hilb_transform)
         mean_rate = np.mean(pop_rate)
         if mean_rate > 0.:
@@ -640,16 +641,25 @@ def gauss(spikes, dt, filter_duration=100.):
 
 
 def filter_band(E, I, FF, window_len, band):
-    filt = signal.firwin(window_len, band, nyq=1000. / 2., pass_zero=False)
-    E_band = signal.filtfilt(filt, [1.], E, padtype='even', padlen=window_len)
-    I_band = signal.filtfilt(filt, [1.], I, padtype='even', padlen=window_len)
-    FF_band = signal.filtfilt(filt, [1.], FF, padtype='even', padlen=window_len)
+    """
+    TODO: nyq depends on filter_dt
+    :param E:
+    :param I:
+    :param FF:
+    :param window_len:
+    :param band:
+    :return:
+    """
+    filt = scipy.signal.firwin(window_len, band, nyq=1000. / 2., pass_zero=False)
+    E_band = scipy.signal.filtfilt(filt, [1.], E, padtype='even', padlen=window_len)
+    I_band = scipy.signal.filtfilt(filt, [1.], I, padtype='even', padlen=window_len)
+    FF_band = scipy.signal.filtfilt(filt, [1.], FF, padtype='even', padlen=window_len)
 
     return E_band, I_band, FF_band
 
 
 def peak_from_spectrogram(freq, title='not specified', dt=1., plot=False):
-    freq, density = signal.periodogram(freq, 1000. / dt)
+    freq, density = scipy.signal.periodogram(freq, 1000. / dt)
     if plot:
         plt.plot(freq, density)
         plt.title(title)
