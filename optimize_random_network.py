@@ -136,7 +136,7 @@ def analyze_network_output(network, export=False, plot=False):
     voltage_rec_dict = network.get_voltage_rec_dict()
     voltage_rec_dict = prune_voltages(voltage_rec_dict, context.dt, context.throwaway)
     inferred_firing_rates = infer_firing_rates(spikes_dict, binned_t, alpha=context.baks_alpha, beta=context.baks_beta,
-                                               pad_dur=context.pad_dur, network=network, plot=plot)
+                                               pad_dur=context.pad_dur, plot=plot)
     connection_dict = network.convert_ncdict_to_weights()
 
     spikes_dict = context.comm.gather(spikes_dict, root=0)

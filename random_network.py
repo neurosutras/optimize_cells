@@ -300,6 +300,7 @@ class Network(object):
             plt.plot(range(len(ms_rec)), ms_rec, '-gD', markevery=ev)
             plt.title('v trace ' + self.get_cell_type(i) + str(i))
             fig.show()
+        plt.show()
 
     def plot_population_firing_rates(self, firing_rates, t):
         """
@@ -714,14 +715,21 @@ def infer_firing_rates(spike_times_dict, t, alpha, beta, pad_dur, plot=False):
 
 def plot_inferred_rates(inferred_firing_rates, spike_times_dict, t, network):
     sampled_gids = network.sample_cells_for_plotting()
-    for gid in sampled_gids:
+    sample_per_pop = int(len(sampled_gids) / 2)
+    fig = plt.figure()
+    fig.suptitle('inferred spike rates')
+    for i, gid in enumerate(sampled_gids):
         smoothed = inferred_firing_rates[gid]
         spike_train = spike_times_dict[gid]
-        fig = plt.figure()
-        plt.plot(spike_train, np.ones_like(spike_train), 'k.')
-        plt.plot(t, smoothed)
-        plt.title('Inferred firing rate - cell: %i' % gid)
-        fig.show()
+        ax = fig.add_subplot(2, sample_per_pop, i + 1)
+        ax.plot(spike_train, np.ones_like(spike_train), 'k.')
+        ax.set_title("cell " + str(gid))
+        if network.get_cell_type(gid) == 'RS':
+            color = 'red'
+        else:
+            color = 'blue'
+        ax.plot(t, smoothed, color=color)
+    plt.show()  # clear stack
 
 def padded_baks(spike_times, t, alpha, beta, pad_dur=500.):
     """
@@ -791,8 +799,7 @@ def untruncated_filter_band(E, I, FF, window_len, band, padlen=250, dt=1.):
     I_band = scipy.signal.filtfilt(filt, [1.], I_mir, padtype=None, padlen=0)
     FF_band = scipy.signal.filtfilt(filt, [1.], FF_mir, padtype=None, padlen=0)
 
-    print len(E_band), len(I_band), len(FF_band), padlen
-    return E_band, I_band, FF_band, E_mir, I_mir
+    return E_band, I_band, FF_band
 
 
 """def plot_things(E_mir, E_band, transform, abs_envelope):
