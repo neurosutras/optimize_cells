@@ -3,6 +3,7 @@ from random_network import *
 import click
 import matplotlib.pyplot as plt
 import time
+import random
 
 
 context = Context()
@@ -74,14 +75,14 @@ def init_context():
     """
     TODO: Define each population size separately here.
     """
-    FF_ncell = 12
-    E_ncell = 12
-    I_ncell = 12
+    FF_ncell = 1200
+    E_ncell = 1200
+    I_ncell = 1200
 
     axon_width = {
-        'FF': 3,
-        'E': 5,
-        'I': 12
+        'FF': 0.1,
+        'E': 0.2,
+        'I': 0.1
     }
     # synaptic_counts[postsynaptic][presynaptic]
     # synaptic_counts = {
@@ -116,6 +117,12 @@ def init_context():
     baks_beta = 5.327364E-01
     pad_dur = 500.  # ms
     throwaway = 250.  # ms
+
+    locations = {}
+    for i in range(0, FF_ncell + E_ncell + I_ncell):
+        random.Random().seed(context.location_seed + i)
+        locations[i] = (random.Random().random() * 2 - 1, random.Random().random() * 2 - 1)
+
     context.update(locals())
 
 
@@ -231,7 +238,7 @@ def compute_features(x, export=False):
     start_time = time.time()
     context.network = Network(context.FF_ncell, context.E_ncell, context.I_ncell, context.delay, context.pc,
                               tstop=context.tstop, axon_width=context.axon_width, synaptic_counts=context.synaptic_counts,
-                              dt=context.dt, e2e_prob=context.e2e_prob, e2i_prob=context.e2i_prob,
+                              locations=context.locations, dt=context.dt, e2e_prob=context.e2e_prob, e2i_prob=context.e2i_prob,
                               i2i_prob=context.i2i_prob, i2e_prob=context.i2e_prob, ff2i_weight=context.ff2i_weight,
                               ff2e_weight=context.ff2e_weight, e2e_weight=context.e2e_weight,
                               e2i_weight=context.e2i_weight, i2i_weight=context.i2i_weight,
@@ -243,13 +250,15 @@ def compute_features(x, export=False):
     if context.disp and int(context.pc.id()) == 0:
         print('NETWORK BUILD RUNTIME: %.2f s' % (time.time() - start_time))
     current_time = time.time()
+    if context.plot:
+        context.network.visualize_connections()
     context.network.run()
     if int(context.pc.id()) == 0:
         if context.disp:
             print('NETWORK SIMULATION RUNTIME: %.2f s' % (time.time() - current_time))
     current_time = time.time()
-    #results = analyze_network_output(context.network, export=export, plot=context.plot)
-    results = analyze_network_output(context.network, export=export, plot=True)
+    results = analyze_network_output(context.network, export=export, plot=context.plot)
+    #results = analyze_network_output(context.network, export=export, plot=True)
     if int(context.pc.id()) == 0:
         if context.disp:
             print('NETWORK ANALYSIS RUNTIME: %.2f s' % (time.time() - current_time))

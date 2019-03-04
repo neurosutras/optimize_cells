@@ -7,6 +7,7 @@ import scipy.signal as signal
 import matplotlib.pyplot as plt
 import seaborn as sns
 from baks import baks
+from collections import defaultdict
 # for h.lambda_f
 h.load_file('stdlib.hoc')
 # for h.stdinit
@@ -15,7 +16,7 @@ h.load_file('stdrun.hoc')
 
 class Network(object):
 
-    def __init__(self, FF_ncell, E_ncell, I_ncell, delay, pc, tstop, axon_width, synaptic_counts,
+    def __init__(self, FF_ncell, E_ncell, I_ncell, delay, pc, tstop, axon_width, synaptic_counts, locations,
                  dt=0.025, e2e_prob=.05, e2i_prob=.05, i2i_prob=.05,
                  i2e_prob=.05, ff2i_weight=1., ff2e_weight=2., e2e_weight=1., e2i_weight=1., i2i_weight=.5,
                  i2e_weight=.5, ff_meanfreq=100, ff_frac_active=.8, ff2i_prob=.5, ff2e_prob=.5, std_dict=None, tau_E=2.,
@@ -53,6 +54,8 @@ class Network(object):
 
         self.axon_width = axon_width
         self.synaptic_counts = synaptic_counts
+
+        self.locations = locations
 
         if dt is None:
             dt = h.dt
@@ -101,7 +104,7 @@ class Network(object):
         nhost = int(self.pc.nhost())
         self.cells = []
         self.gids = []
-        self.locations = {}
+        #self.locations = {}
         for i in range(rank, self.total_cells, nhost):
             if i < self.FF_ncell:
                 self.local_random.seed(self.spikes_seed + i)
@@ -113,13 +116,15 @@ class Network(object):
                 else:
                     cell_type = 'FS'
                 cell = IzhiCell(self.tau_E, self.tau_I, self.synaptic_counts, cell_type)
-            x_pos = self.local_random.random() * 2 - 1
-            y_pos = self.local_random.random() * 2 - 1
-            z_pos = self.local_random.random() * 2 - 1
-            cell.position(x_pos, y_pos, z_pos)
+            # x_pos = self.local_random.random() * 2 - 1
+            # y_pos = self.local_random.random() * 2 - 1
+            #z_pos = self.local_random.random() * 2 - 1
+            #cell.position(x_pos, y_pos, z_pos)
+            cell.position(self.locations[i][0], self.locations[i][1])
             self.cells.append(cell)
             self.gids.append(i)
-            self.locations[i] = (x_pos, y_pos, z_pos)
+            #self.locations[i] = (x_pos, y_pos, z_pos)
+            #self.locations[i] = (x_pos, y_pos)
             self.pc.set_gid2node(i, rank)
             nc = cell.connect2target(None)
             self.pc.cell(i, nc)
@@ -148,7 +153,8 @@ class Network(object):
         rank = int(self.pc.id())
         nhost = int(self.pc.nhost())
         self.local_random.seed(self.connection_seed + rank)
-        self.ncdict = {}  # not efficient but demonstrates use of pc.gid_exists
+        #self.ncdict = {}  # not efficient but demonstrates use of pc.gid_exists
+        self.ncdict = defaultdict(lambda: defaultdict(list))
 
         for connection in ['ff2i', 'ff2e', 'e2e', 'e2i', 'i2i', 'i2e']:
 
@@ -175,14 +181,15 @@ class Network(object):
                 presyn_key = 'inhibitory_presyn'
             for target_gid in rank_subset_gids:
                 target = self.pc.gid2cell(target_gid)
-                x_pos_t, y_pos_t, z_pos_t = target.x, target.y, target.z
+                #x_pos_t, y_pos_t, z_pos_t = target.x, target.y, target.z
+                x_pos_t, y_pos_t = target.x, target.y
                 presyn_probs = {}
                 sum_probs = 0
                 for presyn_gid in range(inp[0], inp[1]):
-                    # presyn_cell = self.pc.gid2cell(presyn_gid)
-                    # x_pos, y_pos, z_pos = presyn_cell.x, presyn_cell.y, presyn_cell.z
-                    x_pos, y_pos, z_pos = self.locations[presyn_gid]
-                    dist = np.sqrt((x_pos_t - x_pos)**2 + (y_pos_t - y_pos)**2 + (z_pos_t - z_pos)**2)
+                    #x_pos, y_pos, z_pos = self.locations[presyn_gid]
+                    x_pos, y_pos = self.locations[presyn_gid]
+                    #dist = np.sqrt((x_pos_t - x_pos)**2 + (y_pos_t - y_pos)**2 + (z_pos_t - z_pos)**2)
+                    dist = np.sqrt((x_pos_t - x_pos)**2 + (y_pos_t - y_pos)**2)
                     sigma = self.axon_width[presyn_code]
                     presyn_probs[presyn_gid] = 1./(np.sqrt(2 * np.pi * sigma**2)) * (np.e ** (-(dist ** 2) / (2 * sigma**2)))
                     sum_probs += presyn_probs[presyn_gid]
@@ -190,17 +197,20 @@ class Network(object):
                 counts = np.random.multinomial(self.synaptic_counts[connection], list(presyn_probs_items[:,1] / float(sum_probs)))
                 presyn_neurons = list(presyn_probs_items[:,0])
                 idxs = []
-                for i in range(len(counts)):
-                    for _ in range(counts[i]):
-                        idxs.append(i)
+                # CHECK GIDS
+                #for i in range(len(counts)): get rid of this
+                for this_count, this_gid in zip(counts, range(inp[0], inp[1])):
+                    for _ in range(this_count):
+                        idxs.append(this_gid)
                 for i in range(len(idxs)):
-                    presyn_gid = int(presyn_neurons[idxs[i]])
+                    #presyn_gid = int(presyn_neurons[idxs[i]]) get rid of this
+                    presyn_gid = int(idxs[i])
                     nc = self.pc.gid_connect(presyn_gid, target.synlist[presyn_key][i])
                     nc.delay = self.delay
                     weight = self.local_random.gauss(mu, mu * std_factor)
                     while weight < 0.: weight = self.local_random.gauss(mu, mu * std_factor)
                     nc.weight[0] = weight
-                    self.ncdict[(presyn_gid, target_gid)] = nc
+                    self.ncdict[target_gid][presyn_gid].append(nc)
 
 
             # for presyn_gid in range(inp[0], inp[1]):
@@ -225,6 +235,37 @@ class Network(object):
             #             while weight < 0.: weight = self.local_random.gauss(mu, mu * std_factor)
             #             nc.weight[0] = weight
             #             self.ncdict[(presyn_gid, target_gid)] = nc
+
+    # only works in 2D!
+    def visualize_connections(self, n=5):
+        for connection in ['ff2i', 'ff2e', 'e2e', 'e2i', 'i2i', 'i2e']:
+            if connection in ['ff2i', 'ff2e']:
+                presyn_code = 'FF'
+                presyn_key = 'excitatory_presyn'
+            elif connection in ['e2e', 'e2i']:
+                presyn_code = 'E'
+                presyn_key = 'excitatory_presyn'
+            else:
+                presyn_code = 'I'
+                presyn_key = 'inhibitory_presyn'
+            indices = self.connectivity_index_dict[connection]
+            inp, out = indices
+            target_gids = random.sample(range(out[0], out[1]), n)
+            for target_gid in target_gids:
+                target_loc = self.locations[target_gid] # (x, y, z)
+                print(target_loc)
+                presyn_gids = list(self.ncdict[target_gid].keys())
+                xs = []
+                ys = []
+                for presyn_gid in presyn_gids:
+                    if presyn_gid in range(inp[0], inp[1]):
+                        xs.append(self.locations[presyn_gid][0])
+                        ys.append(self.locations[presyn_gid][1])
+                vals, xedge, yedge = np.histogram2d(x=xs, y=ys, bins=np.linspace(-1.0, 1.0, 21))
+                #plt.imshow(vals)
+                plt.pcolor(xedge, yedge, vals)
+                plt.title("Cell " + str(target_gid) + " at " + str(target_loc) + ", " + str(connection) + " connections")
+                plt.show()
 
 
     # Instrumentation - stimulation and recordi
@@ -587,7 +628,8 @@ class IzhiCell(object):
         # self.basic_shape()
 
         self.synapses(tau_E, tau_I, syncounts, type)
-        self.x = self.y = self.z = 0.
+        #self.x = self.y = self.z = 0.
+        self.x = self.y = 0.
 
     def __del__(self):
         pass
@@ -601,14 +643,11 @@ class IzhiCell(object):
     #     h.pop_section()
 
     # from Ball Stick
-    def position(self, x, y, z):
-        # self.sec.push()
-        # for i in range(int(h.n3d())):
-        #     h.pt3dchange(i, x - self.x + h.x3d(i), y - self.y + h.y3d(i), z - self.z + h.z3d(i), h.diam3d(i))
+    # def position(self, x, y, z):
+    def position(self, x, y):
         self.x = x
         self.y = y
-        self.z = z
-        # h.pop_section()
+        #self.z = z
 
     # also from Ball_Stick
     def synapses(self, tau_E, tau_I, syncounts, type):
@@ -622,6 +661,7 @@ class IzhiCell(object):
         else:
             e_pre_count = syncounts['ff2i'] + syncounts['e2i']
             i_pre_count = syncounts['i2i']
+        # this is all redundant; only need one E and one I
         for _ in range(e_pre_count):
             s = h.ExpSyn(self.sec(0.8))  # E
             s.tau = tau_E
@@ -659,7 +699,8 @@ class FFCell(object):
             network.FF_spikes_dict[gid] = []
 
         # self.basic_shape()
-        self.x = self.y = self.z = 0.
+        #self.x = self.y = self.z = 0.
+        self.x = self.y = 0.
 
     # # from Ball Stick; not sure if I even need this?
     # def basic_shape(self):
@@ -670,14 +711,11 @@ class FFCell(object):
     #     h.pop_section()
 
     # from Ball Stick
-    def position(self, x, y, z):
-        # self.sec.push()
-        # for i in range(int(h.n3d())):
-        #     h.pt3dchange(i, x - self.x + h.x3d(i), y - self.y + h.y3d(i), z - self.z + h.z3d(i), h.diam3d(i))
+    #def position(self, x, y, z):
+    def position(self, x, y):
         self.x = x
         self.y = y
-        self.z = z
-        # h.pop_section()
+        #self.z = z
 
     def connect2target(self, target):
         nc = h.NetCon(self.pp, target)

@@ -64,7 +64,7 @@ bounds:
   - 8.
   tau_I: !!python/tuple
   - 2.
-  - 10.  
+  - 10.
 feature_names:
 - E_peak_rate
 - I_peak_rate
@@ -93,6 +93,7 @@ kwargs:
   verbose: True
   connection_seed: 0
   spikes_seed: 1000000
+  location_seed: 2000000
 objective_names:
 - E_peak_rate
 - I_peak_rate
