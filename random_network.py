@@ -7,6 +7,7 @@ import scipy.signal as signal
 import matplotlib.pyplot as plt
 import seaborn as sns
 from baks import baks
+
 # for h.lambda_f
 h.load_file('stdlib.hoc')
 # for h.stdinit
@@ -296,9 +297,10 @@ class Network(object):
             for j, v in enumerate(v_dict[i]):
                 if j % ms_step == 0: ms_rec.append(v)
             ev = [int(event / down_dt) for event in spikes_dict[i]]
+            fig = plt.figure()
             plt.plot(range(len(ms_rec)), ms_rec, '-gD', markevery=ev)
             plt.title('v trace ' + self.get_cell_type(i) + str(i))
-            plt.show()
+            fig.show()
 
     def plot_population_firing_rates(self, firing_rates, t):
         """
@@ -370,15 +372,7 @@ class Network(object):
         plt.title('gamma FF')
         plt.show()
 
-    def get_bands_of_interest(self, t, filter_dt, plot=False):
-        """
-        gets gamma and theta bands for all populations
-
-        :param t: array
-        :param filter_dt: float
-        :param plot: bool
-        :return: tuple of array
-        """
+    """def get_bands_of_interest(self, t, filter_dt, plot=False):
         # gauss_E = gauss(self.E_sum, binned_dt)
         #  gauss_I = gauss(self.I_sum, binned_dt)
         #  gauss_FF = gauss(self.FF_sum, binned_dt)
@@ -400,7 +394,7 @@ class Network(object):
             # self.plot_bands(theta_E, gamma_E, gauss_E, theta_FF, gamma_FF, gauss_FF)
             self.plot_bands(t, theta_E, gamma_E, self.E_sum, theta_FF, gamma_FF, self.FF_sum)
 
-        return theta_E, theta_I, gamma_E, gamma_I
+        return theta_E, theta_I, gamma_E, gamma_I"""
 
     def get_active_pop_stats(self, firing_rates_dict, t, threshold=1., plot=False):
         """
@@ -460,12 +454,7 @@ class Network(object):
                 if firing_rates_dict[i][j] > 1.: pop_rate[j] += firing_rates_dict[i][j]
         return pop_rate
 
-    def compute_envelope_ratio(self, band, pop_rate, t, label=None, plot=False):
-        """
-        compute how much of the fluctuation of the cell activity was based on theta/gamma
-        :param band: str, theta or gamma
-        :param pop_rate: array, firing rate of population
-        """
+    """def compute_envelope_ratio(self, band, pop_rate, t, label=None, plot=False):
         hilb_transform = np.abs(signal.hilbert(band))
         mean_envelope = np.mean(hilb_transform)
         mean_rate = np.mean(pop_rate)
@@ -485,85 +474,81 @@ class Network(object):
                 plt.show()
         else:
             ratio = 0.
-        return ratio
+        return ratio"""
 
-    def compute_envelope_ratio2(self, pop_rates, t, filter_dt, label=None, plot=False):
-        plot = True
+    def plot_envelope_ratio(self, t, hilb_transform, pop_rate, label, ratio):
+        plt.plot(t, hilb_transform, label='hilbert transform')
+        plt.plot(t, pop_rate, label='pop firing rate')
+        plt.axhline(y=np.mean(hilb_transform), color='red')
+        plt.axhline(y=np.mean(pop_rate), color='red')
+        plt.legend(loc=1)
+        if label is None:
+            label = 'ratio: %.3E' % ratio
+        else:
+            label += ' ratio: %.3E' % ratio
+        plt.title(label)
+        plt.show()
+
+    def calculate_envelope_ratio(self, pop_rate, band, pad_len):
+        hilb_transform = np.abs(scipy.signal.hilbert(band))[pad_len:][:-pad_len]
+        mean_envelope = np.mean(hilb_transform)
+        mean_rate = np.mean(pop_rate)
+        if mean_rate > 0:
+            ratio = mean_envelope / mean_rate
+        else:
+            ratio = 0.
+        return ratio, hilb_transform
+
+    def get_bands_of_interest(self, filter_dt, basic_rate_E, basic_rate_I, basic_rate_FF, t, plot=False):
+        pad_lengths = {}
+        pad_len = window_len = int(2000. / filter_dt)
+        pad_lengths['theta'] = pad_len
+        theta_band = [5., 10.]
+        theta_E, theta_I, theta_FF = untruncated_filter_band(basic_rate_E, basic_rate_I, basic_rate_FF,
+                                                             window_len, theta_band, pad_len, filter_dt)
+
+        pad_len = window_len = int(200. / filter_dt)
+        gamma_band = [30., 100.]
+        pad_lengths['gamma'] = pad_len
+        gamma_E, gamma_I, gamma_FF = untruncated_filter_band(basic_rate_E, basic_rate_I, basic_rate_FF,
+                                                             window_len, gamma_band, pad_len, filter_dt)
+        if plot:
+            self.plot_bands(t, theta_E[pad_lengths['theta']:][:len(t)], gamma_E[pad_lengths['gamma']:][:len(t)],
+                            basic_rate_E, theta_FF[pad_lengths['theta']:][:len(t)],
+                            gamma_FF[pad_lengths['gamma']:][:len(t)],
+                            basic_rate_FF)
+
+        return theta_E, theta_I, gamma_E, gamma_I, pad_lengths
+
+    def get_envelope_ratio(self, pop_rates, t, filter_dt, label=None, plot=False):
         basic_rate_E = self.count_to_rate_basic(self.E_sum, self.E_ncell)
         basic_rate_I = self.count_to_rate_basic(self.I_sum, self.I_ncell)
         basic_rate_FF = self.count_to_rate_basic(self.FF_sum, self.FF_ncell)
 
-        pad_len = 2000
-        window_len = int(2000. / filter_dt)
-        theta_band = [5., 10.]
-        theta_E, theta_I, theta_FF, E_mir, I_mir = untruncated_filter_band(basic_rate_E, basic_rate_I, basic_rate_FF,
-                                                                           window_len, theta_band, pad_len, filter_dt)
-        window_len = int(200. / filter_dt)
-        gamma_band = [30., 100.]
-        gamma_E, gamma_I, gamma_FF, _, _ = untruncated_filter_band(basic_rate_E, basic_rate_I, basic_rate_FF,
-                                                                   window_len, gamma_band, pad_len, filter_dt)
-        ratios = []
-        band_name = ['theta_FF', 'gamma_FF', 'theta_E', 'gamma_E', 'theta_I', 'gamma_I']
-        bands = [theta_FF, gamma_FF, theta_E, gamma_E, theta_I, gamma_I]
+        theta_E, theta_I, gamma_E, gamma_I, pad_lengths = self.get_bands_of_interest(filter_dt, basic_rate_E,
+                                                                                     basic_rate_I, basic_rate_FF, t,
+                                                                                     plot)
 
-        for i in range(self.npop * 2):
-            label = band_name[i]
-            band = bands[i]
-            if i < 2:
-                pop_rate = pop_rates[0]
-            elif i < 4:
-                pop_rate = pop_rates[2]  # this is 2 on purpose
-            else:
+        ratios = {}
+        bands = {'theta_I': theta_I, 'gamma_I': gamma_I, 'theta_E': theta_E, 'gamma_E': gamma_E}
+        truncated_bands = {}
+        for label, band in bands.iteritems():
+            if label[-1] == 'I':
                 pop_rate = pop_rates[1]
-
-            hilb_transform = signal.hilbert(band)
-            # plt.plot(range(len(hilb_transform)), hilb_transform)
-            abs_hilb_transform = np.abs(signal.hilbert(band))
-            # plt.plot(range(pad_len, len(hilb_transform)+pad_len), hilb_transform)
-            if i == 2:  # plt.show()
-                plot_things(E_mir, theta_E, hilb_transform, abs_hilb_transform)
-            if i == 4:
-                plot_things(I_mir, theta_I, hilb_transform, abs_hilb_transform)
-            hilb_transform = np.abs(signal.hilbert(band))[pad_len:][:-pad_len]
-            mean_envelope = np.mean(hilb_transform)
-            mean_rate = np.mean(pop_rate)
-            if mean_rate > 0.:
-                ratio = mean_envelope / mean_rate
-                if plot:
-                    plt.plot(t, hilb_transform, label='hilbert transform')
-                    plt.plot(t, pop_rate, label='pop firing rate')
-                    plt.axhline(y=np.mean(hilb_transform), color='red')
-                    plt.axhline(y=np.mean(pop_rate), color='red')
-                    plt.legend(loc=1)
-                    if label is None:
-                        label = 'ratio: %.3E' % ratio
-                    else:
-                        label += ' ratio: %.3E' % ratio
-                    plt.title(label)
-                    plt.show()
-                ratios.append(ratio)
             else:
-                ratios.append(0.)
-        theta_FF = theta_FF[pad_len:][:len(t)];
-        gamma_FF = gamma_FF[pad_len:][:len(t)]
-        theta_E = theta_E[pad_len:][:len(t)];
-        gamma_E = gamma_E[pad_len:][:len(t)]
-        theta_I = theta_I[pad_len:][:len(t)];
-        gamma_I = gamma_I[pad_len:][:len(t)]
+                pop_rate = pop_rates[2]
+            if label.find('theta') != -1:
+                pad_len = pad_lengths['theta']
+            else:
+                pad_len = pad_lengths['gamma']
+            ratio, hilb_transform = self.calculate_envelope_ratio(pop_rate, band, pad_len)
+            ratios[label] = ratio
+            truncated_bands[label] = band[pad_len:][:len(t)]
 
-        if plot:
-            self.plot_bands(t, theta_E, gamma_E, basic_rate_E, theta_FF, gamma_FF, basic_rate_FF)
+            if plot:
+                self.plot_envelope_ratio(t, hilb_transform, pop_rate, label, ratio)
 
-        return ratios, [theta_E, gamma_E, theta_I, gamma_I]
-
-    """def avg_pop_rate_array(self, pop, t, firing_rates_dict):
-        count = 0
-        c_sum = np.zeros((1, len(t)))
-        for i in range(self.cell_index[pop][0], self.cell_index[pop][1]):
-            if i in firing_rates_dict.keys():
-                c_sum = np.add(c_sum, firing_rates[i])
-        avg_rate = np.divide(csum, count)
-        return avg_rate"""
+        return ratios, truncated_bands
 
     def convert_ncdict_to_weights(self):
         """
@@ -699,7 +684,7 @@ class FFCell(object):
         return 1
 
 
-def infer_firing_rates(spike_times_dict, t, alpha, beta, pad_dur, plot=False):
+def infer_firing_rates(spike_times_dict, t, alpha, beta, pad_dur, network, plot=False):
     """
 
     :param spike_times_dict: dict of array
@@ -716,17 +701,28 @@ def infer_firing_rates(spike_times_dict, t, alpha, beta, pad_dur, plot=False):
             # spikes_t = get_binned_spike_train(val, t)
             # smoothed = gauss(spikes_t, binned_dt)
             smoothed = padded_baks(spike_train, t, alpha=alpha, beta=beta, pad_dur=pad_dur)
-            if plot:
+            """if plot:
                 fig = plt.figure()
                 plt.plot(spike_train, np.ones_like(spike_train), 'k.')
                 plt.plot(t, smoothed)
                 plt.title('Inferred firing rate - cell: %i' % gid)
-                fig.show()
+                fig.show()"""
             inferred_firing_rates[gid] = smoothed
         else:
             inferred_firing_rates[gid] = np.zeros_like(t)
     return inferred_firing_rates
 
+
+def plot_inferred_rates(inferred_firing_rates, spike_times_dict, t, network):
+    sampled_gids = network.sample_cells_for_plotting()
+    for gid in sampled_gids:
+        smoothed = inferred_firing_rates[gid]
+        spike_train = spike_times_dict[gid]
+        fig = plt.figure()
+        plt.plot(spike_train, np.ones_like(spike_train), 'k.')
+        plt.plot(t, smoothed)
+        plt.title('Inferred firing rate - cell: %i' % gid)
+        fig.show()
 
 def padded_baks(spike_times, t, alpha, beta, pad_dur=500.):
     """
@@ -775,7 +771,6 @@ def gauss(spikes, dt, filter_duration=100.):
     signal = signal[int(filter_duration / dt) + pad_len:][:len(spikes)]
     return signal
 
-
 def mirror_signal(signal, pad_len):
     """np.fliplr hates python 2.7"""
     mirror_beginning = signal[:pad_len][::-1]
@@ -784,35 +779,28 @@ def mirror_signal(signal, pad_len):
 
     return modified_signal
 
-
 def untruncated_filter_band(E, I, FF, window_len, band, padlen=250, dt=1.):
     """from input, filter for certain frequencies"""
     E_mir = mirror_signal(E, padlen)
     I_mir = mirror_signal(I, padlen)
     FF_mir = mirror_signal(FF, padlen)
-    """E2 = E_mir[padlen:][:len(E)]
-    plt.plot(range(len(E_mir)), E_mir)
-    plt.plot(range(250, len(E) + 250), E)
-    plt.plot(range(250, len(E) + 250), E2, color='red')
-    plt.show()"""
 
     filt = signal.firwin(window_len, band, nyq=1000. / 2. / dt, pass_zero=False)
     E_band = signal.filtfilt(filt, [1.], E_mir, padtype=None, padlen=0)
     I_band = signal.filtfilt(filt, [1.], I_mir, padtype=None, padlen=0)
     FF_band = signal.filtfilt(filt, [1.], FF_mir, padtype=None, padlen=0)
 
-    print len(E_band), len(I_band), len(FF_band), padlen
-    return E_band, I_band, FF_band, E_mir, I_mir
+    return E_band, I_band, FF_band
 
 
-def plot_things(E_mir, E_band, transform, abs_envelope):
+"""def plot_things(E_mir, E_band, transform, abs_envelope):
     x = range(len(E_mir))
     plt.plot(range(len(E_mir)), E_mir, label="mirrored signal")
     plt.plot(x, E_band, label="theta E", color="black")
     plt.plot(x, transform, label="hilb transform")
     plt.plot(x, abs_envelope, label="envelope")
     plt.legend()
-    plt.show()
+    plt.show()"""
     
 
 
