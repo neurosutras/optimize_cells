@@ -3,11 +3,10 @@ from neuron import h
 import numpy as np
 import random
 import sys, time
-import scipy.signal as signal
+import scipy.signal
 import matplotlib.pyplot as plt
 import seaborn as sns
 from baks import baks
-
 # for h.lambda_f
 h.load_file('stdlib.hoc')
 # for h.stdinit
@@ -139,8 +138,8 @@ class Network(object):
         if the pre-synaptic neuron is E/FF - connect to 1st synapse (excitatory), otherwise connect to
         2nd synapse (inhibitory) -- see IzhiCell
         connections based on connection probability dict and weight of connection is based on a gaussian distribution
-        
-        restrictions: cells cannot connect with themselves, weights cannot be negative, and the presynaptic cell 
+
+        restrictions: cells cannot connect with themselves, weights cannot be negative, and the presynaptic cell
         needs to live on this rank. (also, FF cells should not connect with other FF cells.)
         """
         rank = int(self.pc.id())
@@ -330,7 +329,7 @@ class Network(object):
 
     def plot_smoothing(self, gauss_E):
         self.plot_two_traces(gauss_E, self.E_sum, 'smoothed spike rate vs. population spiking - E')
-    
+
     def plot_two_traces(self, one, two, title):
         plt.plot(range(len(one)), one)
         plt.plot(range(len(two)), two)
@@ -552,7 +551,7 @@ class Network(object):
 
     def convert_ncdict_to_weights(self):
         """
-        can't collapse NCs on each rank onto the master rank. instead, keep track of 
+        can't collapse NCs on each rank onto the master rank. instead, keep track of
         connections and their weights to be gathered by the master rank.
         """
         connections = {}
@@ -684,7 +683,7 @@ class FFCell(object):
         return 1
 
 
-def infer_firing_rates(spike_times_dict, t, alpha, beta, pad_dur, network, plot=False):
+def infer_firing_rates(spike_times_dict, t, alpha, beta, pad_dur, plot=False):
     """
 
     :param spike_times_dict: dict of array
@@ -771,6 +770,7 @@ def gauss(spikes, dt, filter_duration=100.):
     signal = signal[int(filter_duration / dt) + pad_len:][:len(spikes)]
     return signal
 
+
 def mirror_signal(signal, pad_len):
     """np.fliplr hates python 2.7"""
     mirror_beginning = signal[:pad_len][::-1]
@@ -779,18 +779,20 @@ def mirror_signal(signal, pad_len):
 
     return modified_signal
 
+
 def untruncated_filter_band(E, I, FF, window_len, band, padlen=250, dt=1.):
     """from input, filter for certain frequencies"""
     E_mir = mirror_signal(E, padlen)
     I_mir = mirror_signal(I, padlen)
     FF_mir = mirror_signal(FF, padlen)
 
-    filt = signal.firwin(window_len, band, nyq=1000. / 2. / dt, pass_zero=False)
-    E_band = signal.filtfilt(filt, [1.], E_mir, padtype=None, padlen=0)
-    I_band = signal.filtfilt(filt, [1.], I_mir, padtype=None, padlen=0)
-    FF_band = signal.filtfilt(filt, [1.], FF_mir, padtype=None, padlen=0)
+    filt = scipy.signal.firwin(window_len, band, nyq=1000. / 2. / dt, pass_zero=False)
+    E_band = scipy.signal.filtfilt(filt, [1.], E_mir, padtype=None, padlen=0)
+    I_band = scipy.signal.filtfilt(filt, [1.], I_mir, padtype=None, padlen=0)
+    FF_band = scipy.signal.filtfilt(filt, [1.], FF_mir, padtype=None, padlen=0)
 
-    return E_band, I_band, FF_band
+    print len(E_band), len(I_band), len(FF_band), padlen
+    return E_band, I_band, FF_band, E_mir, I_mir
 
 
 """def plot_things(E_mir, E_band, transform, abs_envelope):
@@ -801,12 +803,12 @@ def untruncated_filter_band(E, I, FF, window_len, band, padlen=250, dt=1.):
     plt.plot(x, abs_envelope, label="envelope")
     plt.legend()
     plt.show()"""
-    
+
 
 
 def peak_from_spectrogram(freq, title='not specified', dt=1., plot=False):
     """return the most dense frequency in a certain band (gamma, theta) based on the spectrogram"""
-    freq, density = signal.periodogram(freq, 1000. / dt)
+    freq, density = scipy.signal.periodogram(freq, 1000. / dt)
     if plot:
         plt.plot(freq, density)
         plt.title(title)
