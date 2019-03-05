@@ -18,7 +18,7 @@ class Network(object):
     def __init__(self, FF_ncell, E_ncell, I_ncell, delay, pc, tstop, dt=0.025, e2e_prob=.05, e2i_prob=.05, i2i_prob=.05,
                  i2e_prob=.05, ff2i_weight=1., ff2e_weight=2., e2e_weight=1., e2i_weight=1., i2i_weight=.5,
                  i2e_weight=.5, ff_meanfreq=100, ff_frac_active=.8, ff2i_prob=.5, ff2e_prob=.5, std_dict=None, tau_E=2.,
-                 tau_I=5., connection_seed=0, spikes_seed=1):
+                 tau_I=5., connection_seed=0, spikes_seed=1, plot_ncells=5):
         """
 
         :param FF_ncell: int, number of cells in FF population
@@ -45,8 +45,9 @@ class Network(object):
         :param tau_I: float, tau decay for inhib synapses
         :param connection_seed: int
         :param spikes_seed: int
+        :param plot_ncells: int, how many cells to sample (per population) for plotting voltage trace and firing rate
         """
-        self.npop = 3
+        self.npop = 3  # number of populations - 3 for FF, inhib, excit cells
         self.pc = pc
         self.delay = delay
         self.tstop = tstop
@@ -56,17 +57,22 @@ class Network(object):
         self.FF_ncell = int(FF_ncell)
         self.E_ncell = int(E_ncell)
         self.I_ncell = int(I_ncell)
+
         self.FF_spikes_dict = {}
         self.ff_frac_active = ff_frac_active
+        self.ff_meanfreq = ff_meanfreq
+
         self.tau_E = tau_E
         self.tau_I = tau_I
+
         self.prob_dict = {'e2e': e2e_prob, 'e2i': e2i_prob, 'i2i': i2i_prob, 'i2e': i2e_prob, 'ff2i': ff2i_prob,
                           'ff2e': ff2e_prob}
         self.weight_dict = {'ff2i': ff2i_weight, 'ff2e': ff2e_weight, 'e2e': e2e_weight, 'e2i': e2i_weight,
                             'i2i': i2i_weight, 'i2e': i2e_weight}
         self.weight_std_dict = std_dict
         self.total_cells = FF_ncell + I_ncell + E_ncell
-        self.cell_index = {'FF': (0, FF_ncell), 'I': (FF_ncell, FF_ncell + I_ncell),
+        self.plot_ncells = plot_ncells
+        self.cell_index = {'FF': (0, FF_ncell), 'I': (FF_ncell, FF_ncell + I_ncell),  # [x, y)
                            'E': (FF_ncell + I_ncell, self.total_cells)}
         self.connectivity_index_dict = {'ff2i': (self.cell_index['FF'], self.cell_index['I']),  # exclusive [x, y)
                                         'ff2e': (self.cell_index['FF'], self.cell_index['E']),
@@ -74,8 +80,6 @@ class Network(object):
                                         'e2i': (self.cell_index['E'], self.cell_index['I']),
                                         'i2i': (self.cell_index['I'], self.cell_index['I']),
                                         'i2e': (self.cell_index['I'], self.cell_index['E'])}
-
-        self.ff_meanfreq = ff_meanfreq
 
         self.local_random = random.Random()
         self.connection_seed = connection_seed
@@ -144,7 +148,7 @@ class Network(object):
         """
         rank = int(self.pc.id())
         self.local_random.seed(self.connection_seed + rank)
-        self.ncdict = {}  # not efficient but demonstrates use of pc.gid_exists
+        self.ncdict = {}
 
         for connection in ['ff2i', 'ff2e', 'e2e', 'e2i', 'i2i', 'i2e']:
             mu, std_factor = self.get_weight(connection)
@@ -252,18 +256,16 @@ class Network(object):
         :param rate_dict: dict, key = gid, val = scalar
         :param peak_dict: dict, key = gid, val = scalar
         """
-        uncounted = 0
-        mean = 0
+        count = 0;
+        mean = 0;
         max_firing = 0
         for i in range(bounds[0], bounds[1]):
-            if i not in rate_dict:
-                uncounted += 1
-                continue
+            if i not in rate_dict: continue
             mean += rate_dict[i]
             max_firing += peak_dict[i]
-        ncell = bounds[1] - bounds[0]
-        if ncell - uncounted != 0:
-            mean = mean / float(ncell - uncounted)
+            count += 1
+        if count != 0:
+            mean = mean / float(count)
             max_firing = max_firing / float(ncell - uncounted)
 
         return mean, max_firing
@@ -273,14 +275,12 @@ class Network(object):
         for plot_voltage_trace. sample a number of cells from the E and I populations to be plotted
         :return: list of gids
         """
-        sample_count = 5
-
         I_sample = range(self.cell_index['I'][0], self.cell_index['I'][1])
         E_sample = range(self.cell_index['E'][0], self.cell_index['E'][1])
-        if self.I_ncell > sample_count:
-            I_sample = self.local_random.sample(I_sample, sample_count)
-        if self.E_ncell > sample_count:
-            E_sample = self.local_random.sample(E_sample, sample_count)
+        if self.I_ncell > self.plot_ncells:
+            I_sample = self.local_random.sample(I_sample, self.plot_ncells)
+        if self.E_ncell > self.plot_ncells:
+            E_sample = self.local_random.sample(E_sample, self.plot_ncells)
         return I_sample + E_sample
 
     def plot_voltage_trace(self, v_dict, spikes_dict, dt=.025):
@@ -500,34 +500,32 @@ class Network(object):
         return ratio, hilb_transform
 
     def get_bands_of_interest(self, filter_dt, basic_rate_E, basic_rate_I, basic_rate_FF, t, plot=False):
-        pad_lengths = {}
-        pad_len = window_len = int(2000. / filter_dt)
-        pad_lengths['theta'] = pad_len
+        pad_len_theta = window_len = int(2000. / filter_dt)
         theta_band = [5., 10.]
         theta_E, theta_I, theta_FF = untruncated_filter_band(basic_rate_E, basic_rate_I, basic_rate_FF,
-                                                             window_len, theta_band, pad_len, filter_dt)
+                                                             window_len, theta_band, pad_len_theta, filter_dt)
 
-        pad_len = window_len = int(200. / filter_dt)
+        pad_len_gamma = window_len = int(200. / filter_dt)
         gamma_band = [30., 100.]
-        pad_lengths['gamma'] = pad_len
         gamma_E, gamma_I, gamma_FF = untruncated_filter_band(basic_rate_E, basic_rate_I, basic_rate_FF,
-                                                             window_len, gamma_band, pad_len, filter_dt)
+                                                             window_len, gamma_band, pad_len_gamma, filter_dt)
         if plot:
-            self.plot_bands(t, theta_E[pad_lengths['theta']:][:len(t)], gamma_E[pad_lengths['gamma']:][:len(t)],
-                            basic_rate_E, theta_FF[pad_lengths['theta']:][:len(t)],
-                            gamma_FF[pad_lengths['gamma']:][:len(t)],
-                            basic_rate_FF)
+            self.plot_bands(t, theta_E[pad_len_theta:][:len(t)], gamma_E[pad_len_gamma:][:len(t)],
+                            basic_rate_E, theta_FF[pad_len_theta:][:len(t)],
+                            gamma_FF[pad_len_gamma:][:len(t)], basic_rate_FF)
 
-        return theta_E, theta_I, gamma_E, gamma_I, pad_lengths
+        return theta_E, theta_I, gamma_E, gamma_I, pad_len_theta, pad_len_gamma
 
     def get_envelope_ratio(self, pop_rates, t, filter_dt, label=None, plot=False):
         basic_rate_E = self.count_to_rate_basic(self.E_sum, self.E_ncell)
         basic_rate_I = self.count_to_rate_basic(self.I_sum, self.I_ncell)
         basic_rate_FF = self.count_to_rate_basic(self.FF_sum, self.FF_ncell)
 
-        theta_E, theta_I, gamma_E, gamma_I, pad_lengths = self.get_bands_of_interest(filter_dt, basic_rate_E,
-                                                                                     basic_rate_I, basic_rate_FF, t,
-                                                                                     plot)
+        theta_E, theta_I, gamma_E, gamma_I, pad_len_theta, pad_len_gamma = self.get_bands_of_interest(filter_dt,
+                                                                                                      basic_rate_E,
+                                                                                                      basic_rate_I,
+                                                                                                      basic_rate_FF, t,
+                                                                                                      plot)
 
         ratios = {}
         bands = {'theta_I': theta_I, 'gamma_I': gamma_I, 'theta_E': theta_E, 'gamma_E': gamma_E}
@@ -538,9 +536,9 @@ class Network(object):
             else:
                 pop_rate = pop_rates[2]
             if label.find('theta') != -1:
-                pad_len = pad_lengths['theta']
+                pad_len = pad_len_theta
             else:
-                pad_len = pad_lengths['gamma']
+                pad_len = pad_len_gamma
             ratio, hilb_transform = self.calculate_envelope_ratio(pop_rate, band, pad_len)
             ratios[label] = ratio
             truncated_bands[label] = band[pad_len:][:len(t)]
@@ -599,6 +597,7 @@ class Network(object):
         plt.show()
 
     def count_to_rate_basic(self, spike_sums, ncell, dt=1.):
+        """converts spike count (summed over population) to average instaneous firing rate for one cell per timestep."""
         factor = dt / 1000.
         rate = np.divide(np.divide(spike_sums, float(ncell)), factor)
         return rate
@@ -670,7 +669,7 @@ class FFCell(object):
         spikes = get_inhom_poisson_spike_times_by_thinning([mean_freq, mean_freq], [0, tstop], dt=0.025,
                                                            generator=local_random)
         vec = h.Vector(spikes)
-        if local_random.random() <= frac_active:  #vec = h.Vector([5, 200])
+        if local_random.random() <= frac_active:
             self.pp.play(vec)
             network.FF_spikes_dict[gid] = np.array(spikes)
         else:
@@ -715,7 +714,8 @@ def infer_firing_rates(spike_times_dict, t, alpha, beta, pad_dur, plot=False):
 
 def plot_inferred_rates(inferred_firing_rates, spike_times_dict, t, network):
     sampled_gids = network.sample_cells_for_plotting()
-    sample_per_pop = int(len(sampled_gids) / 2)
+    sample_per_pop = network.plot_ncells
+
     fig = plt.figure()
     fig.suptitle('inferred spike rates')
     for i, gid in enumerate(sampled_gids):
@@ -730,6 +730,7 @@ def plot_inferred_rates(inferred_firing_rates, spike_times_dict, t, network):
             color = 'blue'
         ax.plot(t, smoothed, color=color)
     plt.show()  # clear stack
+
 
 def padded_baks(spike_times, t, alpha, beta, pad_dur=500.):
     """
@@ -812,7 +813,6 @@ def untruncated_filter_band(E, I, FF, window_len, band, padlen=250, dt=1.):
     plt.show()"""
 
 
-
 def peak_from_spectrogram(freq, title='not specified', dt=1., plot=False):
     """return the most dense frequency in a certain band (gamma, theta) based on the spectrogram"""
     freq, density = scipy.signal.periodogram(freq, 1000. / dt)
@@ -850,6 +850,7 @@ def prune_voltages(v_dict, dt, throwaway):
     for key, val in v_dict.iteritems():
         prune_dict[key] = val[toss:]
     return prune_dict
+
 
 def get_binned_spike_train(spikes, t):
     """

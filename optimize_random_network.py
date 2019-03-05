@@ -77,7 +77,8 @@ def init_context():
     delay = 1.  # ms
     throwaway = 250  # ms
     tstop = 3000 + throwaway  # ms
-    dt = 0.025  # ms
+    dt = 0.025
+    plot_ncells = 5  # ms
     binned_dt = 1.  # ms
     filter_dt = 1.  # ms
     active_rate_threshold = 1.  # Hz
@@ -212,10 +213,10 @@ def compute_features(x, export=False):
                               ff2e_weight=context.ff2e_weight, e2e_weight=context.e2e_weight,
                               e2i_weight=context.e2i_weight, i2i_weight=context.i2i_weight,
                               i2e_weight=context.i2e_weight, ff_meanfreq=context.ff_meanfreq,
-                               ff_frac_active=context.ff_frac_active, ff2i_prob=context.ff2i_prob,
+                              ff_frac_active=context.ff_frac_active, ff2i_prob=context.ff2i_prob,
                               ff2e_prob=context.ff2e_prob, std_dict=context.weight_std_factors, tau_E=context.tau_E,
                               tau_I=context.tau_I, connection_seed=context.connection_seed,
-                              spikes_seed=context.spikes_seed)
+                              spikes_seed=context.spikes_seed, plot_ncells=context.plot_ncells)
     if context.disp and int(context.pc.id()) == 0:
         print('NETWORK BUILD RUNTIME: %.2f s' % (time.time() - start_time))
     current_time = time.time()
