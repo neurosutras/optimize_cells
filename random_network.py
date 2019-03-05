@@ -266,7 +266,7 @@ class Network(object):
             count += 1
         if count != 0:
             mean = mean / float(count)
-            max_firing = max_firing / float(ncell - uncounted)
+            max_firing = max_firing / float(count)
 
         return mean, max_firing
 
