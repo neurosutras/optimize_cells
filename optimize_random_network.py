@@ -155,7 +155,7 @@ def analyze_network_output(network, export=False, plot=False):
         frac_active, mean_firing_active = network.get_active_pop_stats(inferred_firing_rates, binned_t,
                                                                        threshold=context.active_rate_threshold,
                                                                        plot=plot)
-        network.summation(spikes_dict, binned_t)
+        network.spike_summation(spikes_dict, binned_t)
 
         if plot:
             plot_inferred_rates(inferred_firing_rates, spikes_dict, binned_t, network)
@@ -172,14 +172,10 @@ def analyze_network_output(network, export=False, plot=False):
         pop_rates = [FF_pop_rate, I_pop_rate, E_pop_rate]
         ratios, bands = network.get_envelope_ratio(pop_rates, binned_t, context.filter_dt, plot=plot)
 
-        theta_E = bands['theta_E'];
-        gamma_E = bands['gamma_E']
-        theta_I = bands['theta_I'];
-        gamma_I = bands['gamma_I']
-        theta_E_ratio = ratios['theta_E'];
-        gamma_E_ratio = ratios['gamma_E']
-        theta_I_ratio = ratios['theta_I'];
-        gamma_I_ratio = ratios['gamma_I']
+        theta_E = bands['theta_E']; gamma_E = bands['gamma_E']
+        theta_I = bands['theta_I']; gamma_I = bands['gamma_I']
+        theta_E_ratio = ratios['theta_E']; gamma_E_ratio = ratios['gamma_E']
+        theta_I_ratio = ratios['theta_I']; gamma_I_ratio = ratios['gamma_I']
 
         peak_theta_freq_E = peak_from_spectrogram(theta_E, 'theta E', context.filter_dt, plot)
         peak_theta_freq_I = peak_from_spectrogram(theta_I, 'theta I', context.filter_dt, plot)

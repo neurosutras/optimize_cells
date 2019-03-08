@@ -116,17 +116,10 @@ class Network(object):
             nc = cell.connect2target(None)
             self.pc.cell(i, nc)
 
-    def get_cell_type(self, gid):
-        if gid in range(self.cell_index['FF'][1]):
-            return None
-        elif gid in range(self.cell_index['I'][0], self.cell_index['I'][1]):
-            return 'FS'
-        else:
-            return 'RS'
-
     def get_weight(self, connection):
         """
-        want to reduce std if std is problematic, i.e, makes it possible to sample a negative weight
+        want to reduce std if std is problematic, i.e, makes it possible to sample a negative weight.
+        for use in connectcells()
         :param connection: str
         """
         mu = self.weight_dict[connection]
@@ -172,6 +165,12 @@ class Network(object):
                         nc.weight[0] = weight
                         self.ncdict[(presyn_gid, target_gid)] = nc
 
+    def run(self):
+        self.pc.set_maxstep(10)
+        h.stdinit()
+        h.dt = self.dt
+        self.pc.psolve(self.tstop)
+
     # Instrumentation - stimulation and recordi
     def spike_record(self):
         self.spike_tvec = {}
@@ -209,7 +208,17 @@ class Network(object):
     def get_voltage_rec_dict(self):
         return self.convert_hoc_vec_dict(self.voltage_recvec)
 
-    def summation(self, spikes_dict, t):
+    def get_cell_type(self, gid):
+        """None = FF; fast spiking = inhib, regular spiking = excitatory"""
+        if gid in range(self.cell_index['FF'][1]):
+            return None
+        elif gid in range(self.cell_index['I'][0], self.cell_index['I'][1]):
+            return 'FS'
+        else:
+            return 'RS'
+
+    # --Firing rate and spiking calculations
+    def spike_summation(self, spikes_dict, t):
         """
         sums up spikes per population
         :param spikes_dict: dict s.t. key = gid, val = array of spike times
@@ -228,12 +237,6 @@ class Network(object):
                     self.I_sum = np.add(self.I_sum, binned_spikes)
                 else:
                     self.FF_sum = np.add(self.FF_sum, binned_spikes)
-
-    def run(self):
-        self.pc.set_maxstep(10)
-        h.stdinit()
-        h.dt = self.dt
-        self.pc.psolve(self.tstop)
 
     def compute_mean_max_firing_per_cell(self, smoothed_firing_rates):
         """
@@ -256,8 +259,8 @@ class Network(object):
         :param rate_dict: dict, key = gid, val = scalar
         :param peak_dict: dict, key = gid, val = scalar
         """
-        count = 0;
-        mean = 0;
+        count = 0
+        mean = 0
         max_firing = 0
         for i in range(bounds[0], bounds[1]):
             if i not in rate_dict: continue
@@ -270,6 +273,172 @@ class Network(object):
 
         return mean, max_firing
 
+    def get_active_pop_stats(self, firing_rates_dict, t, threshold=1., plot=False):
+        """
+        get mean firing for active populations over simulation. plot if needed.
+        :param threshold: Hz, firing rate threshold above which a cell is considered "active"
+        """
+        frac_active = {}
+        mean_firing_active = {}
+
+        for population in self.cell_index:
+            frac_active[population], mean_firing_active[population] = \
+                self.compute_active_pop_stats(firing_rates_dict, t, threshold, self.cell_index[population])
+
+        if plot:
+            for population in self.cell_index:
+                fig, axes = plt.subplots(1, 2)
+                axes[0].plot(t, frac_active[population])
+                axes[0].set_title('Fraction active cells')
+                axes[1].plot(t, mean_firing_active[population])
+                axes[1].set_title('Mean firing rate of active cells')
+                fig.suptitle('Population: %s' % population)
+                plt.show()
+        return frac_active, mean_firing_active
+
+    def compute_active_pop_stats(self, firing_rates_dict, t, threshold, bounds):
+        """
+        compute frac active and mean firing for active cells
+        :param threshold: Hz, firing rate threshold above which a cell is considered "active"
+        :param bounds: gid range for population
+        :return: two arrays of size t. each element of frac_active = fraction of cells active at time bin,
+        each element of mean_firing_active = firing rate (Hz) of active cells only in each time bin
+        """
+        frac_active = np.zeros_like(t)
+        mean_firing_active = np.zeros_like(frac_active)
+        for j in range(bounds[0], bounds[1]):
+            active_indexes = np.where(firing_rates_dict[j] >= threshold)[0]
+            if np.any(active_indexes):
+                frac_active[active_indexes] += 1.
+                mean_firing_active[active_indexes] += firing_rates_dict[j][active_indexes]
+
+        active_indexes = np.where(frac_active > 0)[0]
+        if np.any(active_indexes):
+            mean_firing_active[active_indexes] = np.divide(mean_firing_active[active_indexes],
+                                                           frac_active[active_indexes])
+
+        frac_active = np.divide(frac_active, float(bounds[1] - bounds[0]))
+        return frac_active, mean_firing_active
+
+    def compute_pop_firing(self, firing_rates_dict, bounds):
+        """
+        from individual cell firing rates, compute population firing rate
+        :param firing_rates_dict: dict; key = gid, val = array of firing rates
+        :param bounds: range of gids for population
+        """
+        pop_rate = [0] * self.tstop
+        for i in range(bounds[0], bounds[1]):
+            if len(firing_rates_dict[i]) == 0: continue
+            for j in range(self.tstop):
+                if firing_rates_dict[i][j] > 1.: pop_rate[j] += firing_rates_dict[i][j]
+        return pop_rate
+
+    def count_to_rate_basic(self, spike_sums, ncell, dt=1.):
+        """converts spike count (summed over population) to average instaneous firing rate for one cell per timestep."""
+        factor = dt / 1000.
+        rate = np.divide(np.divide(spike_sums, float(ncell)), factor)
+        return rate
+
+    # --Theta/gamma stuff
+    """def get_bands_of_interest(self, t, filter_dt, plot=False):
+        # gauss_E = gauss(self.E_sum, binned_dt)
+        #  gauss_I = gauss(self.I_sum, binned_dt)
+        #  gauss_FF = gauss(self.FF_sum, binned_dt)
+        # gauss_E, _ = baks(self.E_sum, t, self.baks_alpha, self.baks_beta)
+        # gauss_I, _ = baks(self.I_sum, t, self.baks_alpha, self.baks_beta)
+        # gauss_FF, _ = baks(self.FF_sum, t, self.baks_alpha, self.baks_beta)
+
+        window_len = int(2000. / filter_dt)
+        theta_band = [5., 10.]
+        #theta_E, theta_I, theta_FF = filter_band(gauss_E, gauss_I, gauss_FF, window_len, theta_band)
+        theta_E, theta_I, theta_FF = filter_band(self.E_sum, self.I_sum, self.FF_sum, window_len, theta_band, filter_dt)
+        window_len = int(200. / filter_dt)
+        gamma_band = [30., 100.]
+        #gamma_E, gamma_I, gamma_FF = filter_band(gauss_E, gauss_I, gauss_FF, window_len, gamma_band)
+        gamma_E, gamma_I, gamma_FF = filter_band(self.E_sum, self.I_sum, self.FF_sum, window_len, gamma_band, filter_dt)
+
+        if plot:
+            # self.plot_smoothing(gauss_E)
+            # self.plot_bands(theta_E, gamma_E, gauss_E, theta_FF, gamma_FF, gauss_FF)
+            self.plot_bands(t, theta_E, gamma_E, self.E_sum, theta_FF, gamma_FF, self.FF_sum)
+
+        return theta_E, theta_I, gamma_E, gamma_I"""
+
+    def calculate_envelope_ratio(self, pop_rate, band, pad_len):
+        """mean of the hilbert transform over the mean of the firing rate"""
+        hilb_transform = np.abs(scipy.signal.hilbert(band))[pad_len:][:-pad_len]
+        mean_envelope = np.mean(hilb_transform)
+        mean_rate = np.mean(pop_rate)
+        if mean_rate > 0:
+            ratio = mean_envelope / mean_rate
+        else:
+            ratio = 0.
+        return ratio, hilb_transform
+
+    def get_bands_of_interest(self, filter_dt, basic_rate_E, basic_rate_I, basic_rate_FF, t, plot=False):
+        """
+        pad length = window length to get rid of edge effects
+        :param: filter_dict: float, ms
+        :param: basic_rate_E: array, instantaneous firing rate for E population (divided by number of E cells)
+        :param: basic_rate_I: array
+        :param: basic_rate_E: array
+        :param: t, array
+        :param: plot
+        """
+        pad_len_theta = window_len = int(2000. / filter_dt)
+        theta_band = [5., 10.]
+        theta_E, theta_I, theta_FF = untruncated_filter_band(basic_rate_E, basic_rate_I, basic_rate_FF,
+                                                             window_len, theta_band, pad_len_theta, filter_dt)
+
+        pad_len_gamma = window_len = int(200. / filter_dt)
+        gamma_band = [30., 100.]
+        gamma_E, gamma_I, gamma_FF = untruncated_filter_band(basic_rate_E, basic_rate_I, basic_rate_FF,
+                                                             window_len, gamma_band, pad_len_gamma, filter_dt)
+        if plot:
+            self.plot_bands(t, theta_E[pad_len_theta:][:len(t)], gamma_E[pad_len_gamma:][:len(t)],
+                            basic_rate_E, theta_FF[pad_len_theta:][:len(t)],
+                            gamma_FF[pad_len_gamma:][:len(t)], basic_rate_FF)
+
+        return theta_E, theta_I, gamma_E, gamma_I, pad_len_theta, pad_len_gamma
+
+    def get_envelope_ratio(self, pop_rates, t, filter_dt, plot=False):
+        """
+        gets the fluctation in population firing rate based on theta/gamma
+        :param pop_rates: list of arrays in the order: FF pop rate, I pop rate, E pop rate
+        :param t: array
+        :param filter_dt: float, ms
+        :param plot:
+        :return: ratios = a dict; truncated_bands; both keyed by strings like 'theta_I', 'gamma_E', etc
+        """
+        basic_rate_E = self.count_to_rate_basic(self.E_sum, self.E_ncell)
+        basic_rate_I = self.count_to_rate_basic(self.I_sum, self.I_ncell)
+        basic_rate_FF = self.count_to_rate_basic(self.FF_sum, self.FF_ncell)
+
+        theta_E, theta_I, gamma_E, gamma_I, pad_len_theta, pad_len_gamma = self.get_bands_of_interest(filter_dt,
+                                                    basic_rate_E, basic_rate_I, basic_rate_FF, t, plot)
+
+        ratios = {}
+        bands = {'theta_I': theta_I, 'gamma_I': gamma_I, 'theta_E': theta_E, 'gamma_E': gamma_E}
+        truncated_bands = {}
+        for label, band in bands.iteritems():
+            if label[-1] == 'I':
+                pop_rate = pop_rates[1]
+            else:
+                pop_rate = pop_rates[2]
+            if label.find('theta') != -1:
+                pad_len = pad_len_theta
+            else:
+                pad_len = pad_len_gamma
+            ratio, hilb_transform = self.calculate_envelope_ratio(pop_rate, band, pad_len)
+            ratios[label] = ratio
+            truncated_bands[label] = band[pad_len:][:len(t)]
+
+            if plot:
+                self.plot_envelope_ratio(t, hilb_transform, pop_rate, label, ratio)
+
+        return ratios, truncated_bands
+
+    # --Plotting
     def sample_cells_for_plotting(self):
         """
         for plot_voltage_trace. sample a number of cells from the E and I populations to be plotted
@@ -302,6 +471,27 @@ class Network(object):
             fig.show()
         plt.show()
 
+    def plot_adj_matrix(self, connections):
+        """
+        plots connections in a matrix map. color represents weight of connection
+        :param connections: dict, key = (pre, post), val = weight
+        """
+        if self.total_cells > 100: return
+        #source = row; target = col
+        matrixmap = np.zeros((self.total_cells, self.total_cells))
+        for pair, weight in connections.iteritems():
+            source, target = pair
+            matrixmap[source][target] = weight
+        ax = sns.heatmap(matrixmap)
+        ax.hlines([self.FF_ncell, self.FF_ncell + self.I_ncell], color='white', *ax.get_xlim())
+        ax.vlines([self.FF_ncell, self.FF_ncell + self.I_ncell], color='white', *ax.get_ylim())
+        plt.show()
+
+        FF_matrixmap = matrixmap[:self.FF_ncell]
+        ax = sns.heatmap(FF_matrixmap)
+        ax.vlines([self.FF_ncell, self.FF_ncell + self.I_ncell], color='white', *ax.get_ylim())
+        plt.show()
+
     def plot_population_firing_rates(self, firing_rates, t):
         """
         relies on the fact that populations have continuous gids. go through all the gids, and when
@@ -328,8 +518,8 @@ class Network(object):
                 counter += 1
                 if key < len(ncell): hm = np.zeros((ncell[counter], len(t)))
 
-    def plot_smoothing(self, gauss_E):
-        self.plot_two_traces(gauss_E, self.E_sum, 'smoothed spike rate vs. population spiking - E')
+    #def plot_smoothing(self, gauss_E):
+    #    self.plot_two_traces(gauss_E, self.E_sum, 'smoothed spike rate vs. population spiking - E')
 
     def plot_two_traces(self, one, two, title):
         plt.plot(range(len(one)), one)
@@ -337,9 +527,22 @@ class Network(object):
         plt.title(title)
         plt.show()
 
+    def plot_envelope_ratio(self, t, hilb_transform, pop_rate, label, ratio):
+        plt.plot(t, hilb_transform, label='hilbert transform')
+        plt.plot(t, pop_rate, label='pop firing rate')
+        plt.axhline(y=np.mean(hilb_transform), color='red')
+        plt.axhline(y=np.mean(pop_rate), color='red')
+        plt.legend(loc=1)
+        if label is None:
+            label = 'ratio: %.3E' % ratio
+        else:
+            label += ' ratio: %.3E' % ratio
+        plt.title(label)
+        plt.show()
+
     def plot_bands(self, t, theta_E, gamma_E, input_E, theta_FF, gamma_FF, input_FF):
         """
-        plots filtered bands vs. their input
+        plots filtered bands vs. their input (FF and E)
         :param t: array
         :param theta_E: array
         :param gamma_E: array
@@ -372,181 +575,22 @@ class Network(object):
         plt.title('gamma FF')
         plt.show()
 
-    """def get_bands_of_interest(self, t, filter_dt, plot=False):
-        # gauss_E = gauss(self.E_sum, binned_dt)
-        #  gauss_I = gauss(self.I_sum, binned_dt)
-        #  gauss_FF = gauss(self.FF_sum, binned_dt)
-        # gauss_E, _ = baks(self.E_sum, t, self.baks_alpha, self.baks_beta)
-        # gauss_I, _ = baks(self.I_sum, t, self.baks_alpha, self.baks_beta)
-        # gauss_FF, _ = baks(self.FF_sum, t, self.baks_alpha, self.baks_beta)
-
-        window_len = int(2000. / filter_dt)
-        theta_band = [5., 10.]
-        #theta_E, theta_I, theta_FF = filter_band(gauss_E, gauss_I, gauss_FF, window_len, theta_band)
-        theta_E, theta_I, theta_FF = filter_band(self.E_sum, self.I_sum, self.FF_sum, window_len, theta_band, filter_dt)
-        window_len = int(200. / filter_dt)
-        gamma_band = [30., 100.]
-        #gamma_E, gamma_I, gamma_FF = filter_band(gauss_E, gauss_I, gauss_FF, window_len, gamma_band)
-        gamma_E, gamma_I, gamma_FF = filter_band(self.E_sum, self.I_sum, self.FF_sum, window_len, gamma_band, filter_dt)
-
-        if plot:
-            # self.plot_smoothing(gauss_E)
-            # self.plot_bands(theta_E, gamma_E, gauss_E, theta_FF, gamma_FF, gauss_FF)
-            self.plot_bands(t, theta_E, gamma_E, self.E_sum, theta_FF, gamma_FF, self.FF_sum)
-
-        return theta_E, theta_I, gamma_E, gamma_I"""
-
-    def get_active_pop_stats(self, firing_rates_dict, t, threshold=1., plot=False):
+    # --Checks and print-outs
+    def check_cell_type_correct(self):
         """
-        get mean firing for active populations over simulation. plot if needed.
-        :param threshold: Hz, firing rate threshold above which a cell is considered "active"
+        goes over each cell and checks whether or not the cell is the cell type it is supposed to be
+        (e.g., cells with gids in a certain range must be FF cells/Hoc object)
         """
-        frac_active = {}
-        mean_firing_active = {}
-
-        for population in self.cell_index:
-            frac_active[population], mean_firing_active[population] = \
-                self.compute_active_pop_stats(firing_rates_dict, t, threshold, self.cell_index[population])
-
-        if plot:
-            for population in self.cell_index:
-                fig, axes = plt.subplots(1, 2)
-                axes[0].plot(t, frac_active[population])
-                axes[0].set_title('Fraction active cells')
-                axes[1].plot(t, mean_firing_active[population])
-                axes[1].set_title('Mean firing rate of active cells')
-                fig.suptitle('Population: %s' % population)
-                plt.show()
-        return frac_active, mean_firing_active
-
-    def compute_active_pop_stats(self, firing_rates_dict, t, threshold, bounds):
-        """
-        compute frac active and mean firing for active cells
-        :param threshold: Hz, firing rate threshold above which a cell is considered "active"
-        :param bounds: gid range for population
-        """
-        frac_active = np.zeros_like(t)
-        mean_firing_active = np.zeros_like(frac_active)
-        for j in range(bounds[0], bounds[1]):
-            active_indexes = np.where(firing_rates_dict[j] >= threshold)[0]
-            if np.any(active_indexes):
-                frac_active[active_indexes] += 1.
-                mean_firing_active[active_indexes] += firing_rates_dict[j][active_indexes]
-
-        active_indexes = np.where(frac_active > 0)[0]
-        if np.any(active_indexes):
-            mean_firing_active[active_indexes] = np.divide(mean_firing_active[active_indexes],
-                                                           frac_active[active_indexes])
-
-        frac_active = np.divide(frac_active, float(bounds[1] - bounds[0]))
-        return frac_active, mean_firing_active
-
-    def compute_pop_firing(self, firing_rates_dict, bounds):
-        """
-        from individual cell firing rates, compute population firing rate
-        :param firing_rates_dict: dict; key = gid, val = array of firing rates
-        :param bounds: range of gids for population
-        """
-        pop_rate = [0] * self.tstop
-        for i in range(bounds[0], bounds[1]):
-            if len(firing_rates_dict[i]) == 0: continue
-            for j in range(self.tstop):
-                if firing_rates_dict[i][j] > 1.: pop_rate[j] += firing_rates_dict[i][j]
-        return pop_rate
-
-    """def compute_envelope_ratio(self, band, pop_rate, t, label=None, plot=False):
-        hilb_transform = np.abs(signal.hilbert(band))
-        mean_envelope = np.mean(hilb_transform)
-        mean_rate = np.mean(pop_rate)
-        if mean_rate > 0.:
-            ratio = mean_envelope / mean_rate
-            if plot:
-                plt.plot(t, hilb_transform, label='hilbert transform')
-                plt.plot(t, pop_rate, label='pop firing rate')
-                plt.axhline(y=np.mean(hilb_transform), color='red')
-                plt.axhline(y=np.mean(pop_rate), color='red')
-                plt.legend(loc=1)
-                if label is None:
-                    label = 'ratio: %.3E' % ratio
-                else:
-                    label += ' ratio: %.3E' % ratio
-                plt.title(label)
-                plt.show()
-        else:
-            ratio = 0.
-        return ratio"""
-
-    def plot_envelope_ratio(self, t, hilb_transform, pop_rate, label, ratio):
-        plt.plot(t, hilb_transform, label='hilbert transform')
-        plt.plot(t, pop_rate, label='pop firing rate')
-        plt.axhline(y=np.mean(hilb_transform), color='red')
-        plt.axhline(y=np.mean(pop_rate), color='red')
-        plt.legend(loc=1)
-        if label is None:
-            label = 'ratio: %.3E' % ratio
-        else:
-            label += ' ratio: %.3E' % ratio
-        plt.title(label)
-        plt.show()
-
-    def calculate_envelope_ratio(self, pop_rate, band, pad_len):
-        hilb_transform = np.abs(scipy.signal.hilbert(band))[pad_len:][:-pad_len]
-        mean_envelope = np.mean(hilb_transform)
-        mean_rate = np.mean(pop_rate)
-        if mean_rate > 0:
-            ratio = mean_envelope / mean_rate
-        else:
-            ratio = 0.
-        return ratio, hilb_transform
-
-    def get_bands_of_interest(self, filter_dt, basic_rate_E, basic_rate_I, basic_rate_FF, t, plot=False):
-        pad_len_theta = window_len = int(2000. / filter_dt)
-        theta_band = [5., 10.]
-        theta_E, theta_I, theta_FF = untruncated_filter_band(basic_rate_E, basic_rate_I, basic_rate_FF,
-                                                             window_len, theta_band, pad_len_theta, filter_dt)
-
-        pad_len_gamma = window_len = int(200. / filter_dt)
-        gamma_band = [30., 100.]
-        gamma_E, gamma_I, gamma_FF = untruncated_filter_band(basic_rate_E, basic_rate_I, basic_rate_FF,
-                                                             window_len, gamma_band, pad_len_gamma, filter_dt)
-        if plot:
-            self.plot_bands(t, theta_E[pad_len_theta:][:len(t)], gamma_E[pad_len_gamma:][:len(t)],
-                            basic_rate_E, theta_FF[pad_len_theta:][:len(t)],
-                            gamma_FF[pad_len_gamma:][:len(t)], basic_rate_FF)
-
-        return theta_E, theta_I, gamma_E, gamma_I, pad_len_theta, pad_len_gamma
-
-    def get_envelope_ratio(self, pop_rates, t, filter_dt, label=None, plot=False):
-        basic_rate_E = self.count_to_rate_basic(self.E_sum, self.E_ncell)
-        basic_rate_I = self.count_to_rate_basic(self.I_sum, self.I_ncell)
-        basic_rate_FF = self.count_to_rate_basic(self.FF_sum, self.FF_ncell)
-
-        theta_E, theta_I, gamma_E, gamma_I, pad_len_theta, pad_len_gamma = self.get_bands_of_interest(filter_dt,
-                                                                                                      basic_rate_E,
-                                                                                                      basic_rate_I,
-                                                                                                      basic_rate_FF, t,
-                                                                                                      plot)
-
-        ratios = {}
-        bands = {'theta_I': theta_I, 'gamma_I': gamma_I, 'theta_E': theta_E, 'gamma_E': gamma_E}
-        truncated_bands = {}
-        for label, band in bands.iteritems():
-            if label[-1] == 'I':
-                pop_rate = pop_rates[1]
-            else:
-                pop_rate = pop_rates[2]
-            if label.find('theta') != -1:
-                pad_len = pad_len_theta
-            else:
-                pad_len = pad_len_gamma
-            ratio, hilb_transform = self.calculate_envelope_ratio(pop_rate, band, pad_len)
-            ratios[label] = ratio
-            truncated_bands[label] = band[pad_len:][:len(t)]
-
-            if plot:
-                self.plot_envelope_ratio(t, hilb_transform, pop_rate, label, ratio)
-
-        return ratios, truncated_bands
+        for cell in self.gids:
+            cell_type = self.get_cell_type(cell)
+            if cell_type is None and isinstance(self.pc.gid2cell(cell), IzhiCell):
+                print cell, " is not a FF cell but a ", type(self.pc.gid2cell(cell))
+            elif cell_type in ['FS', 'RS'] and not isinstance(self.pc.gid2cell(cell), IzhiCell):
+                print cell, " is not a Izhi cell but a ", type(self.pc.gid2cell(cell))
+            elif cell_type is 'FS' and self.pc.gid2cell(cell).izh.a != .02:
+                print cell, " is not a inhibitory Izhi cell but an excitatory one"
+            elif cell_type is 'RS' and self.pc.gid2cell(cell).izh.a != .1:
+                print cell, " is not an excitatory Izhi cell but an inhibitory one"
 
     def convert_ncdict_to_weights(self):
         """
@@ -575,54 +619,10 @@ class Network(object):
         print "connections and weights: \n", connections
         print "connections by presynaptic cell: \n", connections_per_cell
 
-    def plot_adj_matrix(self, connections):
-        """
-        plots connections in a matrix map. color represents weight of connection
-        :param connections: dict, key = (pre, post), val = weight
-        """
-        if self.total_cells > 100: return
-        #source = row; target = col
-        matrixmap = np.zeros((self.total_cells, self.total_cells))
-        for pair, weight in connections.iteritems():
-            source, target = pair
-            matrixmap[source][target] = weight
-        ax = sns.heatmap(matrixmap)
-        ax.hlines([self.FF_ncell, self.FF_ncell + self.I_ncell], color='white', *ax.get_xlim())
-        ax.vlines([self.FF_ncell, self.FF_ncell + self.I_ncell], color='white', *ax.get_ylim())
-        plt.show()
-
-        FF_matrixmap = matrixmap[:self.FF_ncell]
-        ax = sns.heatmap(FF_matrixmap)
-        ax.vlines([self.FF_ncell, self.FF_ncell + self.I_ncell], color='white', *ax.get_ylim())
-        plt.show()
-
-    def count_to_rate_basic(self, spike_sums, ncell, dt=1.):
-        """converts spike count (summed over population) to average instaneous firing rate for one cell per timestep."""
-        factor = dt / 1000.
-        rate = np.divide(np.divide(spike_sums, float(ncell)), factor)
-        return rate
-
-    def check_cell_type_correct(self):
-        """
-        goes over each cell and checks whether or not the cell is the cell type it is supposed to be
-        (e.g., cells with gids in a certain range must be FF cells/Hoc object)
-        """
-        for cell in self.gids:
-            cell_type = self.get_cell_type(cell)
-            if cell_type is None and isinstance(self.pc.gid2cell(cell), IzhiCell):
-                print cell, " is not a FF cell but a ", type(self.pc.gid2cell(cell))
-            elif cell_type in ['FS', 'RS'] and not isinstance(self.pc.gid2cell(cell), IzhiCell):
-                print cell, " is not a Izhi cell but a ", type(self.pc.gid2cell(cell))
-            elif cell_type is 'FS' and self.pc.gid2cell(cell).izh.a != .02:
-                print cell, " is not a inhibitory Izhi cell but an excitatory one"
-            elif cell_type is 'RS' and self.pc.gid2cell(cell).izh.a != .1:
-                print cell, " is not an excitatory Izhi cell but an inhibitory one"
-
-
 
 class IzhiCell(object):
     # derived from modelDB
-    def __init__(self, tau_E, tau_I, type='RS'):  # RS = excit or FS = inhib
+    def __init__(self, tau_E, tau_I, type='RS'):
         self.type = type
         self.sec = h.Section(cell=self)
         self.sec.L, self.sec.diam, self.sec.cm = 10, 10, 31.831
@@ -631,6 +631,7 @@ class IzhiCell(object):
         self.sec(0.5).v = self.vinit
         self.sec.insert('pas')
 
+        # RS = excit or FS = inhib
         if type == 'RS': self.izh.a = .1
         if type == 'FS': self.izh.a = .02
 
@@ -638,10 +639,10 @@ class IzhiCell(object):
 
     def __del__(self):
         pass
-    # from Ball_Stick
+
     def synapses(self, tau_E, tau_I):
         synlist = []
-        s = h.ExpSyn(self.sec(0.8))  # E
+        s = h.ExpSyn(self.sec(0.8))  # E0
         s.tau = tau_E
         synlist.append(s)
         s = h.ExpSyn(self.sec(0.1))  # I1
@@ -650,7 +651,7 @@ class IzhiCell(object):
         synlist.append(s)
 
         self.synlist = synlist
-    # also from Ball Stick
+
     def connect2target(self, target):
         nc = h.NetCon(self.sec(1)._ref_v, target, sec=self.sec)
         nc.threshold = 10
@@ -662,14 +663,25 @@ class IzhiCell(object):
 
 class FFCell(object):
     def __init__(self, tstop, mean_freq, frac_active, network, gid, local_random=None):
+        """
+        probabilistically, the fraction active of the FF population should roughly match frac_active
+        generate random number [0,1]. if less than frac_active, generate spike train for cell.
+        else, cell is completely silent
+
+        :param tstop: simulation runtime(ms)
+        :param mean_freq: Hz
+        :param frac_active: float, 0 to 1
+        :param network: Network object, to pass in FF spike times
+        :param gid: int, assigned by the network
+        :param local_random: Random object
+        """
         if local_random is None:
             local_random = random.Random()
         self.pp = h.VecStim()
-        #tstop in ms and mean_rate in Hz
-        spikes = get_inhom_poisson_spike_times_by_thinning([mean_freq, mean_freq], [0, tstop], dt=0.025,
-                                                           generator=local_random)
-        vec = h.Vector(spikes)
         if local_random.random() <= frac_active:
+            spikes = get_inhom_poisson_spike_times_by_thinning([mean_freq, mean_freq], [0, tstop], dt=0.025,
+                                                               generator=local_random)
+            vec = h.Vector(spikes)
             self.pp.play(vec)
             network.FF_spikes_dict[gid] = np.array(spikes)
         else:
@@ -688,8 +700,8 @@ def infer_firing_rates(spike_times_dict, t, alpha, beta, pad_dur, plot=False):
 
     :param spike_times_dict: dict of array
     :param t: array
-    :param baks_alpha: float
-    :param baks_beta: float
+    :param alpha: float
+    :param beta: float
     :param pad_dur: float
     :param plot: bool
     :return: dict of array
@@ -738,8 +750,8 @@ def padded_baks(spike_times, t, alpha, beta, pad_dur=500.):
     filtering, then returns the properly truncated estimated firing rate.
     :param spike_times: array
     :param t: array
-    :param baks_alpha: float
-    :param baks_beta: float
+    :param alpha: float
+    :param beta: float
     :param pad_dur: float (ms)
     :return: array
     """
@@ -761,8 +773,7 @@ def padded_baks(spike_times, t, alpha, beta, pad_dur=500.):
     return padded_rate[pad_len:-pad_len]
 
 
-def gauss(spikes, dt, filter_duration=100.):
-    """gaussian convolving to transform spike counts to firing rate.. mirror padding. """
+"""def gauss(spikes, dt, filter_duration=100.):
     pad_len = min(2 * int(filter_duration/dt), len(spikes))
     filter_duration = filter_duration  # ms
     filter_t = np.arange(-filter_duration, filter_duration, dt)
@@ -775,22 +786,13 @@ def gauss(spikes, dt, filter_duration=100.):
     modified_spikes = np.append(np.append(mirror_beginning, spikes), mirror_end)
 
     signal = np.convolve(modified_spikes, gaussian_filter)
-    signal_t = np.arange(0., len(signal) * dt, dt)
     signal = signal[int(filter_duration / dt) + pad_len:][:len(spikes)]
-    return signal
-
-
-def mirror_signal(signal, pad_len):
-    """np.fliplr hates python 2.7"""
-    mirror_beginning = signal[:pad_len][::-1]
-    mirror_end = signal[-pad_len:][::-1]
-    modified_signal = np.append(np.append(mirror_beginning, signal), mirror_end)
-
-    return modified_signal
+    return signal"""
 
 
 def untruncated_filter_band(E, I, FF, window_len, band, padlen=250, dt=1.):
-    """from input, filter for certain frequencies"""
+    """from input, filter for certain frequencies. untruncated because we run a hilbert transform on the bands
+    and we want to reduce edge effects"""
     E_mir = mirror_signal(E, padlen)
     I_mir = mirror_signal(I, padlen)
     FF_mir = mirror_signal(FF, padlen)
@@ -864,7 +866,15 @@ def get_binned_spike_train(spikes, t):
     return binned_spikes
 
 
-"""from dentate > stgen.py. temporary. personal issues with importing dentate -S"""
+def mirror_signal(signal, pad_len):
+    """np.fliplr hates python 2.7"""
+    mirror_beginning = signal[:pad_len][::-1]
+    mirror_end = signal[-pad_len:][::-1]
+    modified_signal = np.append(np.append(mirror_beginning, signal), mirror_end)
+    return modified_signal
+
+
+# from dentate > stgen.py. temporary. personal issues with importing dentate -S
 def get_inhom_poisson_spike_times_by_thinning(rate, t, dt=0.02, refractory=3., generator=None):
     if generator is None:
         generator = random.Random()
