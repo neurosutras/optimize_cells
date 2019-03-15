@@ -3,7 +3,6 @@ from random_network import *
 import click
 import matplotlib.pyplot as plt
 import time
-import random
 
 
 context = Context()
@@ -19,7 +18,8 @@ context = Context()
 @click.option("--interactive", is_flag=True)
 @click.option("--verbose", type=int, default=2)
 @click.option("--plot", is_flag=True)
-def main(config_file_path, export, output_dir, export_file_path, label, interactive, verbose, plot):
+@click.option("--spatial", is_flag=True)
+def main(config_file_path, export, output_dir, export_file_path, label, interactive, verbose, plot, spatial):
     """
 
     :param config_file_path: str (path)
@@ -30,6 +30,7 @@ def main(config_file_path, export, output_dir, export_file_path, label, interact
     :param interactive: bool
     :param verbose: int
     :param plot: bool
+    :param spatial: bool
     """
     # requires a global variable context: :class:'Context'
 
@@ -42,7 +43,7 @@ def main(config_file_path, export, output_dir, export_file_path, label, interact
     context.interface.ensure_controller()
     context.interface.apply(config_optimize_interactive, __file__, config_file_path=config_file_path,
                             output_dir=output_dir, export=export, export_file_path=export_file_path, label=label,
-                            disp=verbose > 0, verbose=verbose, plot=plot)
+                            disp=verbose > 0, verbose=verbose, plot=plot, spatial=spatial)
     sys.stdout.flush()
     features = context.interface.execute(compute_features, context.x0_array, context.export)
     sys.stdout.flush()
@@ -67,36 +68,34 @@ def config_worker():
     """
     if 'plot' not in context():
         context.plot = False
+    if 'spatial' not in context():
+        context.spatial = False
     init_context()
     context.pc = h.ParallelContext()
 
 
 def init_context():
-    """
-    TODO: Define each population size separately here.
-    """
-    FF_ncell = 1200
-    E_ncell = 1200
-    I_ncell = 1200
+    FF_ncell = 120
+    E_ncell = 120
+    I_ncell = 120
+    delay = 1.  # ms
+    throwaway = 250  # ms
+    tstop = 3000 + throwaway  # ms
+    dt = 0.025
+    plot_ncells = 5  # ms
+    binned_dt = 1.  # ms
+    filter_dt = 1.  # ms
+    active_rate_threshold = 1.  # Hz
+    baks_alpha = 4.7725100028345535
+    baks_beta = 0.41969058927343522
+    pad_dur = 500.  # ms
 
     axon_width = {
         'FF': 0.1,
         'E': 0.2,
         'I': 0.1
     }
-    # synaptic_counts[postsynaptic][presynaptic]
-    # synaptic_counts = {
-    #     'E': {
-    #         'FF': 6,
-    #         'E': 6,
-    #         'I': 6
-    #     },
-    #     'I': {
-    #         'FF': 12,
-    #         'E': 12,
-    #         'I': 12
-    #     }
-    # }
+
     synaptic_counts = {
         'ff2i': 12,
         'ff2e': 12,
@@ -106,22 +105,11 @@ def init_context():
         'i2e': 6
     }
 
-
-    delay = 1.  # ms
-    tstop = 3000  # ms
-    dt = 0.025  # ms
-    binned_dt = 1.  # ms
-    filter_dt = 1.  # ms
-    active_rate_threshold = 1.  # Hz
-    baks_alpha = 3.714383
-    baks_beta = 5.327364E-01
-    pad_dur = 500.  # ms
-    throwaway = 250.  # ms
-
     locations = {}
-    for i in range(0, FF_ncell + E_ncell + I_ncell):
-        random.Random().seed(context.location_seed + i)
-        locations[i] = (random.Random().random() * 2 - 1, random.Random().random() * 2 - 1)
+    if context.spatial:
+        for i in range(0, FF_ncell + E_ncell + I_ncell):
+            random.Random().seed(context.location_seed + i)
+            locations[i] = (random.Random().random() * 2 - 1, random.Random().random() * 2 - 1)
 
     context.update(locals())
 
@@ -191,10 +179,12 @@ def analyze_network_output(network, export=False, plot=False):
 
     if context.comm.rank == 0:
         frac_active, mean_firing_active = network.get_active_pop_stats(inferred_firing_rates, binned_t,
-                                                                       threshold=context.active_rate_threshold, plot=plot)
-        network.py_summation(spikes_dict, binned_t)
+                                                                       threshold=context.active_rate_threshold,
+                                                                       plot=plot)
+        network.spike_summation(spikes_dict, binned_t)
 
         if plot:
+            plot_inferred_rates(inferred_firing_rates, spikes_dict, binned_t, network)
             network.plot_adj_matrix(connection_dict)
             network.plot_voltage_trace(voltage_rec_dict, spikes_dict, context.dt)
             network.plot_population_firing_rates(inferred_firing_rates, binned_t)
@@ -202,18 +192,21 @@ def analyze_network_output(network, export=False, plot=False):
         E_mean, E_max = network.compute_pop_firing_features(network.cell_index['E'], rate_dict, peak_dict)
         I_mean, I_max = network.compute_pop_firing_features(network.cell_index['I'], rate_dict, peak_dict)
 
-        theta_E, theta_I, gamma_E, gamma_I = network.get_bands_of_interest(binned_t, context.filter_dt, plot=plot)
+        I_pop_rate = mean_firing_active['I']
+        E_pop_rate = mean_firing_active['E']
+        FF_pop_rate = mean_firing_active['FF']
+        pop_rates = [FF_pop_rate, I_pop_rate, E_pop_rate]
+        ratios, bands = network.get_envelope_ratio(pop_rates, binned_t, context.filter_dt, plot=plot)
+
+        theta_E = bands['theta_E']; gamma_E = bands['gamma_E']
+        theta_I = bands['theta_I']; gamma_I = bands['gamma_I']
+        theta_E_ratio = ratios['theta_E']; gamma_E_ratio = ratios['gamma_E']
+        theta_I_ratio = ratios['theta_I']; gamma_I_ratio = ratios['gamma_I']
+
         peak_theta_freq_E = peak_from_spectrogram(theta_E, 'theta E', context.filter_dt, plot)
         peak_theta_freq_I = peak_from_spectrogram(theta_I, 'theta I', context.filter_dt, plot)
         peak_gamma_freq_E = peak_from_spectrogram(gamma_E, 'gamma E', context.filter_dt, plot)
         peak_gamma_freq_I = peak_from_spectrogram(gamma_I, 'gamma I', context.filter_dt, plot)
-
-        I_pop_rate = mean_firing_active['I']
-        E_pop_rate = mean_firing_active['E']
-        theta_E_ratio = network.compute_envelope_ratio(theta_E, E_pop_rate, binned_t, label='E theta', plot=plot)
-        theta_I_ratio = network.compute_envelope_ratio(theta_I, I_pop_rate, binned_t, label='I theta', plot=plot)
-        gamma_E_ratio = network.compute_envelope_ratio(gamma_E, E_pop_rate, binned_t, label='E gamma', plot=plot)
-        gamma_I_ratio = network.compute_envelope_ratio(gamma_I, I_pop_rate, binned_t, label='I gamma', plot=plot)
 
         context.update(locals())
 
@@ -237,20 +230,21 @@ def compute_features(x, export=False):
     context.pc.gid_clear()
     start_time = time.time()
     context.network = Network(context.FF_ncell, context.E_ncell, context.I_ncell, context.delay, context.pc,
-                              tstop=context.tstop, axon_width=context.axon_width, synaptic_counts=context.synaptic_counts,
-                              locations=context.locations, dt=context.dt, e2e_prob=context.e2e_prob, e2i_prob=context.e2i_prob,
+                              tstop=context.tstop, spatial=context.spatial, axon_width=context.axon_width,
+                              synaptic_counts=context.synaptic_counts, locations=context.locations, dt=context.dt,
+                              e2e_prob=context.e2e_prob, e2i_prob=context.e2i_prob,
                               i2i_prob=context.i2i_prob, i2e_prob=context.i2e_prob, ff2i_weight=context.ff2i_weight,
                               ff2e_weight=context.ff2e_weight, e2e_weight=context.e2e_weight,
                               e2i_weight=context.e2i_weight, i2i_weight=context.i2i_weight,
                               i2e_weight=context.i2e_weight, ff_meanfreq=context.ff_meanfreq,
-                               ff_frac_active=context.ff_frac_active, ff2i_prob=context.ff2i_prob,
+                              ff_frac_active=context.ff_frac_active, ff2i_prob=context.ff2i_prob,
                               ff2e_prob=context.ff2e_prob, std_dict=context.weight_std_factors, tau_E=context.tau_E,
                               tau_I=context.tau_I, connection_seed=context.connection_seed,
-                              spikes_seed=context.spikes_seed)
+                              spikes_seed=context.spikes_seed, plot_ncells=context.plot_ncells)
     if context.disp and int(context.pc.id()) == 0:
         print('NETWORK BUILD RUNTIME: %.2f s' % (time.time() - start_time))
     current_time = time.time()
-    if context.plot:
+    if context.plot and context.spatial:
         context.network.visualize_connections()
     context.network.run()
     if int(context.pc.id()) == 0:
@@ -258,7 +252,6 @@ def compute_features(x, export=False):
             print('NETWORK SIMULATION RUNTIME: %.2f s' % (time.time() - current_time))
     current_time = time.time()
     results = analyze_network_output(context.network, export=export, plot=context.plot)
-    #results = analyze_network_output(context.network, export=export, plot=True)
     if int(context.pc.id()) == 0:
         if context.disp:
             print('NETWORK ANALYSIS RUNTIME: %.2f s' % (time.time() - current_time))

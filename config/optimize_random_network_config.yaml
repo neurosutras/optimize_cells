@@ -94,6 +94,7 @@ kwargs:
   connection_seed: 0
   spikes_seed: 1000000
   location_seed: 2000000
+  spatial: True
 objective_names:
 - E_peak_rate
 - I_peak_rate
