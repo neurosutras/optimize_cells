@@ -117,7 +117,7 @@ class Network(object):
                     cell_type = 'RS'
                 else:
                     cell_type = 'FS'
-                cell = IzhiCell(self.tau_E, self.tau_I, self.spatial, self.synaptic_counts, cell_type)
+                cell = IzhiCell(self.tau_E, self.tau_I, cell_type)
             self.cells.append(cell)
             self.gids.append(i)
             self.pc.set_gid2node(i, rank)
@@ -160,36 +160,31 @@ class Network(object):
                 presyn_code = None
                 if connection in ['ff2i', 'ff2e']:
                     presyn_code = 'FF'
-                    #presyn_key = 'excitatory_presyn'
                 elif connection in ['e2e', 'e2i']:
                     presyn_code = 'E'
-                    #presyn_key = 'excitatory_presyn'
                 else:
                     presyn_code = 'I'
-                    #presyn_key = 'inhibitory_presyn'
                 for target_gid in rank_subset_gids:
                     target = self.pc.gid2cell(target_gid)
-                    #x_pos_t, y_pos_t = target.x, target.y
                     x_pos_t, y_pos_t = self.locations[target_gid]
-                    presyn_probs = {}
-                    sum_probs = 0
+                    presyn_probs = []
                     for presyn_gid in range(pre_gids[0], pre_gids[1]):
+                        if presyn_gid == target_gid:
+                            continue
                         x_pos, y_pos = self.locations[presyn_gid]
                         dist = np.sqrt((x_pos_t - x_pos)**2 + (y_pos_t - y_pos)**2)
                         sigma = self.axon_width[presyn_code]
-                        presyn_probs[presyn_gid] = 1./(np.sqrt(2 * np.pi * sigma**2)) * (np.e ** (-(dist ** 2) / (2 * sigma**2)))
-                        sum_probs += presyn_probs[presyn_gid]
-                    presyn_probs_items = np.array(presyn_probs.items())
-                    counts = np.random.multinomial(self.synaptic_counts[connection], list(presyn_probs_items[:,1] / float(sum_probs)))
-                    presyn_neurons = list(presyn_probs_items[:,0])
+                        if dist > sigma:  # or some factor of sigma?
+                            continue
+                        presyn_probs.append((presyn_gid, 1./(np.sqrt(2 * np.pi * sigma**2)) * (np.e ** (-(dist ** 2) / (2 * sigma**2)))))
+                    presyn_probs = np.array(presyn_probs)
+                    presyn_probs[:, 1] /= np.sum(presyn_probs[:, 1])
+                    counts = np.random.multinomial(self.synaptic_counts[connection], presyn_probs[:, 1])
+                    presyn_probs[:, 1] = counts
                     idxs = []
-                    for this_count, this_gid in zip(counts, range(pre_gids[0], pre_gids[1])):
-                        for _ in range(this_count):
-                            idxs.append(this_gid)
-                    for i in range(len(idxs)):
-                        presyn_gid = int(idxs[i])
-                        #nc = self.pc.gid_connect(presyn_gid, target.synlist[presyn_key][i])
-                        #nc = self.pc.gid_connect(presyn_gid, target.synlist[presyn_key][0])
+                    for i in range(len(presyn_probs)):
+                        idxs += [presyn_probs[i][0]] * int(presyn_probs[i][1])
+                    for presyn_gid in idxs:
                         if connection[0] == 'i':
                             syn = target.synlist[1]
                         else:
@@ -216,13 +211,14 @@ class Network(object):
                             weight = self.local_random.gauss(mu, mu * std_factor)
                             while weight < 0.: weight = self.local_random.gauss(mu, mu * std_factor)
                             nc.weight[0] = weight
-                            #self.ncdict[(presyn_gid, target_gid)] = nc
                             self.ncdict[target_gid][presyn_gid] = nc
 
-    def visualize_connections(self, n=5):
+    def visualize_connections(self, ncdict=None, n=5):
         if not self.spatial:
             print("Cannot visualize connections without setting --spatial.")
             return -1
+        if ncdict == None:
+            ncdict = self.ncdict
         for connection in ['ff2i', 'ff2e', 'e2e', 'e2i', 'i2i', 'i2e']:
             if connection in ['ff2i', 'ff2e']:
                 presyn_code = 'FF'
@@ -238,18 +234,17 @@ class Network(object):
             target_gids = random.sample(range(out[0], out[1]), n)
             for target_gid in target_gids:
                 target_loc = self.locations[target_gid]
-                print(target_loc)
-                presyn_gids = list(self.ncdict[target_gid].keys())
+                presyn_gids = []
+                for presyn_gid in ncdict[target_gid].keys():
+                    for _ in range(len(ncdict[target_gid][presyn_gid])):
+                        presyn_gids.append(presyn_gid)
                 xs = []
                 ys = []
                 for presyn_gid in presyn_gids:
                     if presyn_gid in range(inp[0], inp[1]):
                         xs.append(self.locations[presyn_gid][0])
                         ys.append(self.locations[presyn_gid][1])
-                print(xs)
-                print(ys)
                 vals, xedge, yedge = np.histogram2d(x=xs, y=ys, bins=np.linspace(-1.0, 1.0, 21))
-                #plt.imshow(vals)
                 plt.pcolor(xedge, yedge, vals)
                 plt.title("Cell " + str(target_gid) + " at " + str(target_loc) + ", " + str(connection) + " connections")
                 plt.show()
@@ -296,6 +291,14 @@ class Network(object):
 
     def get_voltage_rec_dict(self):
         return self.convert_hoc_vec_dict(self.voltage_recvec)
+
+    def get_ncdict_keys(self):
+        ncdict = dict()
+        for target_gid, presyn_dict in self.ncdict.iteritems():
+            ncdict[target_gid] = dict()
+            for presyn_gid, nc_list in presyn_dict.iteritems():
+                ncdict[target_gid][presyn_gid] = [1] * len(nc_list)  # hacky way of doing this
+        return ncdict
 
     def get_cell_type(self, gid):
         """None = FF; fast spiking = inhib, regular spiking = excitatory"""
@@ -681,7 +684,6 @@ class Network(object):
             elif cell_type is 'RS' and self.pc.gid2cell(cell).izh.a != .1:
                 print cell, " is not an excitatory Izhi cell but an inhibitory one"
 
-    # this must be refactored to conform to new ncdict format!!
     def convert_ncdict_to_weights(self):
         """
         can't collapse NCs on each rank onto the master rank. instead, keep track of
@@ -692,8 +694,6 @@ class Network(object):
             for presyn in self.ncdict[target].keys():
                 # only collects the first presyn-to-target connection weight!
                 connections[(presyn, target)] = self.ncdict[target][presyn][0].weight[0]
-        # for pair, nc in self.ncdict.iteritems():
-        #     connections[pair] = nc.weight[0]
         return connections
 
     def print_connections(self, connections):
@@ -716,7 +716,7 @@ class Network(object):
 
 class IzhiCell(object):
     # derived from modelDB
-    def __init__(self, tau_E, tau_I, spatial, syncounts, type='RS'):
+    def __init__(self, tau_E, tau_I, type='RS'):
         self.type = type
         self.sec = h.Section(cell=self)
         self.sec.L, self.sec.diam, self.sec.cm = 10, 10, 31.831
@@ -729,35 +729,21 @@ class IzhiCell(object):
         if type == 'RS': self.izh.a = .1
         if type == 'FS': self.izh.a = .02
 
-        self.synapses(tau_E, tau_I, spatial, syncounts, type)
-
-        #self.x = self.y = -1.
+        self.synapses(tau_E, tau_I, type)
 
     def __del__(self):
         pass
 
     # don't need synapse counts at all?
-    def synapses(self, tau_E, tau_I, spatial, syncounts, type):
-        if spatial:
-            synlist = {
-                'excitatory_presyn': [],
-                'inhibitory_presyn': []
-            }
-        else:
-            synlist = []
+    def synapses(self, tau_E, tau_I, type):
+        synlist = []
         s = h.ExpSyn(self.sec(0.8))  # E0
         s.tau = tau_E
-        if spatial:
-            synlist['excitatory_presyn'].append(s)
-        else:
-            synlist.append(s)
+        synlist.append(s)
         s = h.ExpSyn(self.sec(0.1))  # I1
         s.tau = tau_I
         s.e = -80
-        if spatial:
-            synlist['inhibitory_presyn'].append(s)
-        else:
-            synlist.append(s)
+        synlist.append(s)
 
         self.synlist = synlist
 
@@ -795,8 +781,6 @@ class FFCell(object):
             network.FF_spikes_dict[gid] = np.array(spikes)
         else:
             network.FF_spikes_dict[gid] = []
-
-        #self.x = self.y = 0.
 
     def connect2target(self, target):
         nc = h.NetCon(self.pp, target)

@@ -75,9 +75,9 @@ def config_worker():
 
 
 def init_context():
-    FF_ncell = 120
-    E_ncell = 120
-    I_ncell = 120
+    FF_ncell = 2000
+    E_ncell = 2000
+    I_ncell = 2000
     delay = 1.  # ms
     throwaway = 250  # ms
     tstop = 3000 + throwaway  # ms
@@ -91,25 +91,26 @@ def init_context():
     pad_dur = 500.  # ms
 
     axon_width = {
-        'FF': 0.1,
-        'E': 0.2,
-        'I': 0.1
+        'FF': 0.3,
+        'E': 0.3,
+        'I': 0.3
     }
 
     synaptic_counts = {
-        'ff2i': 12,
-        'ff2e': 12,
-        'e2e': 6,
-        'e2i': 12,
-        'i2i': 12,
-        'i2e': 6
+        'ff2i': 100,
+        'ff2e': 100,
+        'e2e': 100,
+        'e2i': 100,
+        'i2i': 100,
+        'i2e': 100
     }
 
     locations = {}
+    local_random = random.Random()
     if context.spatial:
         for i in range(0, FF_ncell + E_ncell + I_ncell):
-            random.Random().seed(context.location_seed + i)
-            locations[i] = (random.Random().random() * 2 - 1, random.Random().random() * 2 - 1)
+            local_random.seed(context.location_seed + i)
+            locations[i] = (local_random.random() * 2 - 1, local_random.random() * 2 - 1)
 
     context.update(locals())
 
@@ -245,7 +246,11 @@ def compute_features(x, export=False):
         print('NETWORK BUILD RUNTIME: %.2f s' % (time.time() - start_time))
     current_time = time.time()
     if context.plot and context.spatial:
-        context.network.visualize_connections()
+        ncdict = context.network.get_ncdict_keys()
+        ncdict = context.comm.gather(ncdict, root=0)
+        if context.comm.rank == 0:
+            ncdict = {key: val for ncdict_mini in ncdict for key, val in ncdict_mini.iteritems()}
+            context.network.visualize_connections(ncdict)
     context.network.run()
     if int(context.pc.id()) == 0:
         if context.disp:
