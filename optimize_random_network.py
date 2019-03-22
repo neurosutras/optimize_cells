@@ -71,22 +71,20 @@ def config_worker():
 
 
 def init_context():
-    """
-    TODO: Define each population size separately here.
-    """
     FF_ncell = 12
     E_ncell = 12
     I_ncell = 12
     delay = 1.  # ms
-    throwaway = 250  # ms
-    tstop = 3000 + throwaway  # ms
-    dt = 0.025  # ms
+    equilibrate = 250.  # ms
+    tstop = 3000 + equilibrate  # ms
+    dt = 0.025
+    plot_ncells = 5  # ms
     binned_dt = 1.  # ms
     filter_dt = 1.  # ms
     active_rate_threshold = 1.  # Hz
     baks_alpha = 4.7725100028345535
     baks_beta = 0.41969058927343522
-    pad_dur = 500.  # ms
+    baks_pad_dur = 1000.  # ms
     context.update(locals())
 
 
@@ -123,6 +121,84 @@ def update_context(x, local_context=None):
                                         'i2i': x_dict['II_weights_sigma_factor']}
 
 
+def plot_inferred_spike_rates(gid_range_dict, spike_trains_dict, inferred_firing_rates, t,
+                              active_rate_threshold=1., cells_per_pop=4):
+    """
+
+    :param gid_range_dict: dict: {pop_name (str): tuple of int}
+    :param spike_trains_dict: dict of array
+    :param inferred_firing_rates: dict of array
+    :param t: array
+    :param gid_sample_dict: dict: {pop_name (str): list of gid (int)}
+    :param active_rate_threshold: float
+    :param cells_per_pop: int
+    """
+    num_pops = len(gid_range_dict)
+    fig, axes = plt.subplots(num_pops, cells_per_pop, sharex=True)
+    for j in xrange(cells_per_pop):
+        axes[num_pops-1][j].set_xlabel('Time (ms)')
+    for i in xrange(num_pops):
+        axes[i][0].set_ylabel('Firing rate (Hz)')
+
+    for row, pop_name in enumerate(gid_range_dict):
+        active_gid_range = []
+        for gid in range(*gid_range_dict[pop_name]):
+            inferred_rate = inferred_firing_rates[gid]
+            if np.max(inferred_rate) >= active_rate_threshold:
+                active_gid_range.append(gid)
+        gid_sample = random.sample(active_gid_range, min(len(active_gid_range), cells_per_pop))
+        for col, gid in enumerate(gid_sample):
+            inferred_rate = inferred_firing_rates[gid]
+            spike_train = spike_trains_dict[gid]
+            binned_spike_indexes = find_nearest(spike_train, t)
+            axes[row][col].plot(t, inferred_rate, label='Inferred rate')
+            axes[row][col].plot(t[binned_spike_indexes], np.ones(len(binned_spike_indexes)), 'k.', label='Spikes')
+            axes[row][col].set_title('%s cell: %i' % (pop_name, gid))
+
+    axes[0][0].legend(loc='best')
+    clean_axes(axes)
+    fig.suptitle('Inferred spike rates')
+    fig.tight_layout()
+    fig.show()
+
+
+def plot_voltage_traces(gid_range_dict, voltage_rec_dict, t, cells_per_pop=8, pop_names=None):
+    """
+
+    :param gid_range_dict: dict: {pop_name (str): tuple of int}
+    :param voltage_rec_dict: dict of array
+    :param t: array
+    :param cells_per_pop: int
+    :param pop_names: list of str
+    """
+    if pop_names is None:
+        pop_names = [pop_name for pop_name in gid_range_dict if pop_name not in ['FF']]
+    num_pops = len(pop_names)
+    num_rows = 2 * num_pops
+    num_cols = cells_per_pop / 2
+    fig, axes = plt.subplots(num_rows, num_cols, sharex=True)
+    for j in xrange(num_cols):
+        axes[num_rows-1][j].set_xlabel('Time (ms)')
+    for i in xrange(num_rows):
+        axes[i][0].set_ylabel('Voltage (mV)')
+
+    for i, pop_name in enumerate(pop_names):
+        this_gid_range = range(*gid_range_dict[pop_name])
+        gid_sample = random.sample(this_gid_range, min(len(this_gid_range), cells_per_pop))
+        for j, gid in enumerate(gid_sample):
+            row = (i * 2) + (j / num_cols)
+            col = j % num_cols
+            rec = voltage_rec_dict[gid]
+            axes[row][col].plot(t, rec)
+            axes[row][col].set_title('%s cell: %i' % (pop_name, gid))
+
+    axes[0][0].legend(loc='best')
+    clean_axes(axes)
+    fig.suptitle('Voltage recordings')
+    fig.tight_layout()
+    fig.show()
+
+
 def analyze_network_output(network, export=False, plot=False):
     """
 
@@ -131,15 +207,13 @@ def analyze_network_output(network, export=False, plot=False):
     :param plot: bool
     :return: dict
     """
-    binned_t = np.arange(0., context.tstop + context.binned_dt - context.throwaway, context.binned_dt)
+    binned_t = np.arange(0., context.tstop + context.binned_dt - context.equilibrate, context.binned_dt)
     spikes_dict = network.get_spikes_dict()
-    spikes_dict.update(network.FF_spikes_dict)
-    spikes_dict = prune_and_shift_spikes(spikes_dict, context.throwaway)
+    voltage_rec_dict, rec_t = network.get_voltage_rec_dict()
 
-    voltage_rec_dict = network.get_voltage_rec_dict()
-    voltage_rec_dict = prune_voltages(voltage_rec_dict, context.dt, context.throwaway)
     inferred_firing_rates = infer_firing_rates(spikes_dict, binned_t, alpha=context.baks_alpha, beta=context.baks_beta,
-                                               pad_dur=context.pad_dur, plot=plot)
+                                               pad_dur=context.baks_pad_dur)
+
     connection_dict = network.convert_ncdict_to_weights()
 
     spikes_dict = context.comm.gather(spikes_dict, root=0)
@@ -155,48 +229,36 @@ def analyze_network_output(network, export=False, plot=False):
 
     if context.comm.rank == 0:
         frac_active, mean_firing_active = network.get_active_pop_stats(inferred_firing_rates, binned_t,
-                                                                       threshold=context.active_rate_threshold, plot=plot)
-        network.summation(spikes_dict, binned_t)
+                                                                       threshold=context.active_rate_threshold,
+                                                                       plot=plot)
+        network.spike_summation(spikes_dict, binned_t)
 
         if plot:
+            plot_inferred_spike_rates(network.cell_index, spikes_dict, inferred_firing_rates, binned_t,
+                                      context.active_rate_threshold)
+            plot_voltage_traces(network.cell_index, voltage_rec_dict, rec_t)
             network.plot_adj_matrix(connection_dict)
-            network.plot_voltage_trace(voltage_rec_dict, spikes_dict, context.dt)
             network.plot_population_firing_rates(inferred_firing_rates, binned_t)
 
         E_mean, E_max = network.compute_pop_firing_features(network.cell_index['E'], rate_dict, peak_dict)
         I_mean, I_max = network.compute_pop_firing_features(network.cell_index['I'], rate_dict, peak_dict)
-        """
-        avg_FF_rate = network.avg_pop_rate_array('FF', binned_t, inferred_firing_rates)
-        avg_I_rate = network.avg_pop_rate_array('I', binned_t, inferred_firing_rates)
-        avg_E_rate = network.avg_pop_rate_array('E', binned_t, inferred_firing_rates)
-        """
+
         I_pop_rate = mean_firing_active['I']
         E_pop_rate = mean_firing_active['E']
         FF_pop_rate = mean_firing_active['FF']
         pop_rates = [FF_pop_rate, I_pop_rate, E_pop_rate]
-        ratios, bands = network.compute_envelope_ratio2(pop_rates, binned_t, context.filter_dt, plot=plot)
-        theta_E = bands[0];
-        gamma_E = bands[1];
-        theta_I = bands[2];
-        gamma_I = bands[3]
-        """theta_E, theta_I, gamma_E, gamma_I = network.get_bands_of_interest(binned_t, context.filter_dt, spikes_dict)
-        """
+        ratios, bands = network.get_envelope_ratio(pop_rates, binned_t, context.filter_dt, plot=plot)
+
+        theta_E = bands['theta_E']; gamma_E = bands['gamma_E']
+        theta_I = bands['theta_I']; gamma_I = bands['gamma_I']
+        theta_E_ratio = ratios['theta_E']; gamma_E_ratio = ratios['gamma_E']
+        theta_I_ratio = ratios['theta_I']; gamma_I_ratio = ratios['gamma_I']
+
         peak_theta_freq_E = peak_from_spectrogram(theta_E, 'theta E', context.filter_dt, plot)
         peak_theta_freq_I = peak_from_spectrogram(theta_I, 'theta I', context.filter_dt, plot)
         peak_gamma_freq_E = peak_from_spectrogram(gamma_E, 'gamma E', context.filter_dt, plot)
         peak_gamma_freq_I = peak_from_spectrogram(gamma_I, 'gamma I', context.filter_dt, plot)
 
-        """I_pop_rate = mean_firing_active['I']
-        E_pop_rate = mean_firing_active['E']
-        theta_E_ratio = network.compute_envelope_ratio(theta_E, E_pop_rate, binned_t, label='E theta', plot=plot)
-        theta_I_ratio = network.compute_envelope_ratio(theta_I, I_pop_rate, binned_t, label='I theta', plot=plot)
-        gamma_E_ratio = network.compute_envelope_ratio(gamma_E, E_pop_rate, binned_t, label='E gamma', plot=plot)
-        gamma_I_ratio = network.compute_envelope_ratio(gamma_I, I_pop_rate, binned_t, label='I gamma', plot=plot)
-        """
-        theta_E_ratio = ratios[2];
-        gamma_E_ratio = ratios[3];
-        theta_I_ratio = ratios[4];
-        gamma_I_ratio = ratios[5]
         context.update(locals())
 
         return {'E_mean_rate': E_mean, 'E_peak_rate': E_max, 'I_mean_rate': I_mean, "I_peak_rate": I_max,
@@ -219,15 +281,16 @@ def compute_features(x, export=False):
     context.pc.gid_clear()
     start_time = time.time()
     context.network = Network(context.FF_ncell, context.E_ncell, context.I_ncell, context.delay, context.pc,
-                              tstop=context.tstop, dt=context.dt, e2e_prob=context.e2e_prob, e2i_prob=context.e2i_prob,
-                              i2i_prob=context.i2i_prob, i2e_prob=context.i2e_prob, ff2i_weight=context.ff2i_weight,
+                              tstop=context.tstop, equilibrate=context.equilibrate, dt=context.dt,
+                              e2e_prob=context.e2e_prob, e2i_prob=context.e2i_prob, i2i_prob=context.i2i_prob,
+                              i2e_prob=context.i2e_prob, ff2i_weight=context.ff2i_weight,
                               ff2e_weight=context.ff2e_weight, e2e_weight=context.e2e_weight,
                               e2i_weight=context.e2i_weight, i2i_weight=context.i2i_weight,
                               i2e_weight=context.i2e_weight, ff_meanfreq=context.ff_meanfreq,
-                               ff_frac_active=context.ff_frac_active, ff2i_prob=context.ff2i_prob,
+                              ff_frac_active=context.ff_frac_active, ff2i_prob=context.ff2i_prob,
                               ff2e_prob=context.ff2e_prob, std_dict=context.weight_std_factors, tau_E=context.tau_E,
                               tau_I=context.tau_I, connection_seed=context.connection_seed,
-                              spikes_seed=context.spikes_seed)
+                              spikes_seed=context.spikes_seed, plot_ncells=context.plot_ncells)
     if context.disp and int(context.pc.id()) == 0:
         print('NETWORK BUILD RUNTIME: %.2f s' % (time.time() - start_time))
     current_time = time.time()
