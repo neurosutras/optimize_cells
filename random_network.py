@@ -654,6 +654,7 @@ class IzhiCell(object):
 
     def __del__(self):
         pass
+
     # from Ball_Stick
     def synapses(self, tau_E, tau_I):
         synlist = []
@@ -853,6 +854,7 @@ def prune_voltages(v_dict, dt, throwaway):
     for key, val in v_dict.iteritems():
         prune_dict[key] = val[toss:]
     return prune_dict
+
 
 def get_binned_spike_train(spikes, t):
     """

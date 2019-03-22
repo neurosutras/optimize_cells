@@ -84,9 +84,9 @@ mkdir ~/neuron/nrn
 cd ~/neuron/nrnsrc
 git clone https://github.com/nrnhines/nrn.git .
 ./build.sh
-export CFLAGS='-Qunused-arguments -mmacosx-version-min=10.9 -stdlib=libc++'
-export CXXFLAGS='-Qunused-arguments -mmacosx-version-min=10.9 -stdlib=libc++'
-export LDFLAGS='-Qunused-arguments -mmacosx-version-min=10.9 -stdlib=libc++'
+export CFLAGS='-Qunused-arguments -stdlib=libc++ -mmacosx-version-min=10.9'
+export CXXFLAGS='-Qunused-arguments -stdlib=libc++ -mmacosx-version-min=10.9'
+export LDFLAGS='-Qunused-arguments -stdlib=libc++ -mmacosx-version-min=10.9'
 ./configure --prefix=$HOME/neuron/nrn --with-iv=$HOME/neuron/iv --with-nrnpython=$HOME/anaconda2/bin/python \
 --with-paranrn --with-mpi --with-readline=no
 cd ~/neuron/nrnsrc/src/nrnmpi
@@ -180,6 +180,13 @@ module load mpi4py
 
 
 2) On NERSC Cori:
+Build mpi4py locally to ensure it is built with the same version of cc and built against the same version of mpich as neuron:
+wget https://bitbucket.org/mpi4py/mpi4py/downloads/mpi4py-3.0.0.tar.gz
+tar zxvf mpi4py-3.0.0.tar.gz
+cd mpi4py-3.0.0
+module swap PrgEnv-intel PrgEnv-gnu
+python setup.py build --mpicc=$(which cc) --build-base=$HOME/.local/cori/2.7-anaconda-4.4
+python setup.py install --prefix=$HOME/.local/cori/2.7-anaconda-4.4
 
 module swap PrgEnv-intel PrgEnv-gnu
 module load python
@@ -189,9 +196,36 @@ export LD_PRELOAD=/lib64/libreadline.so.6
 export CRAYPE_LINK_TYPE=dynamic
 export PYTHONPATH=/usr/common/software/python/2.7-anaconda-4.4/lib/python2.7/site-packages:$PYTHONPATH
 
+./build.sh
 ./configure --prefix=$HOME/neuron/nrn -with-paranrn --with-mpi \
     --with-nrnpython=/usr/common/software/python/2.7-anaconda-4.4/bin/python --without-x --without-memacs \
     --with-readline=no
+cd src/nrnmpi
+sh mkdynam.sh
+cd ../..
+make
+make install
+
+3) On NCSA Blue Waters:
+start interactive session to link to mpich on compute node:
+qsub -I -l nodes=1:ppn=32:xe -l walltime=01:00:00
+
+module swap PrgEnv-intel PrgEnv-gnu
+module load bwpy
+module load bwpy-mpi
+export EPYTHON="python2.7"
+export CRAYPE_LINK_TYPE=dynamic
+bwpy-environ
+
+export CC=cc
+export CXX=CC
+./build.sh
+./configure --prefix=$HOME/neuron/nrn -with-paranrn --with-mpi \
+    --with-nrnpython=/mnt/bwpy/mpi/usr/bin/python --without-x --without-memacs \
+    --with-readline=no
+cd src/nrnmpi
+sh mkdynam.sh
+cd ../..
 make
 make install
 
