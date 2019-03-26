@@ -72,9 +72,8 @@ class Network(object):
         if self.debug:
             self.check_cell_type_correct()
         self.connectcells()
-        if not self.debug:
-            self.voltage_record()
-            self.spike_record()
+        self.voltage_record()
+        self.spike_record()
 
     def mkcells(self):
         rank = int(self.pc.id())
@@ -86,7 +85,7 @@ class Network(object):
             for i, gid in enumerate(xrange(gid_start, gid_stop)):
                 # round-robin distribution of cells across MPI ranks
                 if i % nhost == rank:
-                    if self.debug:
+                    if self.verbose > 1:
                         print('mkcells: rank: %i got %s gid: %i' % (rank, pop_name, gid))
                     if cell_type == 'input':
                         cell = FFCell()
@@ -108,20 +107,6 @@ class Network(object):
                     nc = cell.connect2target(None)
                     self.pc.cell(gid, nc)
 
-    def get_weight(self, connection):
-        """
-        want to reduce std if std is problematic, i.e, makes it possible to sample a negative weight.
-        for use in connectcells()
-        :param connection: str
-        """
-        mu = self.weight_dict[connection]
-        if self.weight_std_dict[connection] >= 2. / 3. / np.sqrt(2.):
-            print 'network.connectcells: connection: %s; reducing std to avoid negative weights: %.2f' % \
-                  (connection, self.weight_std_dict[connection])
-            self.weight_std_dict[connection] = 2. / 3. / np.sqrt(2.)
-        std_factor = self.weight_std_dict[connection]
-        return mu, std_factor
-
     def connectcells(self):
         """
         Consult to prob_connections dict to determine connections. Consult connection_weights and
@@ -129,6 +114,7 @@ class Network(object):
         Restrictions: 1) cells cannot connect with themselves
                       2) weights cannot be negative
         """
+        rank = int(self.pc.id())
         self.ncdict = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
         for target_pop_name in self.prob_connection:
             for target_gid in self.cells[target_pop_name]:
@@ -141,6 +127,12 @@ class Network(object):
                     stop_gid = self.pop_gid_ranges[source_pop_name][1]
                     mu = self.connection_weights[target_pop_name][source_pop_name]
                     sigma_factor = self.connection_weight_sigma_factors[target_pop_name][source_pop_name]
+                    if sigma_factor >= 2. / 3. / np.sqrt(2.):
+                        orig_sigma_factor = sigma_factor
+                        sigma_factor = 2. / 3. / np.sqrt(2.)
+                        print('network.connectcells: %s: %s connection; reducing weight_sigma_factor to avoid negative '
+                              'weights; orig: %.2f, new: %.2f' %
+                              (source_pop_name, target_pop_name, orig_sigma_factor, sigma_factor))
                     for source_gid in xrange(start_gid, stop_gid):
                         if source_gid == target_gid:
                             continue
@@ -152,8 +144,10 @@ class Network(object):
                             while this_weight < 0.: this_weight = self.local_random.gauss(mu, mu * sigma_factor)
                             this_nc.weight[0] = this_weight
                             self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid] = this_nc
-                if self.debug:
-                    print('%s gid: %i: %s' % (target_pop_name, target_gid, self.ncdict[target_pop_name][target_gid]))
+                    if self.verbose > 1:
+                        print('rank: %i; target: %s gid: %i: source: %s; num_syns: %i' %
+                              (rank, target_pop_name, target_gid, source_pop_name,
+                               len(self.ncdict[target_pop_name][target_gid][source_pop_name])))
 
     def run(self):
         self.pc.set_maxstep(10)
@@ -163,31 +157,34 @@ class Network(object):
 
     # Instrumentation - stimulation and recording
     def spike_record(self):
-        for i, gid in enumerate(self.gids):
-            if self.cells[i].is_art(): continue
-            tvec = h.Vector()
-            nc = self.cells[i].connect2target(None)
-            nc.record(tvec)
-            self.spikes_rec_dict[gid] = tvec
+        for pop_name in self.cells:
+            for gid, cell in self.cells[pop_name].iteritems():
+                if cell.is_art(): continue
+                tvec = h.Vector()
+                nc = cell.connect2target(None)
+                nc.record(tvec)
+                self.spikes_dict[pop_name][gid] = tvec
 
     def voltage_record(self):
         self.voltage_tvec = h.Vector()
         self.voltage_tvec.record(h._ref_t)
         self.voltage_recvec = {}
-        for i, cell in enumerate(self.cells):
-            if cell.is_art(): continue
-            rec = h.Vector()
-            rec.record(getattr(cell.sec(.5), '_ref_v'))
-            self.voltage_recvec[self.gids[i]] = rec
+        for pop_name in self.cells:
+            for gid, cell in self.cells[pop_name].iteritems():
+                if cell.is_art(): continue
+                rec = h.Vector()
+                rec.record(getattr(cell.sec(.5), '_ref_v'))
+                self.voltage_recvec[gid] = rec
 
     def get_spikes_dict(self):
-        spikes_dict = dict()
-        for gid, spike_train in self.spikes_rec_dict.iteritems():
-            spike_train_array = np.array(spike_train)
-            indexes = np.where(spike_train_array >= self.equilibrate)[0]
-            if np.any(indexes):
-                spike_train_array = np.subtract(spike_train_array[indexes], self.equilibrate)
-            spikes_dict[gid] = spike_train_array
+        spikes_dict = defaultdict(dict)
+        for pop_name in self.spikes_dict:
+            for gid, spike_train in self.spikes_dict[pop_name].iteritems():
+                spike_train_array = np.array(spike_train)
+                indexes = np.where(spike_train_array >= self.equilibrate)[0]
+                if np.any(indexes):
+                    spike_train_array = np.subtract(spike_train_array[indexes], self.equilibrate)
+                spikes_dict[pop_name][gid] = spike_train_array
         return spikes_dict
 
     def get_voltage_rec_dict(self):
