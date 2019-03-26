@@ -1,19 +1,8 @@
-"""
-Uses nested.optimize to tune synaptic weights within a simple ring network.
-
-Requires a YAML file to specify required configuration parameters.
-Requires use of a nested.parallel interface.
-"""
-__author__ = 'Aaron D. Milstein and Grace Ng'
 from nested.optimize_utils import *
-from nested.parallel import *
-from dentate_network import *
-from dentate.env import Env
-import collections
+from optimize_simple_network_utils import *
 import click
+import time
 
-
-script_filename='optimize_simple_network.py'
 
 context = Context()
 
@@ -25,9 +14,11 @@ context = Context()
 @click.option("--output-dir", type=str, default='data')
 @click.option("--export-file-path", type=str, default=None)
 @click.option("--label", type=str, default=None)
-@click.option("--disp", is_flag=True)
-@click.option("--verbose", is_flag=True)
-def main(config_file_path, export, output_dir, export_file_path, label, disp, verbose):
+@click.option("--interactive", is_flag=True)
+@click.option("--verbose", type=int, default=2)
+@click.option("--plot", is_flag=True)
+@click.option("--debug", is_flag=True)
+def main(config_file_path, export, output_dir, export_file_path, label, interactive, verbose, plot, debug):
     """
 
     :param config_file_path: str (path)
@@ -35,79 +26,89 @@ def main(config_file_path, export, output_dir, export_file_path, label, disp, ve
     :param output_dir: str
     :param export_file_path: str
     :param label: str
-    :param disp: bool
-    :param verbose: bool
+    :param interactive: bool
+    :param verbose: int
+    :param plot: bool
+    :param debug: bool
     """
     # requires a global variable context: :class:'Context'
 
     context.update(locals())
-    group_size = 2
-    context.interface = ParallelContextInterface(procs_per_worker=group_size)
-    config_optimize_interactive(__file__, config_file_path=config_file_path, output_dir=output_dir,
-                                export_file_path=export_file_path, label=label, disp=disp, verbose=verbose)
-    context.interface.start(disp=disp)
-    context.interface.ensure_controller()
+    comm = MPI.COMM_WORLD
 
-    num_params = 1
-    sequences = [[context.x0_array] * num_params] + [[context.export] * num_params]
-    primitives = context.interface.map(compute_features_simple_ring, *sequences)
-    features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
-    features, objectives = get_objectives_simple_ring(features, context.export)
+    from nested.parallel import ParallelContextInterface
+    context.interface = ParallelContextInterface(procs_per_worker=comm.size)
+    context.interface.start(disp=True)
+    context.interface.ensure_controller()
+    context.interface.apply(config_optimize_interactive, __file__, config_file_path=config_file_path,
+                            output_dir=output_dir, export=export, export_file_path=export_file_path, label=label,
+                            disp=verbose > 0, verbose=verbose, plot=plot)
+    sys.stdout.flush()
+    features = context.interface.execute(compute_features, context.x0_array, context.export)
+    sys.stdout.flush()
+    features, objectives = context.interface.execute(get_objectives, features)
+    sys.stdout.flush()
     print 'params:'
     pprint.pprint(context.x0_dict)
     print 'features:'
     pprint.pprint(features)
     print 'objectives:'
     pprint.pprint(objectives)
-    context.interface.stop()
+    sys.stdout.flush()
+    context.update(locals())
+
+    if not interactive:
+        context.interface.stop()
 
 
 def config_worker():
     """
 
     """
-    param_indexes = {param_name: i for i, param_name in enumerate(context.param_names)}
-    processed_export_file_path = context.export_file_path.replace('.hdf5', '_processed.hdf5')
-    context.update(locals())
+    if 'plot' not in context():
+        context.plot = False
+    if 'verbose' not in context():
+        context.verbose = 1
+    if 'debug' not in context():
+        context.debug = False
     init_context()
-
-    pc = context.interface.pc
-    context.pc = pc
-    setup_network(**context.kwargs)
+    context.pc = h.ParallelContext()
 
 
 def init_context():
-    """
+    pop_sizes = {'FF': 100, 'E': 10, 'I': 10}
+    prev_gid = 0
+    pop_gid_ranges = dict()
+    for pop_name in pop_sizes:
+        next_gid = prev_gid + pop_sizes[pop_name]
+        pop_gid_ranges[pop_name] = (prev_gid, next_gid)
+        prev_gid += pop_sizes[pop_name]
+    pop_cell_types = {'FF': 'input', 'E': 'RS', 'I': 'FS'}
+    # {'postsynaptic population': {'presynaptic population': float} }
+    prob_connection = defaultdict(dict)
+    connection_weights = defaultdict(dict)
+    connection_weight_sigma_factors = defaultdict(dict)
+    connection_syn_types = {'FF': 'E', 'E': 'E', 'I': 'I'}  # {'presynaptic population': syn_type}
+    connection_kinetics = defaultdict(dict)
+    input_pop_mean_rates = defaultdict(dict)
+    input_pop_fraction_active = defaultdict(dict)
+    if 'FF_mean_rate' not in context():
+        raise RuntimeError('optimize_simple_network: missing required kwarg: FF_mean_rate')
 
-    """
-    ncell = 3
-    delay = 1
-    tstop = 100
+    delay = 1.  # ms
+    equilibrate = 250.  # ms
+    tstop = 3000 + equilibrate  # ms
+    dt = 0.025
+    binned_dt = 1.  # ms
+    filter_dt = 1.  # ms
+    active_rate_threshold = 1.  # Hz
+    baks_alpha = 4.7725100028345535
+    baks_beta = 0.41969058927343522
+    baks_pad_dur = 1000.  # ms
     context.update(locals())
 
 
-def report_pc_id():
-    return {'pc.id_world': context.pc.id_world(), 'pc.id': context.pc.id()}
-
-
-def setup_network(verbose=False, cvode=False, daspk=False, **kwargs):
-    """
-
-    :param verbose: bool
-    :param cvode: bool
-    :param daspk: bool
-    """
-    # Set up Env according to dentate script
-    context.env = Env(context.interace.comm, kwargs['network_config_file'], kwargs['template_paths'],
-                      kwargs['dataset_prefix'], kwargs['results_path'], kwargs['results_id'], kwargs['node_rank_file'],
-                      kwargs['io_size'], kwargs['vrecord_fraction'], kwargs['coredat'], kwargs['tstop'], kwargs['v_init'],
-                      kwargs['max_walltime_hours'], kwargs['results_write_time'], kwargs['dt'], kwargs['ldbal'],
-                      kwargs['lptbal'], kwargs['verbose'])
-    init(context.env)
-
-
-#Need to modify this for the network
-def update_source_contexts(x, local_context=None):
+def update_context(x, local_context=None):
     """
 
     :param x: array
@@ -115,69 +116,168 @@ def update_source_contexts(x, local_context=None):
     """
     if local_context is None:
         local_context = context
-    """
-    local_context.cell.reinit_mechanisms(from_file=True)
-    if not local_context.spines:
-        local_context.cell.correct_g_pas_for_spines()
-    """
-    for update_func in local_context.update_context_funcs:
-        update_func(x, local_context)
+    x_dict = param_array_to_dict(x, context.param_names)
+    local_context.prob_connection['E']['FF'] = x_dict['FF_E_prob_connection']
+    local_context.prob_connection['E']['E'] = x_dict['E_E_prob_connection']
+    local_context.prob_connection['E']['I'] = x_dict['I_E_prob_connection']
+    local_context.prob_connection['I']['FF'] = x_dict['FF_I_prob_connection']
+    local_context.prob_connection['I']['E'] = x_dict['E_I_prob_connection']
+    local_context.prob_connection['I']['I'] = x_dict['I_I_prob_connection']
+
+    local_context.connection_kinetics['E']['E'] = x_dict['tau_E']
+    local_context.connection_kinetics['E']['I'] = x_dict['tau_I']
+    local_context.connection_kinetics['I']['E'] = x_dict['tau_E']
+    local_context.connection_kinetics['I']['I'] = x_dict['tau_I']
+
+    local_context.connection_weights['E']['FF'] = x_dict['FF_E_mean_weight']
+    local_context.connection_weights['E']['E'] = x_dict['E_E_mean_weight']
+    local_context.connection_weights['E']['I'] = x_dict['I_E_mean_weight']
+    local_context.connection_weights['I']['FF'] = x_dict['FF_I_mean_weight']
+    local_context.connection_weights['I']['E'] = x_dict['E_I_mean_weight']
+    local_context.connection_weights['I']['I'] = x_dict['I_I_mean_weight']
+
+    local_context.connection_weight_sigma_factors['E']['FF'] = x_dict['FF_E_weight_sigma_factor']
+    local_context.connection_weight_sigma_factors['E']['E'] = x_dict['E_E_weight_sigma_factor']
+    local_context.connection_weight_sigma_factors['E']['I'] = x_dict['I_E_weight_sigma_factor']
+    local_context.connection_weight_sigma_factors['I']['FF'] = x_dict['FF_I_weight_sigma_factor']
+    local_context.connection_weight_sigma_factors['I']['E'] = x_dict['E_I_weight_sigma_factor']
+    local_context.connection_weight_sigma_factors['I']['I'] = x_dict['I_I_weight_sigma_factor']
+    
+    local_context.input_pop_mean_rates['FF'] = local_context.FF_mean_rate
+    local_context.input_pop_fraction_active['FF'] = x_dict['FF_frac_active']
 
 
-#Need to update this as well -- do we need both update functions?
-def update_context_simple_ring(x, local_context=None):
+def analyze_network_output(network, export=False, plot=False):
+    """
+
+    :param network: :class:'Network'
+    :param export: bool
+    :param plot: bool
+    :return: dict
+    """
+    binned_t = np.arange(0., context.tstop + context.binned_dt - context.equilibrate, context.binned_dt)
+    spikes_dict = network.get_spikes_dict()
+    voltage_rec_dict, rec_t = network.get_voltage_rec_dict()
+
+    inferred_firing_rates = infer_firing_rates(spikes_dict, binned_t, alpha=context.baks_alpha, beta=context.baks_beta,
+                                               pad_dur=context.baks_pad_dur)
+
+    connection_dict = network.convert_ncdict_to_weights()
+
+    spikes_dict = context.comm.gather(spikes_dict, root=0)
+    voltage_rec_dict = context.comm.gather(voltage_rec_dict, root=0)
+    inferred_firing_rates = context.comm.gather(inferred_firing_rates, root=0)
+    connection_dict = context.comm.gather(connection_dict, root=0)
+    if context.comm.rank == 0:
+        connection_dict = merge_list_of_dict(connection_dict)
+        inferred_firing_rates = merge_list_of_dict(inferred_firing_rates)
+        voltage_rec_dict = merge_list_of_dict(voltage_rec_dict)
+        spikes_dict = merge_list_of_dict(spikes_dict)
+        rate_dict, peak_dict = network.compute_mean_max_firing_per_cell(inferred_firing_rates)
+
+    if context.comm.rank == 0:
+        frac_active, mean_firing_active = network.get_active_pop_stats(inferred_firing_rates, binned_t,
+                                                                       threshold=context.active_rate_threshold,
+                                                                       plot=plot)
+        network.spike_summation(spikes_dict, binned_t)
+
+        if plot:
+            plot_inferred_spike_rates(network.cell_index, spikes_dict, inferred_firing_rates, binned_t,
+                                      context.active_rate_threshold)
+            plot_voltage_traces(network.cell_index, voltage_rec_dict, rec_t)
+            network.plot_adj_matrix(connection_dict)
+            network.plot_population_firing_rates(inferred_firing_rates, binned_t)
+
+        E_mean, E_max = network.compute_pop_firing_features(network.cell_index['E'], rate_dict, peak_dict)
+        I_mean, I_max = network.compute_pop_firing_features(network.cell_index['I'], rate_dict, peak_dict)
+
+        I_pop_rate = mean_firing_active['I']
+        E_pop_rate = mean_firing_active['E']
+        FF_pop_rate = mean_firing_active['FF']
+        pop_rates = [FF_pop_rate, I_pop_rate, E_pop_rate]
+        ratios, bands = network.get_envelope_ratio(pop_rates, binned_t, context.filter_dt, plot=plot)
+
+        theta_E = bands['theta_E']; gamma_E = bands['gamma_E']
+        theta_I = bands['theta_I']; gamma_I = bands['gamma_I']
+        theta_E_ratio = ratios['theta_E']; gamma_E_ratio = ratios['gamma_E']
+        theta_I_ratio = ratios['theta_I']; gamma_I_ratio = ratios['gamma_I']
+
+        peak_theta_freq_E = peak_from_spectrogram(theta_E, 'theta E', context.filter_dt, plot)
+        peak_theta_freq_I = peak_from_spectrogram(theta_I, 'theta I', context.filter_dt, plot)
+        peak_gamma_freq_E = peak_from_spectrogram(gamma_E, 'gamma E', context.filter_dt, plot)
+        peak_gamma_freq_I = peak_from_spectrogram(gamma_I, 'gamma I', context.filter_dt, plot)
+
+        context.update(locals())
+
+        return {'E_mean_rate': E_mean, 'E_peak_rate': E_max, 'I_mean_rate': I_mean, "I_peak_rate": I_max,
+                'peak_theta_freq_E': peak_theta_freq_E, 'peak_theta_freq_I': peak_theta_freq_I,
+                'peak_gamma_freq_E': peak_gamma_freq_E, 'peak_gamma_freq_I': peak_gamma_freq_I,
+                'E_frac_active': np.mean(frac_active['E']), 'I_frac_active': np.mean(frac_active['I']),
+                'FF_frac_active': np.mean(frac_active['FF']), 'theta_E_envelope_ratio': theta_E_ratio,
+                'theta_I_envelope_ratio': theta_I_ratio, 'gamma_E_envelope_ratio': gamma_E_ratio,
+                'gamma_I_envelope_ratio': gamma_I_ratio}
+
+
+def compute_features(x, export=False):
     """
 
     :param x: array
-    :param local_context: :class:'Context'
+    :param export: bool
+    :return: dict
     """
-    if local_context is None:
-        local_context = context
-    param_indexes = local_context.param_indexes
-    context.ring.update_syn_weight((0, 1), x[param_indexes['n0.syn_weight n1']])
-    context.ring.update_syn_weight((0, 2), x[param_indexes['n0.syn_weight n2']])
-    context.ring.update_syn_weight((1, 2), x[param_indexes['n1.syn_weight n2']])
-
-
-def compute_features_simple_ring(x, export=False):
     update_source_contexts(x, context)
-    results = runring(context.ring, context.pc, context.interface.comm)
-    if int(context.pc.id()) == 0:
-        max_ind = np.argmax(np.array(results['rec'][2]))
-        min_ind = np.argmin(np.array(results['rec'][2]))
-        equil_index = np.floor(0.05*len(results['rec'][2]))
-        vm_baseline = np.mean(np.array(results['rec'][2][:int(equil_index)]))
-        processed_result = {'n2.EPSP': results['rec'][2][max_ind] - vm_baseline, 'peak_t': results['t'][2][max_ind],
-                            'n2.IPSP': results['rec'][2][min_ind] - vm_baseline, 'min_t': results['t'][2][min_ind],
-                            'PC id': context.pc.id_world()}
+    context.pc.gid_clear()
+    start_time = time.time()
+    context.network = Network(pc=context.pc, pop_sizes=context.pop_sizes, pop_gid_ranges=context.pop_gid_ranges,
+                              pop_cell_types=context.pop_cell_types, connection_syn_types=context.connection_syn_types,
+                              prob_connection=context.prob_connection,
+                              connection_weights=context.connection_weights,
+                              connection_weight_sigma_factors=context.connection_weight_sigma_factors,
+                              input_pop_mean_rates=context.input_pop_mean_rates,
+                              input_pop_fraction_active=context.input_pop_fraction_active,
+                              connection_kinetics=context.connection_kinetics, tstop=context.tstop,
+                              equilibrate=context.equilibrate, dt=context.dt, delay=context.delay,
+                              connection_seed=context.connection_seed, spikes_seed=context.spikes_seed,
+                              verbose=context.verbose, debug=context.debug)
+    if context.disp and int(context.pc.id()) == 0:
+        print('NETWORK BUILD RUNTIME: %.2f s' % (time.time() - start_time))
+    current_time = time.time()
+    if context.debug:
+        return dict()
     else:
-        processed_result = None
-    return processed_result
+        context.network.run()
+        if int(context.pc.id()) == 0:
+            if context.disp:
+                print('NETWORK SIMULATION RUNTIME: %.2f s' % (time.time() - current_time))
+        current_time = time.time()
+        results = analyze_network_output(context.network, export=export, plot=context.plot)
+        if int(context.pc.id()) == 0:
+            if context.disp:
+                print('NETWORK ANALYSIS RUNTIME: %.2f s' % (time.time() - current_time))
+            if results is None:
+                return dict()
+            return results
 
 
-def get_objectives_simple_ring(features, export=False):
+def get_objectives(features, export=False):
     """
 
     :param features: dict
     :param export: bool
     :return: tuple of dict
     """
-    objectives = {}
-    for feature_name in ['n2.EPSP', 'n2.IPSP']:
-        objective_name = feature_name
-        objectives[objective_name] = ((context.target_val[objective_name] - features[feature_name]) /
+    if int(context.pc.id()) == 0:
+        objectives = {}
+        for feature_name in ['E_peak_rate', 'I_peak_rate', 'E_mean_rate', 'I_mean_rate', 'peak_theta_freq_E',
+                             'peak_theta_freq_I', 'peak_gamma_freq_E', 'peak_gamma_freq_I', 'E_frac_active',
+                             'I_frac_active', 'theta_E_envelope_ratio', 'theta_I_envelope_ratio',
+                             'gamma_E_envelope_ratio', 'gamma_I_envelope_ratio']:
+            objective_name = feature_name
+            objectives[objective_name] = ((context.target_val[objective_name] - features[feature_name]) /
                                                   context.target_range[objective_name]) ** 2.
-    return features, objectives
-
-
-"""
-def calc_spike_count(indiv, i):
-    """"""
-    x = indiv['x']
-    results = runring(context.ring)
-    return {'pop_id': int(i), 'result_list': [{'id': context.pc.id_world()}, results]}
-"""
+        return features, objectives
 
 
 if __name__ == '__main__':
-    main(args=sys.argv[(list_find(lambda s: s.find(script_filename) != -1, sys.argv) + 1):], standalone_mode=False)
+    main(args=sys.argv[(list_find(lambda s: s.find(os.path.basename(__file__)) != -1, sys.argv) + 1):],
+         standalone_mode=False)

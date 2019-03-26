@@ -1,12 +1,9 @@
-from mpi4py import MPI
+from nested.utils import *
 from neuron import h
-import numpy as np
-import random
-import sys, time
-import scipy.signal
-import matplotlib.pyplot as plt
 import seaborn as sns
 from baks import baks
+
+
 # for h.lambda_f
 h.load_file('stdlib.hoc')
 # for h.stdinit
@@ -15,42 +12,33 @@ h.load_file('stdrun.hoc')
 
 class Network(object):
 
-    def __init__(self, FF_ncell, E_ncell, I_ncell, delay, pc, tstop, equilibrate=250., dt=0.025, e2e_prob=.05,
-                 e2i_prob=.05, i2i_prob=.05, i2e_prob=.05, ff2i_weight=1., ff2e_weight=2., e2e_weight=1.,
-                 e2i_weight=1., i2i_weight=.5, i2e_weight=.5, ff_meanfreq=100, ff_frac_active=.8, ff2i_prob=.5,
-                 ff2e_prob=.5, std_dict=None, tau_E=2., tau_I=5., connection_seed=0, spikes_seed=1, plot_ncells=5):
+    def __init__(self, pc, pop_sizes, pop_gid_ranges, pop_cell_types, connection_syn_types, prob_connection,
+                 connection_weights, connection_weight_sigma_factors, connection_kinetics, input_pop_mean_rates,
+                 input_pop_fraction_active, tstop=1000., equilibrate=250., dt=0.025, delay=1., connection_seed=0,
+                 spikes_seed=100000, verbose=1, debug=False):
         """
 
-        :param FF_ncell: int, number of cells in FF population
-        :param E_ncell: int, number of cells in E population
-        :param I_ncell: int, number of cells in I population
-        :param delay: float, netcon delay
         :param pc: ParallelContext object
-        :param tstop: int, duration of sim
-        :param equilibrate: float, duration of network simulation equilibration time
-        :param dt: float, timestep in ms. default is .025
-        :param e2e_prob: float, connection probability for E cell -> E cell
-        :param e2i_prob: E cell -> I cell
-        :param i2i_prob: I -> I
-        :param i2e_prob: I -> E
-        :param ff2i_weight: float, weight for NetCon object for connection between FF cells -> I cells
-        :param ff2e_weight: FF -> E
-        :param e2e_weight: E -> E
-        :param e2i_weight: E -> I
-        :param i2i_weight: I -> I
-        :param i2e_weight: I -> E
-        :param ff_meanfreq: int, mean frequency (lambda) for FF cells. spikes modeled as a poisson
-        :param ff_frac_active: float, fraction active of FF cells
-        :param ff2i_prob: float, connection probability for FF cell -> I cell
-        :param ff2e_prob: FF -> E
-        :param std_dict: dict, standard dev of weights for each projection (e.g., I->E='i2e') relative to the mean
-        :param tau_E: float, tau decay for excitatory synapses
-        :param tau_I: float, tau decay for inhib synapses
-        :param connection_seed: int
-        :param spikes_seed: int
-        :param plot_ncells: int, how many cells to sample (per population) for plotting voltage trace and firing rate
+        :param pop_sizes: dict of int: cell population sizes
+        :param pop_gid_ranges: dict of tuple of int: start and stop indexes; gid range of each cell population
+        :param pop_cell_types: dict of str: cell_type of each cell population
+        :param connection_syn_types: dict of str: synaptic connection type for each presynaptic population
+        :param prob_connection: nested dict of float: connection probabilities between cell populations
+        :param connection_weights: nested dict of float: mean strengths of each connection type
+        :param connection_weight_sigma_factors: nested dict of float: variances of connection strengths, normalized to
+                                                mean
+        :param connection_kinetics: nested dict of float: synaptic decay kinetics (ms)
+        :param input_pop_mean_rates: dict of float: mean firing rate of each input population (Hz)
+        :param input_pop_fraction_active: dict of float: fraction of each input population chosen to be active
+        :param tstop: int: simulation duration (ms)
+        :param equilibrate: float: simulation equilibration duration (ms)
+        :param dt: float: simulation timestep (ms)
+        :param delay: float: netcon synaptic delay (ms)
+        :param connection_seed: int: random seed for reproducible connections
+        :param spikes_seed: int: random seed for reproducible input spike trains
+        :param verbose: int: level for verbose print statements
+        :param debug: bool: turn on for extra tests
         """
-        self.npop = 3  # number of populations - 3 for FF, inhib, excit cells
         self.pc = pc
         self.delay = delay
         self.tstop = tstop
@@ -58,76 +46,67 @@ class Network(object):
         if dt is None:
             dt = h.dt
         self.dt = dt
-        self.FF_ncell = int(FF_ncell)
-        self.E_ncell = int(E_ncell)
-        self.I_ncell = int(I_ncell)
+        self.verbose = verbose
+        self.debug = debug
 
-        self.FF_spikes_dict = {}
-        self.ff_frac_active = ff_frac_active
-        self.ff_meanfreq = ff_meanfreq
+        self.pop_sizes = pop_sizes
+        self.total_cells = np.sum(self.pop_sizes.values())
 
-        self.tau_E = tau_E
-        self.tau_I = tau_I
+        self.pop_gid_ranges = pop_gid_ranges
+        self.pop_cell_types = pop_cell_types
+        self.connection_syn_types = connection_syn_types
+        self.prob_connection = prob_connection
+        self.connection_weights = connection_weights
+        self.connection_weight_sigma_factors = connection_weight_sigma_factors
+        self.connection_kinetics = connection_kinetics
 
-        self.prob_dict = {'e2e': e2e_prob, 'e2i': e2i_prob, 'i2i': i2i_prob, 'i2e': i2e_prob, 'ff2i': ff2i_prob,
-                          'ff2e': ff2e_prob}
-        self.weight_dict = {'ff2i': ff2i_weight, 'ff2e': ff2e_weight, 'e2e': e2e_weight, 'e2i': e2i_weight,
-                            'i2i': i2i_weight, 'i2e': i2e_weight}
-        self.weight_std_dict = std_dict
-        self.total_cells = FF_ncell + I_ncell + E_ncell
-        self.plot_ncells = plot_ncells
-        self.cell_index = {'FF': (0, FF_ncell), 'I': (FF_ncell, FF_ncell + I_ncell),  # [x, y)
-                           'E': (FF_ncell + I_ncell, self.total_cells)}
-        self.connectivity_index_dict = {'ff2i': (self.cell_index['FF'], self.cell_index['I']),  # exclusive [x, y)
-                                        'ff2e': (self.cell_index['FF'], self.cell_index['E']),
-                                        'e2e': (self.cell_index['E'], self.cell_index['E']),
-                                        'e2i': (self.cell_index['E'], self.cell_index['I']),
-                                        'i2i': (self.cell_index['I'], self.cell_index['I']),
-                                        'i2e': (self.cell_index['I'], self.cell_index['E'])}
+        self.spikes_dict = defaultdict(dict)
+        self.input_pop_mean_rates = input_pop_mean_rates
+        self.input_pop_fraction_active = input_pop_fraction_active
 
         self.local_random = random.Random()
         self.connection_seed = connection_seed
         self.spikes_seed = spikes_seed
 
-        self.spikes_rec_dict = {}
-        self.mknetwork()
-        self.voltage_record()
-        self.spike_record()
-
-    def mknetwork(self):
         self.mkcells()
-        self.check_cell_type_correct()
+        if self.debug:
+            self.check_cell_type_correct()
         self.connectcells()
+        if not self.debug:
+            self.voltage_record()
+            self.spike_record()
 
     def mkcells(self):
         rank = int(self.pc.id())
         nhost = int(self.pc.nhost())
-        self.cells = []
-        self.gids = []
-        for i in range(rank, self.total_cells, nhost):
-            if i < self.FF_ncell:
-                cell = FFCell()
-                self.local_random.seed(self.spikes_seed + i)
-                if self.local_random.random() <= self.ff_frac_active:
-                    this_spike_train = get_inhom_poisson_spike_times_by_thinning(
-                        [self.ff_meanfreq, self.ff_meanfreq], [0., float(self.tstop)], dt=self.dt,
-                        generator=self.local_random)
-                else:
-                    this_spike_train = []
-                vec = h.Vector(this_spike_train)
-                cell.pp.play(vec)
-                self.spikes_rec_dict[i] = np.array(this_spike_train)
-            else:
-                if i in range(self.cell_index['E'][0], self.cell_index['E'][1]):
-                    cell_type = 'RS'
-                else:
-                    cell_type = 'FS'
-                cell = IzhiCell(self.tau_E, self.tau_I, cell_type)
-            self.cells.append(cell)
-            self.gids.append(i)
-            self.pc.set_gid2node(i, rank)
-            nc = cell.connect2target(None)
-            self.pc.cell(i, nc)
+        self.cells = defaultdict(dict)
+
+        for pop_name, (gid_start, gid_stop) in self.pop_gid_ranges.iteritems():
+            cell_type = self.pop_cell_types[pop_name]
+            for i, gid in enumerate(xrange(gid_start, gid_stop)):
+                # round-robin distribution of cells across MPI ranks
+                if i % nhost == rank:
+                    if self.debug:
+                        print('mkcells: rank: %i got %s gid: %i' % (rank, pop_name, gid))
+                    if cell_type == 'input':
+                        cell = FFCell()
+                        self.local_random.seed(self.spikes_seed + gid)
+                        if self.local_random.random() <= self.input_pop_fraction_active[pop_name]:
+                            this_spike_train = get_inhom_poisson_spike_times_by_thinning(
+                                [self.input_pop_mean_rates[pop_name], self.input_pop_mean_rates[pop_name]],
+                                [0., float(self.tstop)], dt=self.dt, generator=self.local_random)
+                        else:
+                            this_spike_train = []
+                        vec = h.Vector(this_spike_train)
+                        cell.pp.play(vec)
+                        self.spikes_dict[pop_name][gid] = np.array(this_spike_train)
+                    elif cell_type in ['RS', 'FS']:
+                        cell = IzhiCell(tau_E=self.connection_kinetics[pop_name]['E'],
+                                        tau_I=self.connection_kinetics[pop_name]['I'], type=cell_type)
+                    self.cells[pop_name][gid] = cell
+                    self.pc.set_gid2node(gid, rank)
+                    nc = cell.connect2target(None)
+                    self.pc.cell(gid, nc)
 
     def get_weight(self, connection):
         """
@@ -145,38 +124,36 @@ class Network(object):
 
     def connectcells(self):
         """
-        if the pre-synaptic neuron is E/FF - connect to 1st synapse (excitatory), otherwise connect to
-        2nd synapse (inhibitory) -- see IzhiCell
-        connections based on connection probability dict and weight of connection is based on a gaussian distribution
-
-        restrictions: cells cannot connect with themselves, weights cannot be negative, and the presynaptic cell
-        needs to live on this rank. (also, FF cells should not connect with other FF cells.)
+        Consult to prob_connections dict to determine connections. Consult connection_weights and
+        connection_weight_sigma_factor to determine synaptic strength.
+        Restrictions: 1) cells cannot connect with themselves
+                      2) weights cannot be negative
         """
-        rank = int(self.pc.id())
-        self.local_random.seed(self.connection_seed + rank)
-        self.ncdict = {}
-
-        for connection in ['ff2i', 'ff2e', 'e2e', 'e2i', 'i2i', 'i2e']:
-            mu, std_factor = self.get_weight(connection)
-            pre_gids, post_gids = self.connectivity_index_dict[connection]
-            rank_subset_gids = [i for i in self.gids if i in range(post_gids[0], post_gids[1])]
-
-            for presyn_gid in range(pre_gids[0], pre_gids[1]):
-                for target_gid in rank_subset_gids:
-                    if presyn_gid == target_gid:
-                        continue
-                    if self.local_random.random() <= self.prob_dict[connection]:
-                        target = self.pc.gid2cell(target_gid)
-                        if connection[0] == 'i':
-                            syn = target.synlist[1]
-                        else:
-                            syn = target.synlist[0]
-                        nc = self.pc.gid_connect(presyn_gid, syn)
-                        nc.delay = self.delay
-                        weight = self.local_random.gauss(mu, mu * std_factor)
-                        while weight < 0.: weight = self.local_random.gauss(mu, mu * std_factor)
-                        nc.weight[0] = weight
-                        self.ncdict[(presyn_gid, target_gid)] = nc
+        self.ncdict = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
+        for target_pop_name in self.prob_connection:
+            for target_gid in self.cells[target_pop_name]:
+                self.local_random.seed(self.connection_seed + target_gid)
+                target_cell = self.cells[target_pop_name][target_gid]
+                for source_pop_name in self.prob_connection[target_pop_name]:
+                    this_prob_connection = self.prob_connection[target_pop_name][source_pop_name]
+                    this_syn_type = self.connection_syn_types[source_pop_name]
+                    start_gid = self.pop_gid_ranges[source_pop_name][0]
+                    stop_gid = self.pop_gid_ranges[source_pop_name][1]
+                    mu = self.connection_weights[target_pop_name][source_pop_name]
+                    sigma_factor = self.connection_weight_sigma_factors[target_pop_name][source_pop_name]
+                    for source_gid in xrange(start_gid, stop_gid):
+                        if source_gid == target_gid:
+                            continue
+                        if self.local_random.random() <= this_prob_connection:
+                            this_syn = target_cell.syns[this_syn_type]
+                            this_nc = self.pc.gid_connect(source_gid, this_syn)
+                            this_nc.delay = self.delay
+                            this_weight = self.local_random.gauss(mu, mu * sigma_factor)
+                            while this_weight < 0.: this_weight = self.local_random.gauss(mu, mu * sigma_factor)
+                            this_nc.weight[0] = this_weight
+                            self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid] = this_nc
+                if self.debug:
+                    print('%s gid: %i: %s' % (target_pop_name, target_gid, self.ncdict[target_pop_name][target_gid]))
 
     def run(self):
         self.pc.set_maxstep(10)
@@ -221,15 +198,6 @@ class Network(object):
             voltage_rec_dict[gid] = np.array(recvec)[start_index:]
         tvec_array = np.subtract(tvec_array[start_index:], self.equilibrate)
         return voltage_rec_dict, tvec_array
-
-    def get_cell_type(self, gid):
-        """None = FF; fast spiking = inhib, regular spiking = excitatory"""
-        if gid in range(self.cell_index['FF'][1]):
-            return None
-        elif gid in range(self.cell_index['I'][0], self.cell_index['I'][1]):
-            return 'FS'
-        else:
-            return 'RS'
 
     # --Firing rate and spiking calculations
     def spike_summation(self, spikes_dict, t):
@@ -589,16 +557,26 @@ class Network(object):
         goes over each cell and checks whether or not the cell is the cell type it is supposed to be
         (e.g., cells with gids in a certain range must be FF cells/Hoc object)
         """
-        for cell in self.gids:
-            cell_type = self.get_cell_type(cell)
-            if cell_type is None and isinstance(self.pc.gid2cell(cell), IzhiCell):
-                print cell, " is not a FF cell but a ", type(self.pc.gid2cell(cell))
-            elif cell_type in ['FS', 'RS'] and not isinstance(self.pc.gid2cell(cell), IzhiCell):
-                print cell, " is not a Izhi cell but a ", type(self.pc.gid2cell(cell))
-            elif cell_type is 'FS' and self.pc.gid2cell(cell).izh.a != .02:
-                print cell, " is not a inhibitory Izhi cell but an excitatory one"
-            elif cell_type is 'RS' and self.pc.gid2cell(cell).izh.a != .1:
-                print cell, " is not an excitatory Izhi cell but an inhibitory one"
+        for pop_name in self.cells:
+            target_cell_type = self.pop_cell_types[pop_name]
+            for gid in self.cells[pop_name]:
+                this_cell = self.cells[pop_name][gid]
+                if isinstance(this_cell, FFCell):
+                    if target_cell_type != 'input':
+                        found_cell_type = type(this_cell)
+                        raise RuntimeError('check_cell_type_correct: %s gid: %i is cell_type: %s, not FFCell' %
+                                           (pop_name, gid, found_cell_type))
+                elif isinstance(this_cell, IzhiCell):
+                    if target_cell_type != this_cell.type:
+                        raise RuntimeError('check_cell_type_correct: %s gid: %i is IzhiCell type: %s, not %s' %
+                                           (pop_name, gid, this_cell.type, target_cell_type))
+                    if (target_cell_type == 'RS' and this_cell.izh.a != .1) or \
+                            (target_cell_type == 'FS' and this_cell.izh.a != .02):
+                        raise RuntimeError('check_cell_type_correct: %s gid: %i; IzhiCell type: %s not configured '
+                                           'properly' % (pop_name, gid, this_cell.type))
+                else:
+                    raise RuntimeError('check_cell_type_correct: %s gid: %i is an unknown type: %s' %
+                                       (pop_name, gid, type(this_cell)))
 
     def convert_ncdict_to_weights(self):
         """
@@ -633,7 +611,7 @@ class IzhiCell(object):
     def __init__(self, tau_E, tau_I, type='RS'):
         self.type = type
         self.sec = h.Section(cell=self)
-        self.sec.L, self.sec.diam, self.sec.cm = 10, 10, 31.831
+        self.sec.L, self.sec.diam, self.sec.cm = 10., 10., 31.831
         self.izh = h.Izhi2007b(.5, sec=self.sec)
         self.vinit = -60
         self.sec(0.5).v = self.vinit
@@ -643,22 +621,21 @@ class IzhiCell(object):
         if type == 'RS': self.izh.a = .1
         if type == 'FS': self.izh.a = .02
 
-        self.synapses(tau_E, tau_I)
+        self.mksyns(tau_E, tau_I)
 
     def __del__(self):
         pass
 
-    def synapses(self, tau_E, tau_I):
-        synlist = []
-        s = h.ExpSyn(self.sec(0.8))  # E0
+    def mksyns(self, tau_E, tau_I):
+        self.syns = dict()
+        s = h.ExpSyn(self.sec(0.5))
         s.tau = tau_E
-        synlist.append(s)
-        s = h.ExpSyn(self.sec(0.1))  # I1
+        s.e = 0.
+        self.syns['E'] = s
+        s = h.ExpSyn(self.sec(0.5))
         s.tau = tau_I
-        s.e = -80
-        synlist.append(s)
-
-        self.synlist = synlist
+        s.e = -80.
+        self.syns['I'] = s
 
     def connect2target(self, target):
         nc = h.NetCon(self.sec(1)._ref_v, target, sec=self.sec)
@@ -863,3 +840,81 @@ def get_inhom_poisson_spike_times_by_thinning(rate, t, dt=0.02, refractory=3., g
                 spike_times.append(interp_t[i])
                 ISI_memory = -refractory
     return spike_times
+
+
+def plot_inferred_spike_rates(gid_range_dict, spike_trains_dict, inferred_firing_rates, t,
+                              active_rate_threshold=1., cells_per_pop=4):
+    """
+
+    :param gid_range_dict: dict: {pop_name (str): tuple of int}
+    :param spike_trains_dict: dict of array
+    :param inferred_firing_rates: dict of array
+    :param t: array
+    :param gid_sample_dict: dict: {pop_name (str): list of gid (int)}
+    :param active_rate_threshold: float
+    :param cells_per_pop: int
+    """
+    num_pops = len(gid_range_dict)
+    fig, axes = plt.subplots(num_pops, cells_per_pop, sharex=True)
+    for j in xrange(cells_per_pop):
+        axes[num_pops-1][j].set_xlabel('Time (ms)')
+    for i in xrange(num_pops):
+        axes[i][0].set_ylabel('Firing rate (Hz)')
+
+    for row, pop_name in enumerate(gid_range_dict):
+        active_gid_range = []
+        for gid in range(*gid_range_dict[pop_name]):
+            inferred_rate = inferred_firing_rates[gid]
+            if np.max(inferred_rate) >= active_rate_threshold:
+                active_gid_range.append(gid)
+        gid_sample = random.sample(active_gid_range, min(len(active_gid_range), cells_per_pop))
+        for col, gid in enumerate(gid_sample):
+            inferred_rate = inferred_firing_rates[gid]
+            spike_train = spike_trains_dict[gid]
+            binned_spike_indexes = find_nearest(spike_train, t)
+            axes[row][col].plot(t, inferred_rate, label='Inferred rate')
+            axes[row][col].plot(t[binned_spike_indexes], np.ones(len(binned_spike_indexes)), 'k.', label='Spikes')
+            axes[row][col].set_title('%s cell: %i' % (pop_name, gid))
+
+    axes[0][0].legend(loc='best')
+    clean_axes(axes)
+    fig.suptitle('Inferred spike rates')
+    fig.tight_layout()
+    fig.show()
+
+
+def plot_voltage_traces(gid_range_dict, voltage_rec_dict, t, cells_per_pop=8, pop_names=None):
+    """
+
+    :param gid_range_dict: dict: {pop_name (str): tuple of int}
+    :param voltage_rec_dict: dict of array
+    :param t: array
+    :param cells_per_pop: int
+    :param pop_names: list of str
+    """
+    if pop_names is None:
+        pop_names = [pop_name for pop_name in gid_range_dict if pop_name not in ['FF']]
+    num_pops = len(pop_names)
+    num_rows = 2 * num_pops
+    num_cols = cells_per_pop / 2
+    fig, axes = plt.subplots(num_rows, num_cols, sharex=True)
+    for j in xrange(num_cols):
+        axes[num_rows-1][j].set_xlabel('Time (ms)')
+    for i in xrange(num_rows):
+        axes[i][0].set_ylabel('Voltage (mV)')
+
+    for i, pop_name in enumerate(pop_names):
+        this_gid_range = range(*gid_range_dict[pop_name])
+        gid_sample = random.sample(this_gid_range, min(len(this_gid_range), cells_per_pop))
+        for j, gid in enumerate(gid_sample):
+            row = (i * 2) + (j / num_cols)
+            col = j % num_cols
+            rec = voltage_rec_dict[gid]
+            axes[row][col].plot(t, rec)
+            axes[row][col].set_title('%s cell: %i' % (pop_name, gid))
+
+    axes[0][0].legend(loc='best')
+    clean_axes(axes)
+    fig.suptitle('Voltage recordings')
+    fig.tight_layout()
+    fig.show()
