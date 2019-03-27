@@ -46,15 +46,16 @@ def main(config_file_path, export, output_dir, export_file_path, label, interact
     sys.stdout.flush()
     features = context.interface.execute(compute_features, context.x0_array, context.export)
     sys.stdout.flush()
-    features, objectives = context.interface.execute(get_objectives, features)
-    sys.stdout.flush()
-    print 'params:'
-    pprint.pprint(context.x0_dict)
-    print 'features:'
-    pprint.pprint(features)
-    print 'objectives:'
-    pprint.pprint(objectives)
-    sys.stdout.flush()
+    if not debug:
+        features, objectives = context.interface.execute(get_objectives, features)
+        sys.stdout.flush()
+        print 'params:'
+        pprint.pprint(context.x0_dict)
+        print 'features:'
+        pprint.pprint(features)
+        print 'objectives:'
+        pprint.pprint(objectives)
+        sys.stdout.flush()
     context.update(locals())
 
     if not interactive:
@@ -86,7 +87,7 @@ def init_context():
     pop_cell_types = {'FF': 'input', 'E': 'RS', 'I': 'FS'}
     # {'postsynaptic population': {'presynaptic population': float} }
     prob_connection = defaultdict(dict)
-    connection_weights = defaultdict(dict)
+    connection_weights_mean = defaultdict(dict)
     connection_weight_sigma_factors = defaultdict(dict)
     connection_syn_types = {'FF': 'E', 'E': 'E', 'I': 'I'}  # {'presynaptic population': syn_type}
     connection_kinetics = defaultdict(dict)
@@ -129,12 +130,12 @@ def update_context(x, local_context=None):
     local_context.connection_kinetics['I']['E'] = x_dict['tau_E']
     local_context.connection_kinetics['I']['I'] = x_dict['tau_I']
 
-    local_context.connection_weights['E']['FF'] = x_dict['FF_E_mean_weight']
-    local_context.connection_weights['E']['E'] = x_dict['E_E_mean_weight']
-    local_context.connection_weights['E']['I'] = x_dict['I_E_mean_weight']
-    local_context.connection_weights['I']['FF'] = x_dict['FF_I_mean_weight']
-    local_context.connection_weights['I']['E'] = x_dict['E_I_mean_weight']
-    local_context.connection_weights['I']['I'] = x_dict['I_I_mean_weight']
+    local_context.connection_weights_mean['E']['FF'] = x_dict['FF_E_mean_weight']
+    local_context.connection_weights_mean['E']['E'] = x_dict['E_E_mean_weight']
+    local_context.connection_weights_mean['E']['I'] = x_dict['I_E_mean_weight']
+    local_context.connection_weights_mean['I']['FF'] = x_dict['FF_I_mean_weight']
+    local_context.connection_weights_mean['I']['E'] = x_dict['E_I_mean_weight']
+    local_context.connection_weights_mean['I']['I'] = x_dict['I_I_mean_weight']
 
     local_context.connection_weight_sigma_factors['E']['FF'] = x_dict['FF_E_weight_sigma_factor']
     local_context.connection_weight_sigma_factors['E']['E'] = x_dict['E_E_weight_sigma_factor']
@@ -158,35 +159,32 @@ def analyze_network_output(network, export=False, plot=False):
     binned_t = np.arange(0., context.tstop + context.binned_dt - context.equilibrate, context.binned_dt)
     spikes_dict = network.get_spikes_dict()
     voltage_rec_dict, rec_t = network.get_voltage_rec_dict()
-
-    inferred_firing_rates = infer_firing_rates(spikes_dict, binned_t, alpha=context.baks_alpha, beta=context.baks_beta,
+    firing_rates_dict = infer_firing_rates(spikes_dict, binned_t, alpha=context.baks_alpha, beta=context.baks_beta,
                                                pad_dur=context.baks_pad_dur)
-
-    connection_dict = network.convert_ncdict_to_weights()
+    connection_weights_dict = network.get_connection_weights()
 
     spikes_dict = context.comm.gather(spikes_dict, root=0)
     voltage_rec_dict = context.comm.gather(voltage_rec_dict, root=0)
-    inferred_firing_rates = context.comm.gather(inferred_firing_rates, root=0)
-    connection_dict = context.comm.gather(connection_dict, root=0)
+    firing_rates_dict = context.comm.gather(firing_rates_dict, root=0)
+    connection_weights_dict = context.comm.gather(connection_weights_dict, root=0)
     if context.comm.rank == 0:
-        connection_dict = merge_list_of_dict(connection_dict)
-        inferred_firing_rates = merge_list_of_dict(inferred_firing_rates)
-        voltage_rec_dict = merge_list_of_dict(voltage_rec_dict)
         spikes_dict = merge_list_of_dict(spikes_dict)
-        rate_dict, peak_dict = network.compute_mean_max_firing_per_cell(inferred_firing_rates)
-
-    if context.comm.rank == 0:
-        frac_active, mean_firing_active = network.get_active_pop_stats(inferred_firing_rates, binned_t,
-                                                                       threshold=context.active_rate_threshold,
-                                                                       plot=plot)
-        network.spike_summation(spikes_dict, binned_t)
+        voltage_rec_dict = merge_list_of_dict(voltage_rec_dict)
+        firing_rates_dict = merge_list_of_dict(firing_rates_dict)
+        connection_weights_dict = merge_list_of_dict(connection_weights_dict)
+        mean_rate_dict, peak_rate_dict, mean_rate_active_cells_dict, pop_fraction_active_dict, \
+        binned_spike_count_dict, pop_binned_spike_count_dict = \
+            get_pop_activity_stats(spikes_dict, firing_rates_dict, binned_t, threshold=context.active_rate_threshold,
+                                   plot=plot)
 
         if plot:
-            plot_inferred_spike_rates(network.cell_index, spikes_dict, inferred_firing_rates, binned_t,
-                                      context.active_rate_threshold)
-            plot_voltage_traces(network.cell_index, voltage_rec_dict, rec_t)
-            network.plot_adj_matrix(connection_dict)
-            network.plot_population_firing_rates(inferred_firing_rates, binned_t)
+            plot_inferred_spike_rates(spikes_dict, firing_rates_dict, binned_t, context.active_rate_threshold)
+            plot_voltage_traces(voltage_rec_dict, rec_t)
+            if context.debug:
+                context.update(locals())
+                return dict()
+            network.plot_adj_matrix(connection_weights_dict)
+            network.plot_population_firing_rates(firing_rates_dict, binned_t)
 
         E_mean, E_max = network.compute_pop_firing_features(network.cell_index['E'], rate_dict, peak_dict)
         I_mean, I_max = network.compute_pop_firing_features(network.cell_index['I'], rate_dict, peak_dict)
@@ -231,7 +229,7 @@ def compute_features(x, export=False):
     context.network = Network(pc=context.pc, pop_sizes=context.pop_sizes, pop_gid_ranges=context.pop_gid_ranges,
                               pop_cell_types=context.pop_cell_types, connection_syn_types=context.connection_syn_types,
                               prob_connection=context.prob_connection,
-                              connection_weights=context.connection_weights,
+                              connection_weights_mean=context.connection_weights_mean,
                               connection_weight_sigma_factors=context.connection_weight_sigma_factors,
                               input_pop_mean_rates=context.input_pop_mean_rates,
                               input_pop_fraction_active=context.input_pop_fraction_active,
@@ -242,21 +240,17 @@ def compute_features(x, export=False):
     if context.disp and int(context.pc.id()) == 0:
         print('NETWORK BUILD RUNTIME: %.2f s' % (time.time() - start_time))
     current_time = time.time()
-    if context.debug:
-        return dict()
-    else:
-        context.network.run()
-        if int(context.pc.id()) == 0:
-            if context.disp:
-                print('NETWORK SIMULATION RUNTIME: %.2f s' % (time.time() - current_time))
-        current_time = time.time()
-        results = analyze_network_output(context.network, export=export, plot=context.plot)
-        if int(context.pc.id()) == 0:
-            if context.disp:
-                print('NETWORK ANALYSIS RUNTIME: %.2f s' % (time.time() - current_time))
-            if results is None:
-                return dict()
-            return results
+    context.network.run()
+    if int(context.pc.id()) == 0 and context.disp:
+        print('NETWORK SIMULATION RUNTIME: %.2f s' % (time.time() - current_time))
+    current_time = time.time()
+    results = analyze_network_output(context.network, export=export, plot=context.plot)
+    if int(context.pc.id()) == 0:
+        if context.disp:
+            print('NETWORK ANALYSIS RUNTIME: %.2f s' % (time.time() - current_time))
+        if results is None:
+            return dict()
+        return results
 
 
 def get_objectives(features, export=False):

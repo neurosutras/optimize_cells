@@ -1,16 +1,16 @@
 bounds:
   E_E_prob_connection: !!python/tuple
   - 1.0E-4
-  - .8
+  - 1.
   E_I_prob_connection: !!python/tuple
   - 1.0E-4
-  - .8
+  - 1.
   I_E_prob_connection: !!python/tuple
   - 1.0E-4
-  - .8
+  - 1.
   I_I_prob_connection: !!python/tuple
   - 1.0E-4
-  - .8
+  - 1.
   FF_E_mean_weight: !!python/tuple
   - 0.
   - .5
@@ -19,16 +19,16 @@ bounds:
   - .5
   E_E_mean_weight: !!python/tuple
   - 0.
-  - 5.
+  - .5
   E_I_mean_weight: !!python/tuple
   - 0.
-  - 5.
+  - .5
   I_I_mean_weight: !!python/tuple
   - 0.
-  - 5.
+  - .5
   I_E_mean_weight: !!python/tuple
   - 0.
-  - 5.
+  - .5
   FF_frac_active: !!python/tuple
   - 0.
   - 1.
@@ -161,19 +161,19 @@ target_val:
   peak_gamma_freq_E: 70.
   peak_gamma_freq_I: 70.
 x0:
-  E_E_prob_connection: 0.3
+  E_E_prob_connection: 0.2
   E_I_prob_connection: 0.5
-  I_E_prob_connection: 0.5
-  I_I_prob_connection: 0.3
-  FF_I_mean_weight: .5
-  FF_E_mean_weight: .5
-  E_E_mean_weight: .5
-  E_I_mean_weight: .5
-  I_E_mean_weight: .5
+  I_E_prob_connection: 1.
+  I_I_prob_connection: 1.
+  FF_I_prob_connection: 0.1
+  FF_E_prob_connection: 0.1
+  FF_I_mean_weight: .05
+  FF_E_mean_weight: .05
+  E_E_mean_weight: .005
+  E_I_mean_weight: .005
+  I_E_mean_weight: .25
   I_I_mean_weight: .25
   FF_frac_active: .8
-  FF_I_prob_connection: .5
-  FF_E_prob_connection: .5
   FF_E_weight_sigma_factor: .1
   FF_I_weight_sigma_factor: .1
   E_I_weight_sigma_factor: .1
