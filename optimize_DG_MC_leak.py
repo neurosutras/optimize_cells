@@ -7,7 +7,7 @@ Requires use of a nested.parallel interface.
 __author__ = 'Aaron D. Milstein and Grace Ng'
 from dentate.biophysics_utils import *
 from nested.optimize_utils import *
-from optimize_cells_utils import *
+from cell_utils import *
 import click
 
 

@@ -1,5 +1,5 @@
 from nested.optimize_utils import *
-from optimize_simple_network_utils import *
+from simple_network_utils import *
 import click
 import time
 
@@ -44,18 +44,21 @@ def main(config_file_path, export, output_dir, export_file_path, label, interact
                             output_dir=output_dir, export=export, export_file_path=export_file_path, label=label,
                             disp=verbose > 0, verbose=verbose, plot=plot)
     sys.stdout.flush()
+    time.sleep(1.)
     features = context.interface.execute(compute_features, context.x0_array, context.export)
     sys.stdout.flush()
-    if not debug:
-        features, objectives = context.interface.execute(get_objectives, features)
-        sys.stdout.flush()
-        print 'params:'
-        pprint.pprint(context.x0_dict)
-        print 'features:'
-        pprint.pprint(features)
-        print 'objectives:'
-        pprint.pprint(objectives)
-        sys.stdout.flush()
+    time.sleep(1.)
+    features, objectives = context.interface.execute(get_objectives, features)
+    sys.stdout.flush()
+    time.sleep(1.)
+    print 'params:'
+    pprint.pprint(context.x0_dict)
+    print 'features:'
+    pprint.pprint(features)
+    print 'objectives:'
+    pprint.pprint(objectives)
+    sys.stdout.flush()
+    time.sleep(1.)
     context.update(locals())
 
     if not interactive:
@@ -70,6 +73,8 @@ def config_worker():
         context.plot = False
     if 'verbose' not in context():
         context.verbose = 1
+    else:
+        context.verbose = int(context.verbose)
     if 'debug' not in context():
         context.debug = False
     init_context()
@@ -106,6 +111,7 @@ def init_context():
     baks_alpha = 4.7725100028345535
     baks_beta = 0.41969058927343522
     baks_pad_dur = 1000.  # ms
+    filter_bands = {'Theta': [4., 10.], 'Gamma': [30., 100.]}
     context.update(locals())
 
 
@@ -118,34 +124,33 @@ def update_context(x, local_context=None):
     if local_context is None:
         local_context = context
     x_dict = param_array_to_dict(x, context.param_names)
-    local_context.prob_connection['E']['FF'] = x_dict['FF_E_prob_connection']
+    local_context.prob_connection['E']['FF'] = x_dict['E_FF_prob_connection']
     local_context.prob_connection['E']['E'] = x_dict['E_E_prob_connection']
-    local_context.prob_connection['E']['I'] = x_dict['I_E_prob_connection']
-    local_context.prob_connection['I']['FF'] = x_dict['FF_I_prob_connection']
-    local_context.prob_connection['I']['E'] = x_dict['E_I_prob_connection']
+    local_context.prob_connection['E']['I'] = x_dict['E_I_prob_connection']
+    local_context.prob_connection['I']['FF'] = x_dict['I_FF_prob_connection']
+    local_context.prob_connection['I']['E'] = x_dict['I_E_prob_connection']
     local_context.prob_connection['I']['I'] = x_dict['I_I_prob_connection']
 
-    local_context.connection_kinetics['E']['E'] = x_dict['tau_E']
-    local_context.connection_kinetics['E']['I'] = x_dict['tau_I']
-    local_context.connection_kinetics['I']['E'] = x_dict['tau_E']
-    local_context.connection_kinetics['I']['I'] = x_dict['tau_I']
+    local_context.connection_kinetics['E']['E'] = x_dict['E_tau_E']
+    local_context.connection_kinetics['E']['I'] = x_dict['E_tau_I']
+    local_context.connection_kinetics['I']['E'] = x_dict['I_tau_E']
+    local_context.connection_kinetics['I']['I'] = x_dict['I_tau_I']
 
-    local_context.connection_weights_mean['E']['FF'] = x_dict['FF_E_mean_weight']
+    local_context.connection_weights_mean['E']['FF'] = x_dict['E_FF_mean_weight']
     local_context.connection_weights_mean['E']['E'] = x_dict['E_E_mean_weight']
-    local_context.connection_weights_mean['E']['I'] = x_dict['I_E_mean_weight']
-    local_context.connection_weights_mean['I']['FF'] = x_dict['FF_I_mean_weight']
-    local_context.connection_weights_mean['I']['E'] = x_dict['E_I_mean_weight']
+    local_context.connection_weights_mean['E']['I'] = x_dict['E_I_mean_weight']
+    local_context.connection_weights_mean['I']['FF'] = x_dict['I_FF_mean_weight']
+    local_context.connection_weights_mean['I']['E'] = x_dict['I_E_mean_weight']
     local_context.connection_weights_mean['I']['I'] = x_dict['I_I_mean_weight']
 
-    local_context.connection_weight_sigma_factors['E']['FF'] = x_dict['FF_E_weight_sigma_factor']
+    local_context.connection_weight_sigma_factors['E']['FF'] = x_dict['E_FF_weight_sigma_factor']
     local_context.connection_weight_sigma_factors['E']['E'] = x_dict['E_E_weight_sigma_factor']
-    local_context.connection_weight_sigma_factors['E']['I'] = x_dict['I_E_weight_sigma_factor']
-    local_context.connection_weight_sigma_factors['I']['FF'] = x_dict['FF_I_weight_sigma_factor']
-    local_context.connection_weight_sigma_factors['I']['E'] = x_dict['E_I_weight_sigma_factor']
+    local_context.connection_weight_sigma_factors['E']['I'] = x_dict['E_I_weight_sigma_factor']
+    local_context.connection_weight_sigma_factors['I']['FF'] = x_dict['I_FF_weight_sigma_factor']
+    local_context.connection_weight_sigma_factors['I']['E'] = x_dict['I_E_weight_sigma_factor']
     local_context.connection_weight_sigma_factors['I']['I'] = x_dict['I_I_weight_sigma_factor']
     
     local_context.input_pop_mean_rates['FF'] = local_context.FF_mean_rate
-    local_context.input_pop_fraction_active['FF'] = x_dict['FF_frac_active']
 
 
 def analyze_network_output(network, export=False, plot=False):
@@ -173,47 +178,41 @@ def analyze_network_output(network, export=False, plot=False):
         firing_rates_dict = merge_list_of_dict(firing_rates_dict)
         connection_weights_dict = merge_list_of_dict(connection_weights_dict)
         mean_rate_dict, peak_rate_dict, mean_rate_active_cells_dict, pop_fraction_active_dict, \
-        binned_spike_count_dict, pop_binned_spike_count_dict = \
+        binned_spike_count_dict, mean_rate_from_spike_count_dict = \
             get_pop_activity_stats(spikes_dict, firing_rates_dict, binned_t, threshold=context.active_rate_threshold,
                                    plot=plot)
+        filtered_mean_rate_dict, filter_envelope_dict, filter_envelope_ratio_dict, centroid_freq_dict = \
+            get_pop_bandpass_filtered_signal_stats(mean_rate_from_spike_count_dict, binned_t, context.filter_bands,
+                                               plot=plot)
 
         if plot:
             plot_inferred_spike_rates(spikes_dict, firing_rates_dict, binned_t, context.active_rate_threshold)
             plot_voltage_traces(voltage_rec_dict, rec_t)
-            if context.debug:
-                context.update(locals())
-                return dict()
-            network.plot_adj_matrix(connection_weights_dict)
-            network.plot_population_firing_rates(firing_rates_dict, binned_t)
+            plot_weight_matrix(connection_weights_dict)
+            plot_firing_rate_heatmaps(firing_rates_dict, binned_t)
 
-        E_mean, E_max = network.compute_pop_firing_features(network.cell_index['E'], rate_dict, peak_dict)
-        I_mean, I_max = network.compute_pop_firing_features(network.cell_index['I'], rate_dict, peak_dict)
+        result = dict()
 
-        I_pop_rate = mean_firing_active['I']
-        E_pop_rate = mean_firing_active['E']
-        FF_pop_rate = mean_firing_active['FF']
-        pop_rates = [FF_pop_rate, I_pop_rate, E_pop_rate]
-        ratios, bands = network.get_envelope_ratio(pop_rates, binned_t, context.filter_dt, plot=plot)
-
-        theta_E = bands['theta_E']; gamma_E = bands['gamma_E']
-        theta_I = bands['theta_I']; gamma_I = bands['gamma_I']
-        theta_E_ratio = ratios['theta_E']; gamma_E_ratio = ratios['gamma_E']
-        theta_I_ratio = ratios['theta_I']; gamma_I_ratio = ratios['gamma_I']
-
-        peak_theta_freq_E = peak_from_spectrogram(theta_E, 'theta E', context.filter_dt, plot)
-        peak_theta_freq_I = peak_from_spectrogram(theta_I, 'theta I', context.filter_dt, plot)
-        peak_gamma_freq_E = peak_from_spectrogram(gamma_E, 'gamma E', context.filter_dt, plot)
-        peak_gamma_freq_I = peak_from_spectrogram(gamma_I, 'gamma I', context.filter_dt, plot)
+        result['E_mean_active_rate'] = np.mean(mean_rate_active_cells_dict['E'])
+        result['I_mean_active_rate'] = np.mean(mean_rate_active_cells_dict['I'])
+        result['E_peak_rate'] = np.mean(peak_rate_dict['E'].values())
+        result['I_peak_rate'] = np.mean(peak_rate_dict['I'].values())
+        result['E_frac_active'] = np.mean(pop_fraction_active_dict['E'])
+        result['I_frac_active'] = np.mean(pop_fraction_active_dict['I'])
+        result['FF_theta_envelope_ratio'] = filter_envelope_ratio_dict['Theta']['FF']
+        result['E_theta_envelope_ratio'] = filter_envelope_ratio_dict['Theta']['E']
+        result['I_theta_envelope_ratio'] = filter_envelope_ratio_dict['Theta']['I']
+        result['FF_gamma_envelope_ratio'] = filter_envelope_ratio_dict['Gamma']['FF']
+        result['E_gamma_envelope_ratio'] = filter_envelope_ratio_dict['Gamma']['E']
+        result['I_gamma_envelope_ratio'] = filter_envelope_ratio_dict['Gamma']['I']
+        result['E_centroid_theta_freq'] = centroid_freq_dict['Theta']['E']
+        result['I_centroid_theta_freq'] = centroid_freq_dict['Theta']['I']
+        result['E_centroid_gamma_freq'] = centroid_freq_dict['Gamma']['E']
+        result['I_centroid_gamma_freq'] = centroid_freq_dict['Gamma']['I']
 
         context.update(locals())
 
-        return {'E_mean_rate': E_mean, 'E_peak_rate': E_max, 'I_mean_rate': I_mean, "I_peak_rate": I_max,
-                'peak_theta_freq_E': peak_theta_freq_E, 'peak_theta_freq_I': peak_theta_freq_I,
-                'peak_gamma_freq_E': peak_gamma_freq_E, 'peak_gamma_freq_I': peak_gamma_freq_I,
-                'E_frac_active': np.mean(frac_active['E']), 'I_frac_active': np.mean(frac_active['I']),
-                'FF_frac_active': np.mean(frac_active['FF']), 'theta_E_envelope_ratio': theta_E_ratio,
-                'theta_I_envelope_ratio': theta_I_ratio, 'gamma_E_envelope_ratio': gamma_E_ratio,
-                'gamma_I_envelope_ratio': gamma_I_ratio}
+        return result
 
 
 def compute_features(x, export=False):
@@ -232,7 +231,6 @@ def compute_features(x, export=False):
                               connection_weights_mean=context.connection_weights_mean,
                               connection_weight_sigma_factors=context.connection_weight_sigma_factors,
                               input_pop_mean_rates=context.input_pop_mean_rates,
-                              input_pop_fraction_active=context.input_pop_fraction_active,
                               connection_kinetics=context.connection_kinetics, tstop=context.tstop,
                               equilibrate=context.equilibrate, dt=context.dt, delay=context.delay,
                               connection_seed=context.connection_seed, spikes_seed=context.spikes_seed,
@@ -262,13 +260,9 @@ def get_objectives(features, export=False):
     """
     if int(context.pc.id()) == 0:
         objectives = {}
-        for feature_name in ['E_peak_rate', 'I_peak_rate', 'E_mean_rate', 'I_mean_rate', 'peak_theta_freq_E',
-                             'peak_theta_freq_I', 'peak_gamma_freq_E', 'peak_gamma_freq_I', 'E_frac_active',
-                             'I_frac_active', 'theta_E_envelope_ratio', 'theta_I_envelope_ratio',
-                             'gamma_E_envelope_ratio', 'gamma_I_envelope_ratio']:
-            objective_name = feature_name
-            objectives[objective_name] = ((context.target_val[objective_name] - features[feature_name]) /
-                                                  context.target_range[objective_name]) ** 2.
+        for objective_name in context.objective_names:
+            objectives[objective_name] = ((context.target_val[objective_name] - features[objective_name]) /
+                                          context.target_range[objective_name]) ** 2.
         return features, objectives
 
 

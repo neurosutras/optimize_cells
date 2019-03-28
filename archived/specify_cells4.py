@@ -1,6 +1,6 @@
 __author__ = 'Aaron D. Milstein'
 import btmorph  # must be found in system $PYTHONPATH
-from optimize_cells_utils import *
+from cell_utils import *
 from neuron import h  # must be found in system $PYTHONPATH
 
 # Includes modification of an early version of SWC_neuron.py by Daniele Linaro.

@@ -1,7 +1,7 @@
 from nested.utils import *
 from neuron import h
-import seaborn as sns
 from baks import baks
+from scipy.signal import butter, sosfiltfilt, sosfreqz, hilbert, periodogram
 
 
 # for h.lambda_f
@@ -14,8 +14,8 @@ class Network(object):
 
     def __init__(self, pc, pop_sizes, pop_gid_ranges, pop_cell_types, connection_syn_types, prob_connection,
                  connection_weights_mean, connection_weight_sigma_factors, connection_kinetics, input_pop_mean_rates,
-                 input_pop_fraction_active, tstop=1000., equilibrate=250., dt=0.025, delay=1., connection_seed=0,
-                 spikes_seed=100000, verbose=1, debug=False):
+                 tstop=1000., equilibrate=250., dt=0.025, delay=1., connection_seed=0, spikes_seed=100000, verbose=1,
+                 debug=False):
         """
 
         :param pc: ParallelContext object
@@ -29,7 +29,6 @@ class Network(object):
                                                 mean
         :param connection_kinetics: nested dict of float: synaptic decay kinetics (ms)
         :param input_pop_mean_rates: dict of float: mean firing rate of each input population (Hz)
-        :param input_pop_fraction_active: dict of float: fraction of each input population chosen to be active
         :param tstop: int: simulation duration (ms)
         :param equilibrate: float: simulation equilibration duration (ms)
         :param dt: float: simulation timestep (ms)
@@ -62,7 +61,6 @@ class Network(object):
 
         self.spikes_dict = defaultdict(dict)
         self.input_pop_mean_rates = input_pop_mean_rates
-        self.input_pop_fraction_active = input_pop_fraction_active
 
         self.local_random = random.Random()
         self.connection_seed = connection_seed
@@ -90,12 +88,9 @@ class Network(object):
                     if cell_type == 'input':
                         cell = FFCell()
                         self.local_random.seed(self.spikes_seed + gid)
-                        if self.local_random.random() <= self.input_pop_fraction_active[pop_name]:
-                            this_spike_train = get_inhom_poisson_spike_times_by_thinning(
-                                [self.input_pop_mean_rates[pop_name], self.input_pop_mean_rates[pop_name]],
-                                [0., float(self.tstop)], dt=self.dt, generator=self.local_random)
-                        else:
-                            this_spike_train = []
+                        this_spike_train = get_inhom_poisson_spike_times_by_thinning(
+                            [self.input_pop_mean_rates[pop_name], self.input_pop_mean_rates[pop_name]],
+                            [0., float(self.tstop)], dt=self.dt, generator=self.local_random)
                         vec = h.Vector(this_spike_train)
                         cell.pp.play(vec)
                         self.spikes_dict[pop_name][gid] = np.array(this_spike_train)
@@ -234,7 +229,7 @@ class Network(object):
             weights[target_pop_name] = dict()
             for target_gid in self.ncdict[target_pop_name]:
                 weights[target_pop_name][target_gid] = dict()
-                for source_pop_name in self.prob_connection:
+                for source_pop_name in self.prob_connection[target_pop_name]:
                     weights[target_pop_name][target_gid][source_pop_name] = dict()
                     start_gid = self.pop_gid_ranges[source_pop_name][0]
                     stop_gid = self.pop_gid_ranges[source_pop_name][1]
@@ -246,315 +241,6 @@ class Network(object):
                             weights[target_pop_name][target_gid][source_pop_name][source_gid] = 0.
 
         return weights
-
-    # --Firing rate and spiking calculations
-    def spike_summation(self, spikes_dict, t):
-        """
-        sums up spikes per population
-        :param spikes_dict: dict s.t. key = gid, val = array of spike times
-        :param t: array
-        """
-        self.E_sum = np.zeros_like(t)
-        self.I_sum = np.zeros_like(t)
-        self.FF_sum = np.zeros_like(t)
-        for i in range(self.total_cells):
-            cell_type = self.get_cell_type(i)
-            if len(spikes_dict[i]) > 0:
-                binned_spikes = get_binned_spike_train(spikes_dict[i], t)
-                if cell_type == 'RS':
-                    self.E_sum = np.add(self.E_sum, binned_spikes)
-                elif cell_type == 'FS':
-                    self.I_sum = np.add(self.I_sum, binned_spikes)
-                else:
-                    self.FF_sum = np.add(self.FF_sum, binned_spikes)
-
-    def compute_pop_firing_features(self, bounds, rate_dict, peak_dict):
-        """
-        from dictionaries containing the mean rate and peaks of each cell, returns
-        a value for the mean and peak firing rate (Hz) for the specified population
-        :param bounds: a tuple representing the contiguous range of gids associated with the population
-        :param rate_dict: dict, key = gid, val = scalar
-        :param peak_dict: dict, key = gid, val = scalar
-        """
-        count = 0
-        mean = 0
-        max_firing = 0
-        for i in range(bounds[0], bounds[1]):
-            if i not in rate_dict: continue
-            mean += rate_dict[i]
-            max_firing += peak_dict[i]
-            count += 1
-        if count != 0:
-            mean = mean / float(count)
-            max_firing = max_firing / float(count)
-
-        return mean, max_firing
-
-    def compute_pop_firing(self, firing_rates_dict, bounds):
-        """
-        from individual cell firing rates, compute population firing rate
-        :param firing_rates_dict: dict; key = gid, val = array of firing rates
-        :param bounds: range of gids for population
-        """
-        pop_rate = [0] * self.tstop
-        for i in range(bounds[0], bounds[1]):
-            if len(firing_rates_dict[i]) == 0: continue
-            for j in range(self.tstop):
-                if firing_rates_dict[i][j] > 1.: pop_rate[j] += firing_rates_dict[i][j]
-        return pop_rate
-
-    def count_to_rate_basic(self, spike_sums, ncell, dt=1.):
-        """converts spike count (summed over population) to average instaneous firing rate for one cell per timestep."""
-        factor = dt / 1000.
-        rate = np.divide(np.divide(spike_sums, float(ncell)), factor)
-        return rate
-
-    # --Theta/gamma stuff
-    """def get_bands_of_interest(self, t, filter_dt, plot=False):
-        # gauss_E = gauss(self.E_sum, binned_dt)
-        #  gauss_I = gauss(self.I_sum, binned_dt)
-        #  gauss_FF = gauss(self.FF_sum, binned_dt)
-        # gauss_E, _ = baks(self.E_sum, t, self.baks_alpha, self.baks_beta)
-        # gauss_I, _ = baks(self.I_sum, t, self.baks_alpha, self.baks_beta)
-        # gauss_FF, _ = baks(self.FF_sum, t, self.baks_alpha, self.baks_beta)
-
-        window_len = int(2000. / filter_dt)
-        theta_band = [5., 10.]
-        #theta_E, theta_I, theta_FF = filter_band(gauss_E, gauss_I, gauss_FF, window_len, theta_band)
-        theta_E, theta_I, theta_FF = filter_band(self.E_sum, self.I_sum, self.FF_sum, window_len, theta_band, filter_dt)
-        window_len = int(200. / filter_dt)
-        gamma_band = [30., 100.]
-        #gamma_E, gamma_I, gamma_FF = filter_band(gauss_E, gauss_I, gauss_FF, window_len, gamma_band)
-        gamma_E, gamma_I, gamma_FF = filter_band(self.E_sum, self.I_sum, self.FF_sum, window_len, gamma_band, filter_dt)
-
-        if plot:
-            # self.plot_smoothing(gauss_E)
-            # self.plot_bands(theta_E, gamma_E, gauss_E, theta_FF, gamma_FF, gauss_FF)
-            self.plot_bands(t, theta_E, gamma_E, self.E_sum, theta_FF, gamma_FF, self.FF_sum)
-
-        return theta_E, theta_I, gamma_E, gamma_I"""
-
-    def calculate_envelope_ratio(self, pop_rate, band, pad_len):
-        """mean of the hilbert transform over the mean of the firing rate"""
-        hilb_transform = np.abs(scipy.signal.hilbert(band))[pad_len:][:-pad_len]
-        mean_envelope = np.mean(hilb_transform)
-        mean_rate = np.mean(pop_rate)
-        if mean_rate > 0:
-            ratio = mean_envelope / mean_rate
-        else:
-            ratio = 0.
-        return ratio, hilb_transform
-
-    def get_bands_of_interest(self, filter_dt, basic_rate_E, basic_rate_I, basic_rate_FF, t, plot=False):
-        """
-        pad length = window length to get rid of edge effects
-        :param: filter_dict: float, ms
-        :param: basic_rate_E: array, instantaneous firing rate for E population (divided by number of E cells)
-        :param: basic_rate_I: array
-        :param: basic_rate_E: array
-        :param: t, array
-        :param: plot
-        """
-        pad_len_theta = window_len = int(2000. / filter_dt)
-        theta_band = [5., 10.]
-        theta_E, theta_I, theta_FF = untruncated_filter_band(basic_rate_E, basic_rate_I, basic_rate_FF,
-                                                             window_len, theta_band, pad_len_theta, filter_dt)
-
-        pad_len_gamma = window_len = int(200. / filter_dt)
-        gamma_band = [30., 100.]
-        gamma_E, gamma_I, gamma_FF = untruncated_filter_band(basic_rate_E, basic_rate_I, basic_rate_FF,
-                                                             window_len, gamma_band, pad_len_gamma, filter_dt)
-        if plot:
-            self.plot_bands(t, theta_E[pad_len_theta:][:len(t)], gamma_E[pad_len_gamma:][:len(t)],
-                            basic_rate_E, theta_FF[pad_len_theta:][:len(t)],
-                            gamma_FF[pad_len_gamma:][:len(t)], basic_rate_FF)
-
-        return theta_E, theta_I, gamma_E, gamma_I, pad_len_theta, pad_len_gamma
-
-    def get_envelope_ratio(self, pop_rates, t, filter_dt, plot=False):
-        """
-        gets the fluctation in population firing rate based on theta/gamma
-        :param pop_rates: list of arrays in the order: FF pop rate, I pop rate, E pop rate
-        :param t: array
-        :param filter_dt: float, ms
-        :param plot:
-        :return: ratios = a dict; truncated_bands; both keyed by strings like 'theta_I', 'gamma_E', etc
-        """
-        basic_rate_E = self.count_to_rate_basic(self.E_sum, self.E_ncell)
-        basic_rate_I = self.count_to_rate_basic(self.I_sum, self.I_ncell)
-        basic_rate_FF = self.count_to_rate_basic(self.FF_sum, self.FF_ncell)
-
-        theta_E, theta_I, gamma_E, gamma_I, pad_len_theta, pad_len_gamma = self.get_bands_of_interest(filter_dt,
-                                                    basic_rate_E, basic_rate_I, basic_rate_FF, t, plot)
-
-        ratios = {}
-        bands = {'theta_I': theta_I, 'gamma_I': gamma_I, 'theta_E': theta_E, 'gamma_E': gamma_E}
-        truncated_bands = {}
-        for label, band in bands.iteritems():
-            if label[-1] == 'I':
-                pop_rate = pop_rates[1]
-            else:
-                pop_rate = pop_rates[2]
-            if label.find('theta') != -1:
-                pad_len = pad_len_theta
-            else:
-                pad_len = pad_len_gamma
-            ratio, hilb_transform = self.calculate_envelope_ratio(pop_rate, band, pad_len)
-            ratios[label] = ratio
-            truncated_bands[label] = band[pad_len:][:len(t)]
-
-            if plot:
-                self.plot_envelope_ratio(t, hilb_transform, pop_rate, label, ratio)
-
-        return ratios, truncated_bands
-
-    # --Plotting
-    def sample_cells_for_plotting(self):
-        """
-        for plot_voltage_trace. sample a number of cells from the E and I populations to be plotted
-        :return: list of gids
-        """
-        I_sample = range(self.cell_index['I'][0], self.cell_index['I'][1])
-        E_sample = range(self.cell_index['E'][0], self.cell_index['E'][1])
-        if self.I_ncell > self.plot_ncells:
-            I_sample = self.local_random.sample(I_sample, self.plot_ncells)
-        if self.E_ncell > self.plot_ncells:
-            E_sample = self.local_random.sample(E_sample, self.plot_ncells)
-        return I_sample + E_sample
-
-    def plot_voltage_trace(self, v_dict, spikes_dict, dt=.025):
-        """
-        plots voltage trace for a random subset of E and I cells. downsamples to 1 ms for plotting.
-        markers represent spikes
-        """
-        down_dt = 1.
-        ms_step = int(down_dt / dt)
-        sampled_cells = self.sample_cells_for_plotting()
-        for i in sampled_cells:
-            ms_rec = []
-            for j, v in enumerate(v_dict[i]):
-                if j % ms_step == 0: ms_rec.append(v)
-            ev = [int(event / down_dt) for event in spikes_dict[i]]
-            fig = plt.figure()
-            plt.plot(range(len(ms_rec)), ms_rec, '-gD', markevery=ev)
-            plt.title('v trace ' + self.get_cell_type(i) + str(i))
-            fig.show()
-        plt.show()
-
-    def plot_adj_matrix(self, connections):
-        """
-        plots connections in a matrix map. color represents weight of connection
-        :param connections: dict, key = (pre, post), val = weight
-        """
-        if self.total_cells > 100: return
-        #source = row; target = col
-        matrixmap = np.zeros((self.total_cells, self.total_cells))
-        for pair, weight in connections.iteritems():
-            source, target = pair
-            matrixmap[source][target] = weight
-        plt.figure()
-        ax = sns.heatmap(matrixmap)
-        ax.hlines([self.FF_ncell, self.FF_ncell + self.I_ncell], color='white', *ax.get_xlim())
-        ax.vlines([self.FF_ncell, self.FF_ncell + self.I_ncell], color='white', *ax.get_ylim())
-        plt.show()
-
-        FF_matrixmap = matrixmap[:self.FF_ncell]
-        plt.figure()
-        ax = sns.heatmap(FF_matrixmap)
-        ax.vlines([self.FF_ncell, self.FF_ncell + self.I_ncell], color='white', *ax.get_ylim())
-        plt.show()
-
-    def plot_population_firing_rates(self, firing_rates, t):
-        """
-        relies on the fact that populations have continuous gids. go through all the gids, and when
-        we've hit an end of a population, plot the colormap
-
-        :param firing_rates: dict of array
-        :param t: array
-        """
-        wrap = 0
-        counter = 0
-        populations = ['FF', 'I', 'E']
-        ncell = [self.FF_ncell, self.I_ncell, self.E_ncell]
-        last_idx = [self.FF_ncell - 1, self.cell_index['I'][1] - 1, self.cell_index['E'][1] - 1]
-        hm = np.zeros((ncell[counter], len(t)))
-        for key in range(self.total_cells):
-            if len(firing_rates[key]) != 0:
-                hm[wrap] = firing_rates[key]
-            wrap += 1
-            if key == last_idx[counter]:
-                plt.figure()
-                sns.heatmap(hm)
-                plt.title(populations[counter])
-                plt.show()
-                wrap = 0
-                counter += 1
-                if key < len(ncell): hm = np.zeros((ncell[counter], len(t)))
-
-    def plot_envelope_ratio(self, t, hilb_transform, pop_rate, label, ratio):
-        plt.plot(t, hilb_transform, label='hilbert transform')
-        plt.plot(t, pop_rate, label='pop firing rate')
-        plt.axhline(y=np.mean(hilb_transform), color='red')
-        plt.axhline(y=np.mean(pop_rate), color='red')
-        plt.legend(loc=1)
-        if label is None:
-            label = 'ratio: %.3E' % ratio
-        else:
-            label += ' ratio: %.3E' % ratio
-        plt.title(label)
-        plt.show()
-
-    def plot_bands(self, t, theta_E, gamma_E, input_E, theta_FF, gamma_FF, input_FF):
-        """
-        plots filtered bands vs. their input (FF and E)
-        :param t: array
-        :param theta_E: array
-        :param gamma_E: array
-        :param input_E: array
-        :param theta_FF: array
-        :param gamma_FF: array
-        :param input_FF: array
-        """
-        input_E = np.subtract(input_E, np.mean(input_E))
-        plt.plot(t, input_E, label="input rate")
-        plt.plot(t, theta_E, label="theta")
-        plt.legend(loc=1)
-        plt.title('theta E')
-        plt.show()
-        plt.plot(t, input_E, label="input rate")
-        plt.plot(t, gamma_E, label="gamma")
-        plt.legend(loc=1)
-        plt.title('gamma E')
-        plt.show()
-
-        input_FF = np.subtract(input_FF, np.mean(input_FF))
-        plt.plot(t, input_FF, label="input rate")
-        plt.plot(t, theta_FF, label="theta")
-        plt.legend(loc=1)
-        plt.title('theta FF')
-        plt.show()
-        plt.plot(t, input_FF, label="input rate")
-        plt.plot(t, gamma_FF, label="gamma")
-        plt.legend(loc=1)
-        plt.title('gamma FF')
-        plt.show()
-
-    def print_connections(self, connections):
-        """
-        prints ALL of the connections, first in (pre, post) : weight format, then
-        pre : [post, ..., post] form.
-        """
-        connections_per_cell = {}
-        for pair, weight in connections.iteritems():
-            pre, post = pair
-            if pre not in connections_per_cell:
-                connections_per_cell[pre] = [post]
-            else:
-                li = connections_per_cell[pre]
-                li.append(post)
-                connections_per_cell[pre] = li
-        print "connections and weights: \n", connections
-        print "connections by presynaptic cell: \n", connections_per_cell
 
 
 class IzhiCell(object):
@@ -716,12 +402,13 @@ def get_pop_activity_stats(spikes_dict, firing_rates_dict, t, threshold=1., plot
     :param plot: bool
     :return: tuple of dict
     """
+    dt = t[1] - t[0]
     mean_rate_dict = defaultdict(dict)
     peak_rate_dict = defaultdict(dict)
     mean_rate_active_cells_dict = dict()
     pop_fraction_active_dict = dict()
     binned_spike_count_dict = defaultdict(dict)
-    pop_binned_spike_count_dict = dict()
+    mean_rate_from_spike_count_dict = dict()
 
     for pop_name in spikes_dict:
         this_active_cell_count = np.zeros_like(t)
@@ -744,7 +431,8 @@ def get_pop_activity_stats(spikes_dict, firing_rates_dict, t, threshold=1., plot
         else:
             mean_rate_active_cells_dict[pop_name] = np.zeros_like(t)
         pop_fraction_active_dict[pop_name] = np.divide(this_active_cell_count, len(spikes_dict[pop_name]))
-        pop_binned_spike_count_dict[pop_name] = np.sum(binned_spike_count_dict[pop_name].itervalues(), axis=0)
+        mean_rate_from_spike_count_dict[pop_name] = \
+            np.divide(np.mean(binned_spike_count_dict[pop_name].values(), axis=0), dt / 1000.)
 
     if plot:
         for pop_name in pop_fraction_active_dict:
@@ -753,53 +441,204 @@ def get_pop_activity_stats(spikes_dict, firing_rates_dict, t, threshold=1., plot
             axes[0].set_title('Active fraction of cell population')
             axes[1].plot(t, mean_rate_active_cells_dict[pop_name])
             axes[1].set_title('Mean firing rate of active cells')
+            clean_axes(axes)
             fig.suptitle('Population: %s' % pop_name)
+            fig.tight_layout()
+            fig.subplots_adjust(top=0.9)
             fig.show()
 
     return mean_rate_dict, peak_rate_dict, mean_rate_active_cells_dict, pop_fraction_active_dict, \
-           binned_spike_count_dict, pop_binned_spike_count_dict
+           binned_spike_count_dict, mean_rate_from_spike_count_dict
 
 
-"""def gauss(spikes, dt, filter_duration=100.):
-    pad_len = min(2 * int(filter_duration/dt), len(spikes))
-    filter_duration = filter_duration  # ms
-    filter_t = np.arange(-filter_duration, filter_duration, dt)
-    sigma = filter_duration / 3. / np.sqrt(2.)
-    gaussian_filter = np.exp(-(filter_t / sigma) ** 2.)
-    gaussian_filter /= np.trapz(gaussian_filter, dx=dt / 1000.)
+def get_butter_bandpass_filter(filter_band, sampling_rate, order, filter_label='', plot=False):
+    """
 
-    mirror_beginning = spikes[:pad_len][::-1]
-    mirror_end = spikes[-pad_len:][::-1]
-    modified_spikes = np.append(np.append(mirror_beginning, spikes), mirror_end)
+    :param filter_band: list of float
+    :param sampling_rate: float
+    :param order: int
+    :param filter_label: str
+    :param plot: bool
+    :return: array
+    """
+    nyq = 0.5 * sampling_rate
+    normalized_band = np.divide(filter_band, nyq)
+    sos = butter(order, normalized_band, analog=False, btype='band', output='sos')
+    if plot:
+        fig = plt.figure()
+        w, h = sosfreqz(sos, worN=2000)
+        plt.plot((sampling_rate * 0.5 / np.pi) * w, abs(h))
+        plt.plot([0, 0.5 * sampling_rate], [np.sqrt(0.5), np.sqrt(0.5)], '--', label='sqrt(0.5)')
+        plt.title('%s bandpass filter (%.1f:%.1f Hz), Order: %i' %
+                  (filter_label, min(filter_band), max(filter_band), order))
+        plt.xlabel('Frequency (Hz)')
+        plt.xlim(0., min(nyq, 2. * max(filter_band)))
+        plt.ylabel('Gain')
+        plt.grid(True)
+        fig.show()
 
-    signal = np.convolve(modified_spikes, gaussian_filter)
-    signal = signal[int(filter_duration / dt) + pad_len:][:len(spikes)]
-    return signal"""
-
-
-def untruncated_filter_band(E, I, FF, window_len, band, padlen=250, dt=1.):
-    """from input, filter for certain frequencies. untruncated because we run a hilbert transform on the bands
-    and we want to reduce edge effects"""
-    E_mir = mirror_signal(E, padlen)
-    I_mir = mirror_signal(I, padlen)
-    FF_mir = mirror_signal(FF, padlen)
-
-    filt = scipy.signal.firwin(window_len, band, nyq=1000. / 2. / dt, pass_zero=False)
-    E_band = scipy.signal.filtfilt(filt, [1.], E_mir, padtype=None, padlen=0)
-    I_band = scipy.signal.filtfilt(filt, [1.], I_mir, padtype=None, padlen=0)
-    FF_band = scipy.signal.filtfilt(filt, [1.], FF_mir, padtype=None, padlen=0)
-
-    return E_band, I_band, FF_band
+    return sos
 
 
-"""def plot_things(E_mir, E_band, transform, abs_envelope):
-    x = range(len(E_mir))
-    plt.plot(range(len(E_mir)), E_mir, label="mirrored signal")
-    plt.plot(x, E_band, label="theta E", color="black")
-    plt.plot(x, transform, label="hilb transform")
-    plt.plot(x, abs_envelope, label="envelope")
-    plt.legend()
-    plt.show()"""
+def get_bandpass_filtered_signal_stats(signal, t, sos, filter_band, signal_label='', filter_label='', pad=True,
+                                 pad_len=None, plot=False):
+    """
+
+    :param signal: array
+    :param t: array (ms)
+    :param sos: array
+    :param filter_band: list of float (Hz)
+    :param signal_label: str
+    :param filter_label: str
+    :param pad: bool
+    :param pad_len: int
+    :param plot: bool
+    :return: tuple of array
+    """
+    if pad and pad_len is None:
+        dt = t[1] - t[0]  # ms
+        pad_dur = min(10. * 1000. / np.min(filter_band), len(t) * dt)  # ms
+        pad_len = min(int(pad_dur / dt), len(t) - 1)
+    if pad:
+        padded_signal = get_mirror_padded_signal(signal, pad_len)
+    else:
+        padded_signal = np.array(signal)
+    filtered_padded_signal = sosfiltfilt(sos, padded_signal)
+    filtered_signal = filtered_padded_signal[pad_len:-pad_len]
+    padded_envelope = np.abs(hilbert(filtered_padded_signal))
+    envelope = padded_envelope[pad_len:-pad_len]
+    f, power = periodogram(filtered_signal, fs=1000./dt)
+    centroid_freq = f[get_center_of_mass_index(power)]
+
+    mean_envelope = np.mean(envelope)
+    mean_signal = np.mean(signal)
+    envelope_ratio = mean_envelope / mean_signal
+
+    if plot:
+        fig, axes = plt.subplots(2,2)
+        axes[0][0].plot(t, np.subtract(signal, np.mean(signal)), c='k', label='Original signal')
+        axes[0][0].plot(t, filtered_signal, c='r', label='Filtered signal')
+        axes[0][1].plot(t, signal, label='Original signal', c='grey', alpha=0.5, zorder=1)
+        axes[0][1].plot(t, np.ones_like(t) * mean_signal, c='k', zorder=0)
+        axes[0][1].plot(t, envelope, label='Envelope amplitude', c='r', alpha=0.5, zorder=1)
+        axes[0][1].plot(t, np.ones_like(t) * mean_envelope, c='m', zorder=0)
+        box = axes[0][0].get_position()
+        axes[0][0].set_position([box.x0, box.y0, box.width, box.height * 0.8])
+        axes[0][0].legend(loc='upper center', bbox_to_anchor=(0.5, 1.1), frameon=False, framealpha=0.5)
+        box = axes[0][1].get_position()
+        axes[0][1].set_position([box.x0, box.y0, box.width, box.height * 0.8])
+        axes[0][1].legend(loc='upper center', bbox_to_anchor=(0.5, 1.1), frameon=False, framealpha=0.5)
+
+        axes[1][0].plot(f, power, c='k')
+        axes[1][0].set_xlabel('Frequency (Hz)')
+        axes[1][0].set_ylabel('Spectral density (units$^{2}$/Hz)')
+        axes[1][0].set_xlim(min(filter_band)/2., max(filter_band) * 1.5)
+
+        clean_axes(axes)
+        fig.suptitle('%s\n%s bandpass filter (%.1f:%.1f Hz); Envelope ratio: %.3f; Centroid freq: %.3f Hz' %
+                          (signal_label, filter_label, min(filter_band), max(filter_band), envelope_ratio,
+                           centroid_freq))
+        fig.tight_layout()
+        fig.subplots_adjust(top=0.8)
+        fig.show()
+
+    return filtered_signal, envelope, envelope_ratio, centroid_freq
+
+
+def get_pop_bandpass_filtered_signal_stats(signal_dict, t, filter_band_dict, order=15, plot=False):
+    """
+
+    :param signal_dict: array
+    :param t: array (ms)
+    :param filter_band_dict: dict: {filter_label (str): list of float (Hz) }
+    :param order: int
+    :param plot: bool
+    :return: array
+    """
+    dt = t[1] - t[0]  # ms
+    sampling_rate = 1000. / dt  # Hz
+    filtered_signal_dict = {}
+    envelope_dict = {}
+    envelope_ratio_dict = {}
+    centroid_freq_dict = {}
+    for filter_label, filter_band in filter_band_dict.iteritems():
+        filtered_signal_dict[filter_label] = {}
+        envelope_dict[filter_label] = {}
+        envelope_ratio_dict[filter_label] = {}
+        centroid_freq_dict[filter_label] = {}
+        sos = get_butter_bandpass_filter(filter_band, sampling_rate, filter_label=filter_label, order=order, plot=plot)
+        for pop_name in signal_dict:
+            signal = signal_dict[pop_name]
+            filtered_signal_dict[filter_label][pop_name], envelope_dict[filter_label][pop_name], \
+            envelope_ratio_dict[filter_label][pop_name], centroid_freq_dict[filter_label][pop_name] = \
+                get_bandpass_filtered_signal_stats(signal, t, sos, filter_band,
+                                                   signal_label='Population: %s' % pop_name,
+                                                   filter_label=filter_label, plot=plot)
+
+    return filtered_signal_dict, envelope_dict, envelope_ratio_dict, centroid_freq_dict
+
+
+def plot_heatmap_from_matrix(data, xticks=None, xtick_labels=None, yticks=None, ytick_labels=None, ax=None,
+                             cbar_kw={}, cbar_label="", **kwargs):
+    """
+    Create a heatmap from a numpy array and two lists of labels.
+
+    Arguments:
+        data       : A 2D numpy array of shape (N,M)
+        xticks : A list or array of length <=M with xtick locations
+        xtick_labels : A list or array of length <=M with xtick labels
+        yticks : A list or array of length <=N with ytick locations
+        ytick_labels : A list or array of length <=N with ytick labels
+    Optional arguments:
+        ax         : A matplotlib.axes.Axes instance to which the heatmap
+                     is plotted. If not provided, use current axes or
+                     create a new one.
+        cbar_kw    : A dictionary with arguments to
+                     :meth:`matplotlib.Figure.colorbar`.
+        cbar_label  : The label for the colorbar
+    All other arguments are directly passed on to the imshow call.
+    """
+    if not ax:
+        ax = plt.gca()
+
+    # Plot the heatmap
+    im = ax.imshow(data, **kwargs)
+
+    # Create colorbar
+    cbar = ax.figure.colorbar(im, ax=ax, **cbar_kw)
+    cbar.ax.set_ylabel(cbar_label, rotation=-90, va="bottom")
+
+    if xticks is not None:
+        ax.set_xticks(xticks)
+    if xtick_labels is not None:
+        ax.set_xticklabels(xtick_labels)
+    if yticks is not None:
+        ax.set_yticks(yticks)
+    if ytick_labels is not None:
+        ax.set_yticklabels(ytick_labels)
+
+    # Rotate the tick labels and set their alignment.
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
+             rotation_mode="anchor")
+
+
+def get_center_of_mass_index(signal, subtract_min=True):
+    """
+    Return the index of the center of mass of a signal, or None if the signal is mean zero. By default searches for
+    area above the signal minimum.
+    :param signal:
+    :param subtract_min: bool
+    :return: int
+    """
+    if subtract_min:
+        this_signal = np.subtract(signal, np.min(signal))
+    else:
+        this_signal = np.array(signal)
+    cumsum = np.cumsum(this_signal)
+    if cumsum[-1] == 0.:
+        return None
+    normalized_cumsum = cumsum / cumsum[-1]
+    return np.argwhere(normalized_cumsum >= 0.5)[0][0]
 
 
 def peak_from_spectrogram(freq, title='not specified', dt=1., plot=False):
@@ -844,7 +683,7 @@ def get_mirror_padded_time_series(t, pad_len):
     return padded_t
 
 
-def plot_inferred_spike_rates(spikes_dict, firing_rates_dict, t, active_rate_threshold=1., cells_per_pop=4,
+def plot_inferred_spike_rates(spikes_dict, firing_rates_dict, t, active_rate_threshold=1., rows=3, cols=4,
                               pop_names=None):
     """
 
@@ -852,40 +691,42 @@ def plot_inferred_spike_rates(spikes_dict, firing_rates_dict, t, active_rate_thr
     :param firing_rates_dict: dict of array
     :param t: array
     :param active_rate_threshold: float
-    :param cells_per_pop: int
+    :param rows: int
+    :param cols: int
     :param pop_names: list of str
     """
     if pop_names is None:
         pop_names = list(spikes_dict.keys())
-    num_pops = len(pop_names)
-    fig, axes = plt.subplots(num_pops, cells_per_pop, sharex=True)
-    for j in xrange(cells_per_pop):
-        axes[num_pops-1][j].set_xlabel('Time (ms)')
-    for i in xrange(num_pops):
-        axes[i][0].set_ylabel('Firing rate (Hz)')
-
-    for row, pop_name in enumerate(pop_names):
+    for pop_name in pop_names:
+        fig, axes = plt.subplots(rows, cols, sharex=True)
+        for j in xrange(cols):
+            axes[rows-1][j].set_xlabel('Time (ms)')
+        for i in xrange(rows):
+            axes[i][0].set_ylabel('Firing rate (Hz)')
         active_gid_range = []
         for gid, rate in firing_rates_dict[pop_name].iteritems():
             if np.max(rate) >= active_rate_threshold:
                 active_gid_range.append(gid)
-        gid_sample = random.sample(active_gid_range, min(len(active_gid_range), cells_per_pop))
-        for col, gid in enumerate(gid_sample):
+        gid_sample = random.sample(active_gid_range, min(len(active_gid_range), rows * cols))
+        for i, gid in enumerate(gid_sample):
             inferred_rate = firing_rates_dict[pop_name][gid]
             spike_train = spikes_dict[pop_name][gid]
             binned_spike_indexes = find_nearest(spike_train, t)
+            row = i / cols
+            col = i % cols
             axes[row][col].plot(t, inferred_rate, label='Inferred firing rate')
             axes[row][col].plot(t[binned_spike_indexes], np.ones(len(binned_spike_indexes)), 'k.', label='Spikes')
-            axes[row][col].set_title('%s cell: %i' % (pop_name, gid))
+            axes[row][col].set_title('gid: %i' % gid)
 
-    axes[0][0].legend(loc='best')
-    clean_axes(axes)
-    fig.suptitle('Inferred spike rates')
-    fig.tight_layout()
-    fig.show()
+        axes[0][0].legend(loc='best')
+        clean_axes(axes)
+        fig.suptitle('Inferred spike rates: %s population' % pop_name)
+        fig.tight_layout()
+        fig.subplots_adjust(top=0.85)
+        fig.show()
 
 
-def plot_voltage_traces(voltage_rec_dict, t, cells_per_pop=8, pop_names=None):
+def plot_voltage_traces(voltage_rec_dict, t, rows=3, cols=4, pop_names=None):
     """
 
     :param voltage_rec_dict: dict of array
@@ -895,27 +736,93 @@ def plot_voltage_traces(voltage_rec_dict, t, cells_per_pop=8, pop_names=None):
     """
     if pop_names is None:
         pop_names = list(voltage_rec_dict.keys())
-    num_pops = len(pop_names)
-    num_rows = 2 * num_pops
-    num_cols = cells_per_pop / 2
-    fig, axes = plt.subplots(num_rows, num_cols, sharex=True)
-    for j in xrange(num_cols):
-        axes[num_rows-1][j].set_xlabel('Time (ms)')
-    for i in xrange(num_rows):
-        axes[i][0].set_ylabel('Voltage (mV)')
-
-    for i, pop_name in enumerate(pop_names):
+    for pop_name in pop_names:
+        fig, axes = plt.subplots(rows, cols, sharex=True)
+        for j in xrange(cols):
+            axes[rows - 1][j].set_xlabel('Time (ms)')
+        for i in xrange(rows):
+            axes[i][0].set_ylabel('Voltage (mV)')
         this_gid_range = list(voltage_rec_dict[pop_name].keys())
-        gid_sample = random.sample(this_gid_range, min(len(this_gid_range), cells_per_pop))
-        for j, gid in enumerate(gid_sample):
-            row = (i * 2) + (j / num_cols)
-            col = j % num_cols
+        gid_sample = random.sample(this_gid_range, min(len(this_gid_range), rows * cols))
+        for i, gid in enumerate(gid_sample):
             rec = voltage_rec_dict[pop_name][gid]
+            row = i / cols
+            col = i % cols
             axes[row][col].plot(t, rec)
-            axes[row][col].set_title('%s cell: %i' % (pop_name, gid))
+            axes[row][col].set_title('gid: %i' % gid)
+        axes[0][0].legend(loc='best')
+        clean_axes(axes)
+        fig.suptitle('Voltage recordings: %s population' % pop_name)
+        fig.tight_layout()
+        fig.subplots_adjust(top=0.85)
+        fig.show()
 
-    axes[0][0].legend(loc='best')
-    clean_axes(axes)
-    fig.suptitle('Voltage recordings')
-    fig.tight_layout()
-    fig.show()
+
+def plot_weight_matrix(connection_weights_dict, pop_names=None):
+    """
+    Plots heat maps of connection strengths across all connected cell populations.
+    :param connection_weights_dict: nested dict of float
+    :param pop_names: list of str
+    """
+    if pop_names is None:
+        pop_names = list(connection_weights_dict.keys())
+    for target_pop_name in pop_names:
+        sorted_target_gids = sorted(list(connection_weights_dict[target_pop_name].keys()))
+        source_pop_list = list(connection_weights_dict[target_pop_name][sorted_target_gids[0]].keys())
+        cols = len(source_pop_list)
+        fig, axes = plt.subplots(1, cols, sharey=True)
+        for col, source_pop_name in enumerate(source_pop_list):
+            sorted_source_gids = sorted(list(
+                connection_weights_dict[target_pop_name][sorted_target_gids[0]][source_pop_name].keys()))
+            weight_matrix = np.empty((len(sorted_target_gids), len(sorted_source_gids)), dtype='float32')
+            for i, target_gid in enumerate(sorted_target_gids):
+                for j, source_gid in enumerate(sorted_source_gids):
+                    weight_matrix[i][j] = \
+                        connection_weights_dict[target_pop_name][target_gid][source_pop_name][source_gid]
+            y_interval = len(sorted_target_gids) / 10 + 1
+            yticks = range(0, len(sorted_target_gids), y_interval)
+            ylabels = np.array(sorted_target_gids)[yticks]
+            x_interval = len(sorted_source_gids) / 10 + 1
+            xticks = range(0, len(sorted_source_gids), x_interval)
+            xlabels = np.array(sorted_source_gids)[xticks]
+            plot_heatmap_from_matrix(weight_matrix, xticks=xticks, xtick_labels=xlabels, yticks=yticks,
+                                     ytick_labels=ylabels, ax=axes[col], aspect='auto')
+            axes[col].set_xlabel('Source: %s' % source_pop_name)
+            axes[0].set_ylabel('Target: %s' % target_pop_name)
+        clean_axes(axes)
+        fig.suptitle('Connection weights onto %s population' % target_pop_name, )
+        fig.tight_layout()
+        fig.subplots_adjust(top=0.9)
+        fig.show()
+
+
+def plot_firing_rate_heatmaps(firing_rates_dict, t, pop_names=None):
+    """
+
+    :param firing_rates_dict: dict of array
+    :param t: array
+    :param pop_names: list of str
+    """
+    if pop_names is None:
+        pop_names = list(firing_rates_dict.keys())
+    for pop_name in pop_names:
+        fig, axes = plt.subplots()
+        sorted_gids = sorted(list(firing_rates_dict[pop_name].keys()))
+        rate_matrix = np.empty((len(sorted_gids), len(t)), dtype='float32')
+        for i, gid in enumerate(sorted_gids):
+            rate_matrix[i][:] = firing_rates_dict[pop_name][gid]
+        y_interval = len(sorted_gids) / 10 + 1
+        yticks = range(0, len(sorted_gids), y_interval)
+        ylabels = np.array(sorted_gids)[yticks]
+        dt = t[1] - t[0]
+        x_interval = int(1000. / dt)
+        xticks = range(0, len(t), x_interval)
+        xlabels = np.array(t)[xticks].astype('int32')
+        plot_heatmap_from_matrix(rate_matrix, xticks=xticks, xtick_labels=xlabels, yticks=yticks,
+                                 ytick_labels=ylabels, ax=axes, aspect='auto')
+        axes.set_xlabel('Time (ms)')
+        axes.set_ylabel('Firing rate (Hz)')
+        axes.set_title('Firing rate: %s population' % pop_name)
+        clean_axes(axes)
+        fig.tight_layout()
+        fig.show()

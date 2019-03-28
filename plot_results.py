@@ -1,5 +1,5 @@
 __author__ = 'milsteina'
-from optimize_cells_utils import *
+from cell_utils import *
 import matplotlib as mpl
 import matplotlib.lines as mlines
 import scipy.stats as stats

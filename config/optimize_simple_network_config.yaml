@@ -1,83 +1,87 @@
 bounds:
+  E_FF_prob_connection: !!python/tuple
+    - 0.
+    - 1.
   E_E_prob_connection: !!python/tuple
-  - 1.0E-4
-  - 1.
+    - 1.0E-4
+    - 1.
   E_I_prob_connection: !!python/tuple
-  - 1.0E-4
-  - 1.
+    - 1.0E-4
+    - 1.
+  I_FF_prob_connection: !!python/tuple
+    - 0.
+    - 1.
   I_E_prob_connection: !!python/tuple
-  - 1.0E-4
-  - 1.
+    - 1.0E-4
+    - 1.
   I_I_prob_connection: !!python/tuple
-  - 1.0E-4
-  - 1.
-  FF_E_mean_weight: !!python/tuple
-  - 0.
-  - .5
-  FF_I_mean_weight: !!python/tuple
-  - 0.
-  - .5
+    - 1.0E-4
+    - 1.
+  E_FF_mean_weight: !!python/tuple
+    - 0.
+    - .5
   E_E_mean_weight: !!python/tuple
-  - 0.
-  - .5
+    - 0.
+    - .5
   E_I_mean_weight: !!python/tuple
-  - 0.
-  - .5
-  I_I_mean_weight: !!python/tuple
-  - 0.
-  - .5
+    - 0.
+    - .5
+  I_FF_mean_weight: !!python/tuple
+    - 0.
+    - .5
   I_E_mean_weight: !!python/tuple
-  - 0.
-  - .5
-  FF_frac_active: !!python/tuple
-  - 0.
-  - 1.
-  FF_I_prob_connection: !!python/tuple
-  - 0.
-  - 1.
-  FF_E_prob_connection: !!python/tuple
-  - 0.
-  - 1.
-  FF_E_weight_sigma_factor: !!python/tuple
-  - 0.
-  - 1.
-  FF_I_weight_sigma_factor: !!python/tuple
-  - 0.
-  - 1.
-  E_I_weight_sigma_factor: !!python/tuple
-  - 0.
-  - 1.
+    - 0.
+    - .5
+  I_I_mean_weight: !!python/tuple
+    - 0.
+    - .5
+  E_FF_weight_sigma_factor: !!python/tuple
+    - 0.
+    - 1.
   E_E_weight_sigma_factor: !!python/tuple
-  - 0.
-  - 1.
+    - 0.
+    - 1.
+  E_I_weight_sigma_factor: !!python/tuple
+    - 0.
+    - 1.
+  I_FF_weight_sigma_factor: !!python/tuple
+    - 0.
+    - 1.
   I_E_weight_sigma_factor: !!python/tuple
-  - 0.
-  - 1.
+    - 0.
+    - 1.
   I_I_weight_sigma_factor: !!python/tuple
-  - 0.
-  - 1.
-  tau_E: !!python/tuple
-  - 1.
-  - 20.
-  tau_I: !!python/tuple
-  - 1.
-  - 30.  
+    - 0.
+    - 1.
+  E_tau_E: !!python/tuple
+    - 2.
+    - 20.
+  E_tau_I: !!python/tuple
+    - 2.
+    - 30.
+  I_tau_E: !!python/tuple
+    - 2.
+    - 20.
+  I_tau_I: !!python/tuple
+    - 2.
+    - 30.
 feature_names:
 - E_peak_rate
 - I_peak_rate
-- E_mean_rate
-- I_mean_rate
+- E_mean_active_rate
+- I_mean_active_rate
 - E_frac_active
 - I_frac_active
-- FF_frac_active
-- theta_E_envelope_ratio
-- theta_I_envelope_ratio
-- gamma_E_envelope_ratio
-- gamma_I_envelope_ratio
-- peak_theta_freq_E
-- peak_theta_freq_I
-- peak_gamma_freq_E
-- peak_gamma_freq_I
+- FF_theta_envelope_ratio
+- E_theta_envelope_ratio
+- I_theta_envelope_ratio
+- FF_gamma_envelope_ratio
+- E_gamma_envelope_ratio
+- I_gamma_envelope_ratio
+- E_centroid_theta_freq
+- I_centroid_theta_freq
+- E_centroid_gamma_freq
+- I_centroid_gamma_freq
 update_context:
 - - optimize_simple_network
   - update_context
@@ -87,98 +91,100 @@ get_features_stages:
 get_objectives:
   optimize_simple_network: get_objectives
 kwargs:
-  verbose: True
+  verbose: 1
   connection_seed: 0
   spikes_seed: 1000000
   FF_mean_rate: 20.  # Hz
 objective_names:
 - E_peak_rate
 - I_peak_rate
-- E_mean_rate
-- I_mean_rate
+- E_mean_active_rate
+- I_mean_active_rate
 - E_frac_active
 - I_frac_active
-- theta_E_envelope_ratio
-- theta_I_envelope_ratio
-- gamma_E_envelope_ratio
-- gamma_I_envelope_ratio
-- peak_theta_freq_E
-- peak_theta_freq_I
-- peak_gamma_freq_E
-- peak_gamma_freq_I
+- E_theta_envelope_ratio
+- I_theta_envelope_ratio
+- E_gamma_envelope_ratio
+- I_gamma_envelope_ratio
+- E_centroid_theta_freq
+- I_centroid_theta_freq
+- E_centroid_gamma_freq
+- I_centroid_gamma_freq
 optimization_title: random_network
 param_gen: PopulationAnnealing
 param_names:
+- E_FF_prob_connection
 - E_E_prob_connection
 - E_I_prob_connection
-- I_I_prob_connection
+- I_FF_prob_connection
 - I_E_prob_connection
-- FF_I_mean_weight
-- FF_E_mean_weight
+- I_I_prob_connection
+- E_FF_mean_weight
 - E_E_mean_weight
 - E_I_mean_weight
-- I_I_mean_weight
+- I_FF_mean_weight
 - I_E_mean_weight
-- FF_frac_active
-- FF_I_prob_connection
-- FF_E_prob_connection
-- FF_E_weight_sigma_factor
-- FF_I_weight_sigma_factor
-- E_I_weight_sigma_factor
+- I_I_mean_weight
+- E_FF_weight_sigma_factor
 - E_E_weight_sigma_factor
+- E_I_weight_sigma_factor
+- I_FF_weight_sigma_factor
 - I_E_weight_sigma_factor
 - I_I_weight_sigma_factor
-- tau_E
-- tau_I
+- E_tau_E
+- E_tau_I
+- I_tau_E
+- I_tau_I
 target_range:
-  E_peak_rate: 1.
-  I_peak_rate: 1.
-  E_mean_rate: 1.
-  I_mean_rate: 1.
-  E_frac_active: .05
-  I_frac_active: .05
-  theta_E_envelope_ratio: .2
-  theta_I_envelope_ratio: .2
-  gamma_E_envelope_ratio: .2
-  gamma_I_envelope_ratio: .2
-  peak_theta_freq_E: 0.1
-  peak_theta_freq_I: 0.1
-  peak_gamma_freq_E: 2.
-  peak_gamma_freq_I: 2.
+  E_peak_rate: 0.1
+  I_peak_rate: 0.1
+  E_mean_active_rate: 0.1
+  I_mean_active_rate: 0.1
+  E_frac_active: .001
+  I_frac_active: .001
+  E_theta_envelope_ratio: .01
+  I_theta_envelope_ratio: .01
+  E_gamma_envelope_ratio: .01
+  I_gamma_envelope_ratio: .01
+  E_centroid_theta_freq: 0.05
+  I_centroid_theta_freq: 0.05
+  E_centroid_gamma_freq: 0.5
+  I_centroid_gamma_freq: 0.5
 target_val:
-  E_peak_rate: 30.
+  E_peak_rate: 40.
   I_peak_rate: 40.
-  E_mean_rate: 20.
-  I_mean_rate: 30.
-  E_frac_active: .5
+  E_mean_active_rate: 10.
+  I_mean_active_rate: 20.
+  E_frac_active: .25
   I_frac_active: .9
-  theta_E_envelope_ratio: .5
-  theta_I_envelope_ratio: .5
-  gamma_E_envelope_ratio: .25
-  gamma_I_envelope_ratio: .25
-  peak_theta_freq_E: 7.
-  peak_theta_freq_I: 7.
-  peak_gamma_freq_E: 70.
-  peak_gamma_freq_I: 70.
+  E_theta_envelope_ratio: .5
+  I_theta_envelope_ratio: .5
+  E_gamma_envelope_ratio: .25
+  I_gamma_envelope_ratio: .25
+  E_centroid_theta_freq: 7.
+  I_centroid_theta_freq: 7.
+  E_centroid_gamma_freq: 70.
+  I_centroid_gamma_freq: 70.
 x0:
+  E_FF_prob_connection: 0.1
   E_E_prob_connection: 0.2
   E_I_prob_connection: 0.5
-  I_E_prob_connection: 1.
-  I_I_prob_connection: 1.
-  FF_I_prob_connection: 0.1
-  FF_E_prob_connection: 0.1
-  FF_I_mean_weight: .05
-  FF_E_mean_weight: .05
+  I_FF_prob_connection: 0.1
+  I_E_prob_connection: 0.5
+  I_I_prob_connection: 0.5
+  E_FF_mean_weight: .05
   E_E_mean_weight: .005
-  E_I_mean_weight: .005
-  I_E_mean_weight: .25
-  I_I_mean_weight: .25
-  FF_frac_active: .8
-  FF_E_weight_sigma_factor: .1
-  FF_I_weight_sigma_factor: .1
-  E_I_weight_sigma_factor: .1
+  E_I_mean_weight: .05
+  I_FF_mean_weight: .1
+  I_E_mean_weight: .005
+  I_I_mean_weight: .05
+  E_FF_weight_sigma_factor: .1
   E_E_weight_sigma_factor: .1
+  E_I_weight_sigma_factor: .1
+  I_FF_weight_sigma_factor: .1
   I_E_weight_sigma_factor: .1
   I_I_weight_sigma_factor: .1
-  tau_E: 2.
-  tau_I: 10.
+  E_tau_E: 2.
+  E_tau_I: 10.
+  I_tau_E: 2.
+  I_tau_I: 10.
