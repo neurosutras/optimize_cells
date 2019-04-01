@@ -48,17 +48,18 @@ def main(config_file_path, export, output_dir, export_file_path, label, interact
     features = context.interface.execute(compute_features, context.x0_array, context.export)
     sys.stdout.flush()
     time.sleep(1.)
-    features, objectives = context.interface.execute(get_objectives, features)
-    sys.stdout.flush()
-    time.sleep(1.)
-    print 'params:'
-    pprint.pprint(context.x0_dict)
-    print 'features:'
-    pprint.pprint(features)
-    print 'objectives:'
-    pprint.pprint(objectives)
-    sys.stdout.flush()
-    time.sleep(1.)
+    if not context.debug:
+        features, objectives = context.interface.execute(get_objectives, features)
+        sys.stdout.flush()
+        time.sleep(1.)
+        print 'params:'
+        pprint.pprint(context.x0_dict)
+        print 'features:'
+        pprint.pprint(features)
+        print 'objectives:'
+        pprint.pprint(objectives)
+        sys.stdout.flush()
+        time.sleep(1.)
     context.update(locals())
 
     if not interactive:
@@ -89,7 +90,7 @@ def init_context():
         next_gid = prev_gid + pop_sizes[pop_name]
         pop_gid_ranges[pop_name] = (prev_gid, next_gid)
         prev_gid += pop_sizes[pop_name]
-    pop_cell_types = {'FF': 'input', 'E': 'RS', 'I': 'FS'}
+    pop_cell_types = {'FF': 'input', 'E': 'RS', 'I': 'RS'}
     # {'postsynaptic population': {'presynaptic population': float} }
     prob_connection = defaultdict(dict)
     connection_weights_mean = defaultdict(dict)
@@ -156,7 +157,7 @@ def update_context(x, local_context=None):
 def analyze_network_output(network, export=False, plot=False):
     """
 
-    :param network: :class:'Network'
+    :param network: :class:'SimpleNetwork'
     :param export: bool
     :param plot: bool
     :return: dict
@@ -225,7 +226,7 @@ def compute_features(x, export=False):
     update_source_contexts(x, context)
     context.pc.gid_clear()
     start_time = time.time()
-    context.network = Network(pc=context.pc, pop_sizes=context.pop_sizes, pop_gid_ranges=context.pop_gid_ranges,
+    context.network = SimpleNetwork(pc=context.pc, pop_sizes=context.pop_sizes, pop_gid_ranges=context.pop_gid_ranges,
                               pop_cell_types=context.pop_cell_types, connection_syn_types=context.connection_syn_types,
                               prob_connection=context.prob_connection,
                               connection_weights_mean=context.connection_weights_mean,

@@ -48,7 +48,7 @@ PARAMETER {
   C = 1 : Capacitance
   k = 0.7
   vr = -60 (mV) : Resting membrane potential
-  vt = -40 (mV) : Membrane threhsold
+  vt = -50 (mV) : Membrane spike threshold
   vpeak = 35 (mV) : Peak voltage
   a = 0.03
   b = -2

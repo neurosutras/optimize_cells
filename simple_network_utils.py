@@ -2,20 +2,41 @@ from nested.utils import *
 from neuron import h
 from baks import baks
 from scipy.signal import butter, sosfiltfilt, sosfreqz, hilbert, periodogram
+from collections import namedtuple
 
 
 # for h.lambda_f
 h.load_file('stdlib.hoc')
 # for h.stdinit
 h.load_file('stdrun.hoc')
+h.celsius = 35.  # degrees C
 
 
-class Network(object):
+# Modified from http://modeldb.yale.edu/39948
+izhi_cell_type_param_names = ['C', 'k', 'vr', 'vt', 'vpeak', 'a', 'b', 'c', 'd', 'celltype']
+izhi_cell_type_params = namedtuple('izhi_cell_type_params', izhi_cell_type_param_names)
+izhi_cell_type_param_dict = {
+    'RS': izhi_cell_type_params(C=1., k=0.7, vr=-65., vt=-50., vpeak=35., a=0.03, b=-2., c=-55., d=100., celltype=1),
+    'IB': izhi_cell_type_params(C=1.5, k=0.4057, vr=-65., vt=-50., vpeak=50., a=0.01, b=5., c=-56., d=130., celltype=2),
+    'IB_orig': izhi_cell_type_params(C=1.5, k=1.2, vr=-75., vt=-40., vpeak=50., a=0.01, b=5., c=-56., d=130.,
+                                     celltype=2),
+    'CH': izhi_cell_type_params(C=0.5, k=1.5, vr=-60., vt=-40., vpeak=25., a=0.03, b=1., c=-40., d=150., celltype=3),
+    'LTS': izhi_cell_type_params(C=1.0, k=1.0, vr=-56., vt=-42., vpeak=40., a=0.03, b=8., c=-53., d=20., celltype=4),
+    'FS': izhi_cell_type_params(C=0.2, k=0.0444, vr=-60., vt=-50., vpeak=25., a=0.2, b=-2., c=-55., d=-60., celltype=5),
+    'FS_orig': izhi_cell_type_params(C=0.2, k=1., vr=-55., vt=-40., vpeak=25., a=0.2, b=-2., c=-45., d=-55.,
+                                     celltype=5),
+    'TC': izhi_cell_type_params(C=2.0, k=1.6, vr=-60., vt=-50., vpeak=35., a=0.01, b=15., c=-60., d=10., celltype=6),
+    'RTN': izhi_cell_type_params(C=0.4, k=0.25, vr=-65., vt=-45., vpeak=0., a=0.015, b=10., c=-55., d=50., celltype=7)
+}
+izhi_cell_types = list(izhi_cell_type_param_dict.keys())
+
+
+class SimpleNetwork(object):
 
     def __init__(self, pc, pop_sizes, pop_gid_ranges, pop_cell_types, connection_syn_types, prob_connection,
-                 connection_weights_mean, connection_weight_sigma_factors, connection_kinetics, input_pop_mean_rates,
-                 tstop=1000., equilibrate=250., dt=0.025, delay=1., connection_seed=0, spikes_seed=100000, verbose=1,
-                 debug=False):
+                 connection_weights_mean, connection_weight_sigma_factors, connection_kinetics,
+                 input_pop_mean_rates=None, tstop=1000., equilibrate=250., dt=0.025, delay=1., connection_seed=0,
+                 spikes_seed=100000, v_init=-65., verbose=1, debug=False):
         """
 
         :param pc: ParallelContext object
@@ -35,6 +56,7 @@ class Network(object):
         :param delay: float: netcon synaptic delay (ms)
         :param connection_seed: int: random seed for reproducible connections
         :param spikes_seed: int: random seed for reproducible input spike trains
+        :param v_init: float
         :param verbose: int: level for verbose print statements
         :param debug: bool: turn on for extra tests
         """
@@ -45,6 +67,7 @@ class Network(object):
         if dt is None:
             dt = h.dt
         self.dt = dt
+        self.v_init = v_init
         self.verbose = verbose
         self.debug = debug
 
@@ -67,8 +90,7 @@ class Network(object):
         self.spikes_seed = spikes_seed
 
         self.mkcells()
-        if self.debug:
-            self.verify_cell_types()
+        self.verify_cell_types()
         self.connectcells()
         self.voltage_record()
         self.spike_record()
@@ -84,19 +106,22 @@ class Network(object):
                 # round-robin distribution of cells across MPI ranks
                 if i % nhost == rank:
                     if self.verbose > 1:
-                        print('mkcells: rank: %i got %s gid: %i' % (rank, pop_name, gid))
+                        print('SimpleNetwork.mkcells: rank: %i got %s gid: %i' % (rank, pop_name, gid))
                     if cell_type == 'input':
-                        cell = FFCell()
-                        self.local_random.seed(self.spikes_seed + gid)
-                        this_spike_train = get_inhom_poisson_spike_times_by_thinning(
-                            [self.input_pop_mean_rates[pop_name], self.input_pop_mean_rates[pop_name]],
-                            [0., float(self.tstop)], dt=self.dt, generator=self.local_random)
-                        vec = h.Vector(this_spike_train)
-                        cell.pp.play(vec)
-                        self.spikes_dict[pop_name][gid] = np.array(this_spike_train)
-                    elif cell_type in ['RS', 'FS']:
-                        cell = IzhiCell(tau_E=self.connection_kinetics[pop_name]['E'],
-                                        tau_I=self.connection_kinetics[pop_name]['I'], type=cell_type)
+                        cell = FFCell(pop_name, gid)
+                        if self.input_pop_mean_rates is not None and pop_name in self.input_pop_mean_rates:
+                            self.local_random.seed(self.spikes_seed + gid)
+                            this_spike_train = get_inhom_poisson_spike_times_by_thinning(
+                                [self.input_pop_mean_rates[pop_name], self.input_pop_mean_rates[pop_name]],
+                                [0., float(self.tstop)], dt=self.dt, generator=self.local_random)
+                            cell.load_vecstim(this_spike_train)
+                            self.spikes_dict[pop_name][gid] = np.array(this_spike_train)
+                    elif cell_type in izhi_cell_type_param_dict:
+                        cell = IzhiCell(pop_name, gid, tau_E=self.connection_kinetics[pop_name]['E'],
+                                        tau_I=self.connection_kinetics[pop_name]['I'], cell_type=cell_type)
+                    else:
+                        raise RuntimeError('SimpleNetwork.mkcells: %s gid: %i; unrecognized cell type: %s' %
+                                           (pop_name, gid, cell_type))
                     self.cells[pop_name][gid] = cell
                     self.pc.set_gid2node(gid, rank)
                     nc = cell.connect2target(None)
@@ -113,18 +138,20 @@ class Network(object):
                 if isinstance(this_cell, FFCell):
                     if target_cell_type != 'input':
                         found_cell_type = type(this_cell)
-                        raise RuntimeError('check_cell_type_correct: %s gid: %i is cell_type: %s, not FFCell' %
-                                           (pop_name, gid, found_cell_type))
+                        raise RuntimeError('SimpleNetwork.verify_cell_types: %s gid: %i should be FFCell, but '
+                                           'is cell_type: %s' % (pop_name, gid, found_cell_type))
                 elif isinstance(this_cell, IzhiCell):
-                    if target_cell_type != this_cell.type:
-                        raise RuntimeError('check_cell_type_correct: %s gid: %i is IzhiCell type: %s, not %s' %
-                                           (pop_name, gid, this_cell.type, target_cell_type))
-                    if (target_cell_type == 'RS' and this_cell.izh.a != .1) or \
-                            (target_cell_type == 'FS' and this_cell.izh.a != .02):
-                        raise RuntimeError('check_cell_type_correct: %s gid: %i; IzhiCell type: %s not configured '
-                                           'properly' % (pop_name, gid, this_cell.type))
+                    if target_cell_type != this_cell.cell_type:
+                        raise RuntimeError('SimpleNetwork.verify_cell_types: %s gid: %i should be %s, but is '
+                                           'IzhiCell type: %s' % (pop_name, gid, target_cell_type, this_cell.cell_type))
+                    else:
+                        target_izhi_celltype = izhi_cell_type_param_dict[target_cell_type].celltype
+                        if target_izhi_celltype != this_cell.izh.celltype:
+                            raise RuntimeError('SimpleNetwork.verify_cell_types: %s gid: %i; should be %s '
+                                           'Izhi type %i, but is type %i' %
+                                               (pop_name, gid, target_izhi_celltype, this_cell.izh.celltype))
                 else:
-                    raise RuntimeError('check_cell_type_correct: %s gid: %i is an unknown type: %s' %
+                    raise RuntimeError('SimpleNetwork.verify_cell_types: %s gid: %i is an unknown type: %s' %
                                        (pop_name, gid, type(this_cell)))
 
     def connectcells(self):
@@ -150,8 +177,8 @@ class Network(object):
                     if sigma_factor >= 2. / 3. / np.sqrt(2.):
                         orig_sigma_factor = sigma_factor
                         sigma_factor = 2. / 3. / np.sqrt(2.)
-                        print('network.connectcells: %s: %s connection; reducing weight_sigma_factor to avoid negative '
-                              'weights; orig: %.2f, new: %.2f' %
+                        print('SimpleNetwork.connectcells: %s: %s connection; reducing weight_sigma_factor to avoid '
+                              'negative weights; orig: %.2f, new: %.2f' %
                               (source_pop_name, target_pop_name, orig_sigma_factor, sigma_factor))
                     for source_gid in xrange(start_gid, stop_gid):
                         if source_gid == target_gid:
@@ -166,7 +193,7 @@ class Network(object):
                             this_nc.weight[0] = this_weight
                             self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid] = this_nc
                     if self.verbose > 1:
-                        print('rank: %i; target: %s gid: %i: source: %s; num_syns: %i' %
+                        print('SimpleNetwork.connectcells: rank: %i; target: %s gid: %i: source: %s; num_syns: %i' %
                               (rank, target_pop_name, target_gid, source_pop_name,
                                len(self.ncdict[target_pop_name][target_gid][source_pop_name])))
 
@@ -195,6 +222,7 @@ class Network(object):
         self.pc.set_maxstep(10)
         h.stdinit()
         h.dt = self.dt
+        h.finitialize(self.v_init)
         self.pc.psolve(self.tstop)
 
     def get_spikes_dict(self):
@@ -244,26 +272,52 @@ class Network(object):
 
 
 class IzhiCell(object):
-    # derived from modelDB
-    def __init__(self, tau_E, tau_I, type='RS'):
-        self.type = type
+    # Integrate-and-fire-like neuronal cell models with additional tunable dynamic parameters (e.g. adaptation).
+    # Derived from http://modeldb.yale.edu/39948
+    def __init__(self, pop_name=None, gid=None, tau_E=None, tau_I=None, cell_type='RS'):
+        """
+
+        :param pop_name: str
+        :param gid: int
+        :param tau_E: float (ms)
+        :param tau_I: float (ms)
+        :param cell_type: str
+        """
+        self.cell_type = cell_type
         self.sec = h.Section(cell=self)
         self.sec.L, self.sec.diam, self.sec.cm = 10., 10., 31.831
         self.izh = h.Izhi2007b(.5, sec=self.sec)
-        self.vinit = -60
-        self.sec(0.5).v = self.vinit
         self.sec.insert('pas')
+        if pop_name is None:
+            pop_name = self.cell_type
+        self.pop_name = pop_name
+        if gid is None:
+            gid = 0
+        self.gid = gid
+        self.name = '%s%s' % (pop_name, gid)
 
-        # RS = excit or FS = inhib
-        if type == 'RS': self.izh.a = .1
-        if type == 'FS': self.izh.a = .02
+        if self.cell_type not in izhi_cell_type_param_dict:
+            raise ValueError('IzhiCell: cell_type: %s not recognized' % cell_type)
+
+        for cell_type_param in izhi_cell_type_param_names:
+            setattr(self.izh, cell_type_param, getattr(izhi_cell_type_param_dict[cell_type], cell_type_param))
+        self.sec.e_pas = izhi_cell_type_param_dict[cell_type].vr
 
         self.mksyns(tau_E, tau_I)
 
     def __del__(self):
         pass
 
-    def mksyns(self, tau_E, tau_I):
+    def mksyns(self, tau_E=None, tau_I=None):
+        """
+
+        :param tau_E: float (ms)
+        :param tau_I: float (ms)
+        """
+        if tau_E is None:
+            tau_E = 5.
+        if tau_I is None:
+            tau_I = 10.
         self.syns = dict()
         s = h.ExpSyn(self.sec(0.5))
         s.tau = tau_E
@@ -284,12 +338,25 @@ class IzhiCell(object):
 
 
 class FFCell(object):
-    def __init__(self):
-        self.pp = h.VecStim()
+    def __init__(self, pop_name, gid):
+        """
+
+        :param pop_name: str
+        :param gid: int
+        """
+        self.pop_name = pop_name
+        self.gid = gid
+        self.name = '%s%s' % (pop_name, gid)
+        self.vs = h.VecStim()
+        self.spike_train = []
 
     def connect2target(self, target):
-        nc = h.NetCon(self.pp, target)
+        nc = h.NetCon(self.vs, target)
         return nc
+
+    def load_vecstim(self, spike_train):
+        self.spike_train = spike_train
+        self.vs.play(h.Vector(spike_train))
 
     def is_art(self):
         return 1
@@ -639,21 +706,6 @@ def get_center_of_mass_index(signal, subtract_min=True):
         return None
     normalized_cumsum = cumsum / cumsum[-1]
     return np.argwhere(normalized_cumsum >= 0.5)[0][0]
-
-
-def peak_from_spectrogram(freq, title='not specified', dt=1., plot=False):
-    """return the most dense frequency in a certain band (gamma, theta) based on the spectrogram"""
-    freq, density = scipy.signal.periodogram(freq, 1000. / dt)
-    if plot:
-        plt.plot(freq, density)
-        plt.title(title)
-        plt.show()
-    max_dens = np.max(density)
-    loc = np.where(density == max_dens)
-    if len(loc[0]) > 0:
-        peak_idx = loc[0][0]
-        return freq[peak_idx]
-    return 0.
 
 
 def get_mirror_padded_signal(signal, pad_len):
