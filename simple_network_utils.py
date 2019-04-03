@@ -12,21 +12,24 @@ h.load_file('stdrun.hoc')
 h.celsius = 35.  # degrees C
 
 
-# Modified from http://modeldb.yale.edu/39948
+# Based on http://modeldb.yale.edu/39948
 izhi_cell_type_param_names = ['C', 'k', 'vr', 'vt', 'vpeak', 'a', 'b', 'c', 'd', 'celltype']
 izhi_cell_type_params = namedtuple('izhi_cell_type_params', izhi_cell_type_param_names)
 izhi_cell_type_param_dict = {
-    'RS': izhi_cell_type_params(C=1., k=0.7, vr=-65., vt=-50., vpeak=35., a=0.03, b=-2., c=-55., d=100., celltype=1),
-    'IB': izhi_cell_type_params(C=1.5, k=0.4057, vr=-65., vt=-50., vpeak=50., a=0.01, b=5., c=-56., d=130., celltype=2),
-    'IB_orig': izhi_cell_type_params(C=1.5, k=1.2, vr=-75., vt=-40., vpeak=50., a=0.01, b=5., c=-56., d=130.,
-                                     celltype=2),
-    'CH': izhi_cell_type_params(C=0.5, k=1.5, vr=-60., vt=-40., vpeak=25., a=0.03, b=1., c=-40., d=150., celltype=3),
-    'LTS': izhi_cell_type_params(C=1.0, k=1.0, vr=-56., vt=-42., vpeak=40., a=0.03, b=8., c=-53., d=20., celltype=4),
-    'FS': izhi_cell_type_params(C=0.2, k=0.0444, vr=-60., vt=-50., vpeak=25., a=0.2, b=-2., c=-55., d=-60., celltype=5),
-    'FS_orig': izhi_cell_type_params(C=0.2, k=1., vr=-55., vt=-40., vpeak=25., a=0.2, b=-2., c=-45., d=-55.,
-                                     celltype=5),
-    'TC': izhi_cell_type_params(C=2.0, k=1.6, vr=-60., vt=-50., vpeak=35., a=0.01, b=15., c=-60., d=10., celltype=6),
-    'RTN': izhi_cell_type_params(C=0.4, k=0.25, vr=-65., vt=-45., vpeak=0., a=0.015, b=10., c=-55., d=50., celltype=7)
+    'RS': izhi_cell_type_params(C=1., k=0.7, vr=-65., vt=-50., vpeak=35., a=0.03, b=-2., c=-55., d=100.,
+                                celltype=1),
+    'IB': izhi_cell_type_params(C=1.5, k=1.2, vr=-75., vt=-45., vpeak=50., a=0.01, b=5., c=-56., d=130.,
+                                celltype=2),
+    'CH': izhi_cell_type_params(C=0.5, k=1.5, vr=-60., vt=-40., vpeak=25., a=0.03, b=1., c=-40., d=150.,
+                                celltype=3),
+    'LTS': izhi_cell_type_params(C=1.0, k=1.0, vr=-56., vt=-42., vpeak=40., a=0.03, b=8., c=-53., d=20.,
+                                 celltype=4),
+    'FS': izhi_cell_type_params(C=0.2, k=1., vr=-55., vt=-40., vpeak=25., a=0.2, b=-2., c=-45., d=-55.,
+                                celltype=5),
+    'TC': izhi_cell_type_params(C=2.0, k=1.6, vr=-60., vt=-50., vpeak=35., a=0.01, b=15., c=-60., d=10.,
+                                celltype=6),
+    'RTN': izhi_cell_type_params(C=0.4, k=0.25, vr=-65., vt=-45., vpeak=0., a=0.015, b=10., c=-55., d=50.,
+                                 celltype=7)
 }
 izhi_cell_types = list(izhi_cell_type_param_dict.keys())
 
@@ -285,9 +288,9 @@ class IzhiCell(object):
         """
         self.cell_type = cell_type
         self.sec = h.Section(cell=self)
-        self.sec.L, self.sec.diam, self.sec.cm = 10., 10., 31.831
-        self.izh = h.Izhi2007b(.5, sec=self.sec)
-        self.sec.insert('pas')
+        self.sec.L, self.sec.diam = 10., 10.
+        self.izh = h.Izhi2019(.5, sec=self.sec)
+        self.base_cm = 31.831  # Produces membrane time constant of 8 ms for a RS cell with izh.C = 1. and izi.k = 0.7
         if pop_name is None:
             pop_name = self.cell_type
         self.pop_name = pop_name
@@ -301,8 +304,8 @@ class IzhiCell(object):
 
         for cell_type_param in izhi_cell_type_param_names:
             setattr(self.izh, cell_type_param, getattr(izhi_cell_type_param_dict[cell_type], cell_type_param))
-        self.sec.e_pas = izhi_cell_type_param_dict[cell_type].vr
 
+        self.sec.cm = self.base_cm * self.izh.C
         self.mksyns(tau_E, tau_I)
 
     def __del__(self):

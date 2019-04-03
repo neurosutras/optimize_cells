@@ -1,23 +1,26 @@
 COMMENT
 
 A "simple" implementation of the Izhikevich neuron.
-Equations and parameter values are taken from
+Equations and parameter values are taken from:
   Izhikevich EM (2007).
   "Dynamical systems in neuroscience"
   MIT Press
 
-Equation for synaptic inputs taken from
-  Izhikevich EM, Edelman GM (2008).
-  "Large-scale model of mammalian thalamocortical systems." 
-  PNAS 105(9) 3593-3598.
-
 Example usage (in Python):
-  from neuron import h
-  sec = h.Section(name=sec) # section will be used to calculate v
-  izh = h.Izhi2007b(0.5)
-  def initiz () : sec.v=-60
-  fih=h.FInitializeHandler(initz)
-  izh.Iin = 70  # current clamp
+    from neuron import h
+    from izhi2007Wrapper import IzhiCell
+    import numpy as np
+
+    h.load_file('stdrun.hoc')
+    cell = IzhiCell(celltype='RS')
+    delay = 50  # ms
+    duration = 100  # ms
+    amp = 200  # pA
+    h.tstop = delay + duration
+    Iin_array = np.zeros(int(h.tstop / h.dt))
+    Iin_array[int(delay/h.dt):] = amp
+    Iin_vec = h.Vector(Iin_array)
+    Iin_vec.play(cell.izh._ref_Iin, h.dt)
 
 Cell types available are based on Izhikevich, 2007 book:
     1. RS - Layer 5 regular spiking pyramidal cell (fig 8.12 from 2007 book)
@@ -32,8 +35,8 @@ ENDCOMMENT
 
 : Declare name of object and variables
 NEURON {
-  POINT_PROCESS Izhi2007b
-  RANGE C, k, vr, vt, vpeak, u, a, b, c, d, Iin, celltype, alive, cellid, verbose, derivtype, delta, t0
+  POINT_PROCESS Izhi2007bS
+  RANGE C, k, vr, vt, vpeak, a, b, c, d, Iin, celltype, alive, cellid, verbose, derivtype
   NONSPECIFIC_CURRENT i
 }
 
@@ -41,6 +44,7 @@ NEURON {
 UNITS {
   (mV) = (millivolt)
   (uM) = (micrometer)
+  (nA) = (nanoamp)
 }
 
 : Parameters from Izhikevich 2007, MIT Press for regular spiking pyramidal cell
@@ -48,7 +52,7 @@ PARAMETER {
   C = 1 : Capacitance
   k = 0.7
   vr = -60 (mV) : Resting membrane potential
-  vt = -50 (mV) : Membrane spike threshold
+  vt = -40 (mV) : Membrane threshold
   vpeak = 35 (mV) : Peak voltage
   a = 0.03
   b = -2
@@ -64,11 +68,14 @@ PARAMETER {
 ASSIGNED {
   v (mV)
   i (nA)
-  u (mV) : Slow current/recovery variable
-  delta
-  t0
   derivtype
 }
+
+: State variables
+STATE {
+  u (mV) : Slow current/recovery variable
+}
+
 
 : Initial conditions
 INITIAL {
@@ -79,38 +86,28 @@ INITIAL {
 
 : Define neuron dynamics
 BREAKPOINT {
-  delta = t-t0 : Find time difference
-  if (celltype<5) {
-    u = u + delta*a*(b*(v-vr)-u) : Calculate recovery variable
-  }
-  else {
-     : For FS neurons, include nonlinear U(v): U(v) = 0 when v<vb ; U(v) = 0.025(v-vb) when v>=vb (d=vb=-55)
-     if (celltype==5) {
-       if (v<d) { 
-        u = u + delta*a*(0-u)
-       }
-       else { 
-        u = u + delta*a*((0.025*(v-d)*(v-d)*(v-d))-u)
-       }
-     }
-
-     : For TC neurons, reset b
-     if (celltype==6) {
-       if (v>-65) {b=0}
-       else {b=15}
-       u = u + delta*a*(b*(v-vr)-u) : Calculate recovery variable
-     }
-     
-     : For TRN neurons, reset b
-     if (celltype==7) {
-       if (v>-65) {b=2}
-       else {b=10}
-       u = u + delta*a*(b*(v-vr)-u) : Calculate recovery variable
-     }
-  }
-
-  t0=t : Reset last time so delta can be calculated in the next time step
+  SOLVE states METHOD euler
   i = -(k*(v-vr)*(v-vt) - u + Iin)/C/1000
+}
+
+FUNCTION derivfunc () {
+  if (celltype==5 && derivtype==2) { : For FS neurons, include nonlinear U(v): U(v) = 0 when v<vb ; U(v) = 0.025(v-vb) when v>=vb (d=vb=-55)
+    derivfunc = a*(0-u)
+  } else if (celltype==5 && derivtype==1) { : For FS neurons, include nonlinear U(v): U(v) = 0 when v<vb ; U(v) = 0.025(v-vb) when v>=vb (d=vb=-55)
+    derivfunc = a*((0.025*(v-d)*(v-d)*(v-d))-u)
+  } else if (celltype==5) { 
+    VERBATIM
+    hoc_execerror("izhi2007b.mod ERRA: derivtype not set",0);
+    ENDVERBATIM
+  } else {
+    derivfunc = a*(b*(v-vr)-u) : Calculate recovery variable
+  }
+}
+
+DERIVATIVE states {
+  LOCAL f
+  f = derivfunc()
+  u' = f
 }
 
 : Input received
