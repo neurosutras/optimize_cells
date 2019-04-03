@@ -65,6 +65,9 @@ bounds:
   I_tau_I: !!python/tuple
     - 2.
     - 30.
+  syn_proportion: !!python/tuple
+    - 0.
+    - 1.
 feature_names:
 - E_peak_rate
 - I_peak_rate
@@ -135,6 +138,7 @@ param_names:
 - E_tau_I
 - I_tau_E
 - I_tau_I
+- syn_proportion
 target_range:
   E_peak_rate: 0.1
   I_peak_rate: 0.1
@@ -188,3 +192,4 @@ x0:
   E_tau_I: 10.
   I_tau_E: 2.
   I_tau_I: 10.
+  syn_proportion: .8

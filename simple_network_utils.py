@@ -2,7 +2,7 @@ from nested.utils import *
 from neuron import h
 from baks import baks
 from scipy.signal import butter, sosfiltfilt, sosfreqz, hilbert, periodogram
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 
 
 # for h.lambda_f
@@ -39,7 +39,7 @@ class SimpleNetwork(object):
     def __init__(self, pc, pop_sizes, pop_gid_ranges, pop_cell_types, connection_syn_types, prob_connection,
                  connection_weights_mean, connection_weight_sigma_factors, connection_kinetics,
                  input_pop_mean_rates=None, tstop=1000., equilibrate=250., dt=0.025, delay=1., connection_seed=0,
-                 spikes_seed=100000, v_init=-65., verbose=1, debug=False):
+                 nsyn=100, syn_proportion= .5, spikes_seed=100000, v_init=-65., verbose=1, debug=False):
         """
 
         :param pc: ParallelContext object
@@ -76,6 +76,8 @@ class SimpleNetwork(object):
 
         self.pop_sizes = pop_sizes
         self.total_cells = np.sum(self.pop_sizes.values())
+        self.nsyn = nsyn
+        self.syn_proportion = syn_proportion
 
         self.pop_gid_ranges = pop_gid_ranges
         self.pop_cell_types = pop_cell_types
@@ -92,13 +94,13 @@ class SimpleNetwork(object):
         self.connection_seed = connection_seed
         self.spikes_seed = spikes_seed
 
-        self.mkcells()
+        self.mkcells(nsyn, syn_proportion)
         self.verify_cell_types()
         self.connectcells()
         self.voltage_record()
         self.spike_record()
 
-    def mkcells(self):
+    def mkcells(self, nsyn, syn_proportion):
         rank = int(self.pc.id())
         nhost = int(self.pc.nhost())
         self.cells = defaultdict(dict)
@@ -120,7 +122,7 @@ class SimpleNetwork(object):
                             cell.load_vecstim(this_spike_train)
                             self.spikes_dict[pop_name][gid] = np.array(this_spike_train)
                     elif cell_type in izhi_cell_type_param_dict:
-                        cell = IzhiCell(pop_name, gid, tau_E=self.connection_kinetics[pop_name]['E'],
+                        cell = IzhiCell(nsyn, syn_proportion, gid, tau_E=self.connection_kinetics[pop_name]['E'],
                                         tau_I=self.connection_kinetics[pop_name]['I'], cell_type=cell_type)
                     else:
                         raise RuntimeError('SimpleNetwork.mkcells: %s gid: %i; unrecognized cell type: %s' %
@@ -200,6 +202,76 @@ class SimpleNetwork(object):
                               (rank, target_pop_name, target_gid, source_pop_name,
                                len(self.ncdict[target_pop_name][target_gid][source_pop_name])))
 
+    def get_pop_name(self, gid):
+        for pop in ['FF', 'I', 'E']:
+            if gid in range(self.pop_gid_ranges[pop][0], self.pop_gid_ranges[pop][1]):
+                return pop
+        return None
+
+    def connectcells2(self):
+        rank = int(self.pc.id())
+        self.ncdict = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
+        for target_pop_name in self.prob_connection:
+            for target_gid in self.cells[target_pop_name]:
+                self.local_random.seed(self.connection_seed + target_gid)
+                target_cell = self.cells[target_pop_name][target_gid]
+                Esyns = int(self.syn_proportion * self.nsyn)
+                for i in range(Esyns):
+                    source_gid = int(self.local_random.random() * (self.pop_gid_ranges['FF'][1] -
+                                 self.pop_gid_ranges['E'][0]) + self.pop_gid_ranges['E'][0])
+                    while source_gid == target_gid:
+                        source_gid = int(self.local_random.random() * (self.pop_gid_ranges['FF'][1] -
+                                 self.pop_gid_ranges['E'][0]) + self.pop_gid_ranges['E'][0])
+                    source_pop_name = self.get_pop_name(source_gid)
+                    mu = self.connection_weights_mean[target_pop_name][source_pop_name]
+                    sigma_factor = self.connection_weight_sigma_factors[target_pop_name][source_pop_name]
+                    if sigma_factor >= 2. / 3. / np.sqrt(2.):
+                        orig_sigma_factor = sigma_factor
+                        sigma_factor = 2. / 3. / np.sqrt(2.)
+                        print('SimpleNetwork.connectcells: %s: %s connection; reducing weight_sigma_factor to avoid '
+                              'negative weights; orig: %.2f, new: %.2f' %
+                              (source_pop_name, target_pop_name, orig_sigma_factor, sigma_factor))
+                    this_syn = target_cell.syns['E'][i]
+                    this_nc = self.pc.gid_connect(source_gid, this_syn)
+                    this_nc.delay = self.delay
+                    this_weight = self.local_random.gauss(mu, mu * sigma_factor)
+                    while this_weight < 0.:
+                        this_weight = self.local_random.gauss(mu, mu * sigma_factor)
+                    this_nc.weight[0] = this_weight
+                    self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid] = this_nc
+                    if self.verbose > 1:
+                        print('SimpleNetwork.connectcells: rank: %i; target: %s gid: %i:; syn id: %s;'
+                              ' source: %s gid: %i' %
+                              (rank, target_pop_name, target_gid, i, source_pop_name,source_gid))
+                for i in range(self.nsyn - Esyns):
+                    source_gid = int(self.local_random.random() * (self.pop_gid_ranges['I'][1] -
+                                     self.pop_gid_ranges['I'][0]) + self.pop_gid_ranges['I'][0])
+                    while source_gid == target_gid:
+                        source_gid = int(self.local_random.random() * (self.pop_gid_ranges['I'][1] -
+                                         self.pop_gid_ranges['I'][0]) + self.pop_gid_ranges['I'][0])
+                    source_pop_name = self.get_pop_name(source_gid)
+                    mu = self.connection_weights_mean[target_pop_name][source_pop_name]
+                    sigma_factor = self.connection_weight_sigma_factors[target_pop_name][source_pop_name]
+                    if sigma_factor >= 2. / 3. / np.sqrt(2.):
+                        orig_sigma_factor = sigma_factor
+                        sigma_factor = 2. / 3. / np.sqrt(2.)
+                        print('SimpleNetwork.connectcells: %s: %s connection; reducing weight_sigma_factor to avoid '
+                              'negative weights; orig: %.2f, new: %.2f' %
+                              (source_pop_name, target_pop_name, orig_sigma_factor, sigma_factor))
+                    this_syn = target_cell.syns['I'][i]
+                    this_nc = self.pc.gid_connect(source_gid, this_syn)
+                    this_nc.delay = self.delay
+                    this_weight = self.local_random.gauss(mu, mu * sigma_factor)
+                    while this_weight < 0.:
+                        this_weight = self.local_random.gauss(mu, mu * sigma_factor)
+                    this_nc.weight[0] = this_weight
+                    self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid] = this_nc
+                    if self.verbose > 1:
+                        print('SimpleNetwork.connectcells: rank: %i; target: %s gid: %i:; syn id: %s;'
+                              ' source: %s gid: %i' %
+                              (rank, target_pop_name, target_gid, i, source_pop_name, source_gid))
+
+
     # Instrumentation - stimulation and recording
     def spike_record(self):
         for pop_name in self.cells:
@@ -277,7 +349,7 @@ class SimpleNetwork(object):
 class IzhiCell(object):
     # Integrate-and-fire-like neuronal cell models with additional tunable dynamic parameters (e.g. adaptation).
     # Derived from http://modeldb.yale.edu/39948
-    def __init__(self, pop_name=None, gid=None, tau_E=None, tau_I=None, cell_type='RS'):
+    def __init__(self, nsyn, syn_proportion, pop_name=None, gid=None, tau_E=None, tau_I=None, cell_type='RS'):
         """
 
         :param pop_name: str
@@ -306,12 +378,12 @@ class IzhiCell(object):
             setattr(self.izh, cell_type_param, getattr(izhi_cell_type_param_dict[cell_type], cell_type_param))
 
         self.sec.cm = self.base_cm * self.izh.C
-        self.mksyns(tau_E, tau_I)
+        self.mksyns(nsyn, syn_proportion, tau_I)
 
     def __del__(self):
         pass
 
-    def mksyns(self, tau_E=None, tau_I=None):
+    def mksyns(self, nsyn, syn_proportion, tau_E=None, tau_I=None):
         """
 
         :param tau_E: float (ms)
@@ -321,15 +393,18 @@ class IzhiCell(object):
             tau_E = 5.
         if tau_I is None:
             tau_I = 10.
-        self.syns = dict()
-        s = h.ExpSyn(self.sec(0.5))
-        s.tau = tau_E
-        s.e = 0.
-        self.syns['E'] = s
-        s = h.ExpSyn(self.sec(0.5))
-        s.tau = tau_I
-        s.e = -80.
-        self.syns['I'] = s
+        self.syns = defaultdict(list)
+        Esyns = int(nsyn * syn_proportion)
+        for i in range(Esyns):
+            s = h.ExpSyn(self.sec(0.5))
+            s.tau = tau_E
+            s.e = 0.
+            self.syns['E'].append(s)
+        for i in range(nsyn - Esyns):
+            s = h.ExpSyn(self.sec(0.5))
+            s.tau = tau_I
+            s.e = -80.
+            self.syns['I'].append(s)
 
     def connect2target(self, target):
         nc = h.NetCon(self.sec(1)._ref_v, target, sec=self.sec)
