@@ -236,7 +236,7 @@ def compute_features(x, export=False):
                               input_pop_mean_rates=context.input_pop_mean_rates,
                               connection_kinetics=context.connection_kinetics, tstop=context.tstop,
                               equilibrate=context.equilibrate, dt=context.dt, delay=context.delay,
-                              nsyn=context.syn, syn_proportion=context.syn_proportion,
+                              nsyn=context.nsyn, syn_proportion=context.syn_proportion,
                               connection_seed=context.connection_seed, spikes_seed=context.spikes_seed,
                               verbose=context.verbose, debug=context.debug)
     if context.disp and int(context.pc.id()) == 0:

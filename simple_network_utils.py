@@ -96,7 +96,7 @@ class SimpleNetwork(object):
 
         self.mkcells(nsyn, syn_proportion)
         self.verify_cell_types()
-        self.connectcells()
+        self.connectcells2()
         self.voltage_record()
         self.spike_record()
 
@@ -270,7 +270,68 @@ class SimpleNetwork(object):
                         print('SimpleNetwork.connectcells: rank: %i; target: %s gid: %i:; syn id: %s;'
                               ' source: %s gid: %i' %
                               (rank, target_pop_name, target_gid, i, source_pop_name, source_gid))
-
+    def connectcells2_buggy(self):
+        rank = int(self.pc.id())
+        self.ncdict = defaultdict(lambda: defaultdict(lambda: defaultdict(defaultdict(dict))))
+        for target_pop_name in self.prob_connection:
+            for target_gid in self.cells[target_pop_name]:
+                self.local_random.seed(self.connection_seed + target_gid)
+                target_cell = self.cells[target_pop_name][target_gid]
+                Esyns = int(self.syn_proportion * self.nsyn)
+                for i in range(Esyns):
+                    source_gid = int(self.local_random.random() * (self.pop_gid_ranges['FF'][1] -
+                                 self.pop_gid_ranges['E'][0]) + self.pop_gid_ranges['E'][0])
+                    while source_gid == target_gid:
+                        source_gid = int(self.local_random.random() * (self.pop_gid_ranges['FF'][1] -
+                                 self.pop_gid_ranges['E'][0]) + self.pop_gid_ranges['E'][0])
+                    source_pop_name = self.get_pop_name(source_gid)
+                    mu = self.connection_weights_mean[target_pop_name][source_pop_name]
+                    sigma_factor = self.connection_weight_sigma_factors[target_pop_name][source_pop_name]
+                    if sigma_factor >= 2. / 3. / np.sqrt(2.):
+                        orig_sigma_factor = sigma_factor
+                        sigma_factor = 2. / 3. / np.sqrt(2.)
+                        print('SimpleNetwork.connectcells: %s: %s connection; reducing weight_sigma_factor to avoid '
+                              'negative weights; orig: %.2f, new: %.2f' %
+                              (source_pop_name, target_pop_name, orig_sigma_factor, sigma_factor))
+                    this_syn = target_cell.syns['E'][i]
+                    this_nc = self.pc.gid_connect(source_gid, this_syn)
+                    this_nc.delay = self.delay
+                    this_weight = self.local_random.gauss(mu, mu * sigma_factor)
+                    while this_weight < 0.:
+                        this_weight = self.local_random.gauss(mu, mu * sigma_factor)
+                    this_nc.weight[0] = this_weight
+                    self.ncdict[target_pop_name][target_gid][i][source_pop_name][source_gid] = this_nc
+                    if self.verbose > 1:
+                        print('SimpleNetwork.connectcells: rank: %i; target: %s gid: %i:; syn id: %s;'
+                              ' source: %s gid: %i' %
+                              (rank, target_pop_name, target_gid, i, source_pop_name,source_gid))
+                for i in range(self.nsyn - Esyns):
+                    source_gid = int(self.local_random.random() * (self.pop_gid_ranges['I'][1] -
+                                     self.pop_gid_ranges['I'][0]) + self.pop_gid_ranges['I'][0])
+                    while source_gid == target_gid:
+                        source_gid = int(self.local_random.random() * (self.pop_gid_ranges['I'][1] -
+                                         self.pop_gid_ranges['I'][0]) + self.pop_gid_ranges['I'][0])
+                    source_pop_name = self.get_pop_name(source_gid)
+                    mu = self.connection_weights_mean[target_pop_name][source_pop_name]
+                    sigma_factor = self.connection_weight_sigma_factors[target_pop_name][source_pop_name]
+                    if sigma_factor >= 2. / 3. / np.sqrt(2.):
+                        orig_sigma_factor = sigma_factor
+                        sigma_factor = 2. / 3. / np.sqrt(2.)
+                        print('SimpleNetwork.connectcells: %s: %s connection; reducing weight_sigma_factor to avoid '
+                              'negative weights; orig: %.2f, new: %.2f' %
+                              (source_pop_name, target_pop_name, orig_sigma_factor, sigma_factor))
+                    this_syn = target_cell.syns['I'][i]
+                    this_nc = self.pc.gid_connect(source_gid, this_syn)
+                    this_nc.delay = self.delay
+                    this_weight = self.local_random.gauss(mu, mu * sigma_factor)
+                    while this_weight < 0.:
+                        this_weight = self.local_random.gauss(mu, mu * sigma_factor)
+                    this_nc.weight[0] = this_weight
+                    self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid] = this_nc
+                    if self.verbose > 1:
+                        print('SimpleNetwork.connectcells: rank: %i; target: %s gid: %i:; syn id: %s;'
+                              ' source: %s gid: %i' %
+                              (rank, target_pop_name, target_gid, i, source_pop_name, source_gid))
 
     # Instrumentation - stimulation and recording
     def spike_record(self):
