@@ -825,7 +825,7 @@ def plot_weight_matrix(connection_weights_dict, pop_names=None):
         sorted_target_gids = sorted(list(connection_weights_dict[target_pop_name].keys()))
         source_pop_list = list(connection_weights_dict[target_pop_name][sorted_target_gids[0]].keys())
         cols = len(source_pop_list)
-        fig, axes = plt.subplots(1, cols, sharey=True)
+        fig, axes = plt.subplots(1, cols, sharey=True, figsize=(5*cols, 5))
         for col, source_pop_name in enumerate(source_pop_list):
             sorted_source_gids = sorted(list(
                 connection_weights_dict[target_pop_name][sorted_target_gids[0]][source_pop_name].keys()))
@@ -834,20 +834,20 @@ def plot_weight_matrix(connection_weights_dict, pop_names=None):
                 for j, source_gid in enumerate(sorted_source_gids):
                     weight_matrix[i][j] = \
                         connection_weights_dict[target_pop_name][target_gid][source_pop_name][source_gid]
-            y_interval = len(sorted_target_gids) / 10 + 1
+            y_interval = max(2, len(sorted_target_gids) / 10)
             yticks = range(0, len(sorted_target_gids), y_interval)
             ylabels = np.array(sorted_target_gids)[yticks]
-            x_interval = len(sorted_source_gids) / 10 + 1
+            x_interval = max(2, len(sorted_source_gids) / 10)
             xticks = range(0, len(sorted_source_gids), x_interval)
             xlabels = np.array(sorted_source_gids)[xticks]
             plot_heatmap_from_matrix(weight_matrix, xticks=xticks, xtick_labels=xlabels, yticks=yticks,
-                                     ytick_labels=ylabels, ax=axes[col], aspect='auto')
-            axes[col].set_xlabel('Source: %s' % source_pop_name)
-            axes[0].set_ylabel('Target: %s' % target_pop_name)
+                                     ytick_labels=ylabels, ax=axes[col], aspect='auto', cbar_label='Synaptic weight')
+            axes[col].set_xlabel('Cell ID\nSource: %s' % source_pop_name)
+            axes[0].set_ylabel('Target: %s\nCell ID' % target_pop_name)
         clean_axes(axes)
         fig.suptitle('Connection weights onto %s population' % target_pop_name, )
         fig.tight_layout()
-        fig.subplots_adjust(top=0.9)
+        fig.subplots_adjust(top=0.9, wspace=0.2)
         fig.show()
 
 
@@ -866,7 +866,7 @@ def plot_firing_rate_heatmaps(firing_rates_dict, t, pop_names=None):
         rate_matrix = np.empty((len(sorted_gids), len(t)), dtype='float32')
         for i, gid in enumerate(sorted_gids):
             rate_matrix[i][:] = firing_rates_dict[pop_name][gid]
-        y_interval = len(sorted_gids) / 10 + 1
+        y_interval = max(2, len(sorted_gids) / 10)
         yticks = range(0, len(sorted_gids), y_interval)
         ylabels = np.array(sorted_gids)[yticks]
         dt = t[1] - t[0]
@@ -874,9 +874,9 @@ def plot_firing_rate_heatmaps(firing_rates_dict, t, pop_names=None):
         xticks = range(0, len(t), x_interval)
         xlabels = np.array(t)[xticks].astype('int32')
         plot_heatmap_from_matrix(rate_matrix, xticks=xticks, xtick_labels=xlabels, yticks=yticks,
-                                 ytick_labels=ylabels, ax=axes, aspect='auto')
+                                 ytick_labels=ylabels, ax=axes, aspect='auto', cbar_label='Firing rate (Hz)')
         axes.set_xlabel('Time (ms)')
-        axes.set_ylabel('Firing rate (Hz)')
+        axes.set_ylabel('Target: %s\nCell ID' % pop_name)
         axes.set_title('Firing rate: %s population' % pop_name)
         clean_axes(axes)
         fig.tight_layout()

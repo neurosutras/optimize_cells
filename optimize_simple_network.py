@@ -83,14 +83,14 @@ def config_worker():
 
 
 def init_context():
-    pop_sizes = {'FF': 100, 'E': 10, 'I': 10}
+    pop_sizes = {'FF': 100, 'E': 100, 'I': 100}
     prev_gid = 0
     pop_gid_ranges = dict()
     for pop_name in pop_sizes:
         next_gid = prev_gid + pop_sizes[pop_name]
         pop_gid_ranges[pop_name] = (prev_gid, next_gid)
         prev_gid += pop_sizes[pop_name]
-    pop_cell_types = {'FF': 'input', 'E': 'RS', 'I': 'RS'}
+    pop_cell_types = {'FF': 'input', 'E': 'IB', 'I': 'FS'}
     # {'postsynaptic population': {'presynaptic population': float} }
     prob_connection = defaultdict(dict)
     connection_weights_mean = defaultdict(dict)
