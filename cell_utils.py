@@ -68,6 +68,30 @@ def get_R_inp(t, vm, start, stop, amp, dt=0.025):
     return baseline, peak/abs(amp), plateau/abs(amp)
 
 
+def get_event_amp(t, rec, start, stop, dt=0.025):
+    """
+    Calculate peak amplitude of an event within the specified recording window.
+    :param t: array
+    :param rec: array
+    :param start: float
+    :param stop: float
+    :param dt: float
+    :return: float
+    """
+    interp_t, interp_rec = interp(t, rec, stop, dt)
+    start_index = int(start / dt)
+    left = start_index - int(3. / dt)
+    right = left + int(2. / dt)
+    baseline = np.mean(interp_rec[left:right])
+    interp_rec -= baseline
+    abs_interp_rec = np.abs(interp_rec)
+
+    peak_index = np.argmax(abs_interp_rec[start_index:])
+    peak_val = interp_rec[start_index + peak_index]
+
+    return peak_val
+
+
 def model_exp_rise_decay(t, tau_rise, tau_decay):
     shape = np.exp(-t/tau_decay)-np.exp(-t/tau_rise)
     return shape/np.max(shape)

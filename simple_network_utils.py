@@ -34,19 +34,12 @@ izhi_cell_type_param_dict = {
 izhi_cell_types = list(izhi_cell_type_param_dict.keys())
 
 
-syn_mech_names = \
+default_syn_mech_names = \
     {'E': 'SatExp2Syn',
      'I': 'SatExp2Syn'
      }
 
-"""
-syn_mech_names = \
-    {'E': 'ExpSyn',
-     'I': 'ExpSyn'
-     }
-"""
-
-syn_mech_param_rules = \
+default_syn_mech_param_rules = \
     {'SatExp2Syn': {'mech_file': 'sat_exp2syn.mod',
                     'mech_params': ['sat', 'dur_onset', 'tau_offset', 'e'],
                     'netcon_params': {'weight': 0, 'g_unit': 1}
@@ -57,8 +50,7 @@ syn_mech_param_rules = \
                 }
      }
 
-
-default_syn_mech_params = \
+default_syn_type_mech_params = \
     {'E': {'sat': 0.9,
            'dur_onset': 1.,  # ms
            'tau_offset': 5.,  # ms
@@ -74,26 +66,15 @@ default_syn_mech_params = \
            'weight': 1.
            }
      }
-"""
-default_syn_mech_params = \
-    {'E': {'tau': 5.,
-           'e': 0.,  # mV
-           'weight': 1.
-           },
-     'I': {'tau': 10.,
-           'e': -80.,  # mV
-           'weight': 1.
-           }
-     }
-"""
 
 
 class SimpleNetwork(object):
 
     def __init__(self, pc, pop_sizes, pop_gid_ranges, pop_cell_types, connection_syn_types, prob_connection,
-                 connection_weights_mean, connection_weight_sigma_factors, syn_mech_params,
-                 input_pop_mean_rates=None, tstop=1000., equilibrate=250., dt=0.025, delay=1., connection_seed=0,
-                 spikes_seed=100000, v_init=-65., verbose=1, debug=False):
+                 connection_weights_mean, connection_weight_sigma_factors, syn_mech_params, syn_mech_names=None,
+                 syn_mech_param_rules=None, syn_mech_param_defaults=None, input_pop_mean_rates=None, tstop=1000.,
+                 equilibrate=250., dt=0.025, delay=1., connection_seed=0, spikes_seed=100000, v_init=-65., verbose=1,
+                 debug=False):
         """
 
         :param pc: ParallelContext object
@@ -105,7 +86,10 @@ class SimpleNetwork(object):
         :param connection_weights_mean: nested dict of float: mean strengths of each connection type
         :param connection_weight_sigma_factors: nested dict of float: variances of connection strengths, normalized to
                                                 mean
-        :param syn_mech_params: nested dict of float: synaptic decay kinetics (ms)
+        :param syn_mech_params: nested dict: {target_pop_name (str): {source_pop_name (str): {param_name (str): float}}}
+        :param syn_mech_names: dict: {syn_name (str): name of hoc point process (str)}
+        :param syn_mech_param_rules: nested dict
+        :param syn_mech_param_defaults: nested dict
         :param input_pop_mean_rates: dict of float: mean firing rate of each input population (Hz)
         :param tstop: int: simulation duration (ms)
         :param equilibrate: float: simulation equilibration duration (ms)
@@ -138,6 +122,21 @@ class SimpleNetwork(object):
         self.connection_weights_mean = connection_weights_mean
         self.connection_weight_sigma_factors = connection_weight_sigma_factors
         self.syn_mech_params = syn_mech_params
+        if syn_mech_names is None:
+            self.syn_mech_names = default_syn_mech_names
+        if syn_mech_param_rules is None:
+            self.syn_mech_param_rules = default_syn_mech_param_rules
+        if syn_mech_param_defaults is None:
+            self.syn_mech_param_defaults = defaultdict(dict)
+            for target_pop_name in self.prob_connection:
+                for source_pop_name in self.prob_connection[target_pop_name]:
+                    syn_type = self.connection_syn_types[source_pop_name]
+                    if syn_type not in default_syn_type_mech_params:
+                        raise RuntimeError('SimpleNetwork: default synaptic mechanism parameters not found for '
+                                           'target_pop: %s, source_pop: %s, syn_type: %s' %
+                                           (target_pop_name, source_pop_name, syn_type))
+                    self.syn_mech_param_defaults[target_pop_name][source_pop_name] = \
+                        default_syn_type_mech_params[syn_type]
 
         self.spikes_dict = defaultdict(dict)
         self.input_pop_mean_rates = input_pop_mean_rates
@@ -245,9 +244,12 @@ class SimpleNetwork(object):
                             while this_weight < 0.:
                                 this_weight = self.local_random.gauss(mu, mu * sigma_factor)
                             this_syn, this_nc = \
-                                target_cell.append_connection(self.pc, this_syn_type, source_gid, delay=self.delay,
-                                                              weight=this_weight,
-                                                              **self.syn_mech_params[target_pop_name][this_syn_type])
+                                target_cell.append_connection(
+                                    self.pc, this_syn_type, source_gid, delay=self.delay, weight=this_weight,
+                                    syn_mech_names=self.syn_mech_names, syn_mech_param_rules=self.syn_mech_param_rules,
+                                    syn_mech_param_defaults=
+                                    self.syn_mech_param_defaults[target_pop_name][source_pop_name],
+                                    **self.syn_mech_params[target_pop_name][source_pop_name])
                             self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid] = this_nc
                     if self.verbose > 1:
                         print('SimpleNetwork.connectcells: rank: %i; target: %s gid: %i: source: %s; num_syns: %i' %
@@ -360,58 +362,55 @@ class IzhiCell(object):
         self.sec.cm = self.base_cm * self.izh.C
         self.syns = dict()
 
-    def config_connection(self, syn, nc, syn_type, delay=None, **syn_mech_params):
+    def config_connection(self, syn_type, syn=None, nc=None, delay=None, syn_mech_names=None,
+                          syn_mech_param_rules=None, **syn_mech_params):
         """
-
+        :param syn_type: str
         :param syn: NEURON point process object
         :param nc: NEURON netcon object
-        :param syn_type: str
+        :param delay: float
+        :param syn_mech_names: dict
+        :param syn_mech_param_rules: dict
         :param syn_mech_params: dict
         """
-        print nc.pre(), syn_mech_params
-        if delay is not None:
+        if syn is None and nc is None:
+            raise RuntimeError('IzhiCell.config_connection: must provide at least one: synaptic point process or '
+                               'netcon object')
+        if nc is not None and delay is not None:
             nc.delay = delay
+        if syn_mech_names is None:
+            syn_mech_names = default_syn_mech_names
         syn_mech_name = syn_mech_names[syn_type]
+        if syn_mech_param_rules is None:
+            syn_mech_param_rules = default_syn_mech_param_rules
         for param_name in syn_mech_params:
-            if param_name in syn_mech_param_rules[syn_mech_name]['mech_params']:
+            if param_name in syn_mech_param_rules[syn_mech_name]['mech_params'] and syn is not None:
                 setattr(syn, param_name, syn_mech_params[param_name])
-            elif param_name in syn_mech_param_rules[syn_mech_name]['netcon_params']:
+            elif param_name in syn_mech_param_rules[syn_mech_name]['netcon_params'] and nc is not None:
                 index = syn_mech_param_rules[syn_mech_name]['netcon_params'][param_name]
                 nc.weight[index] = syn_mech_params[param_name]
 
-    def mksyns(self, tau_E=None, tau_I=None):
-        """
-
-        :param tau_E: float (ms)
-        :param tau_I: float (ms)
-        """
-        if tau_E is None:
-            tau_E = 5.
-        if tau_I is None:
-            tau_I = 10.
-        self.syns = dict()
-        s = h.ExpSyn(self.sec(0.5))
-        s.tau = tau_E
-        s.e = 0.
-        self.syns['E'] = s
-        s = h.ExpSyn(self.sec(0.5))
-        s.tau = tau_I
-        s.e = -80.
-        self.syns['I'] = s
-
-    def append_connection(self, pc, syn_type, source_gid, delay=None, syn_mech_params=None, **kwargs):
+    def append_connection(self, pc, syn_type, source_gid, delay=None, syn_mech_names=None, syn_mech_param_rules=None,
+                          syn_mech_param_defaults=None, **kwargs):
         """
 
         :param pc: :class:'h.ParallelContext'
         :param syn_type: str
         :param source_gid: int
         :param delay: float
-        :param syn_mech_params: dict
+        :param syn_mech_names: dict
+        :param syn_mech_param_rules: nested dict
+        :param syn_mech_param_defaults: nested dict
+        :param kwargs: dict
 
         """
+        if syn_mech_names is None:
+            syn_mech_names = default_syn_mech_names
         syn_mech_name = syn_mech_names[syn_type]
-        if syn_mech_params is None:
-            syn_mech_params = dict(default_syn_mech_params[syn_type])
+        if syn_mech_param_defaults is None:
+            syn_mech_params = dict(default_syn_type_mech_params[syn_type])
+        else:
+            syn_mech_params = dict(syn_mech_param_defaults)
         syn_mech_params.update(kwargs)
         if syn_type in self.syns:
             syn = self.syns[syn_type]
@@ -420,7 +419,8 @@ class IzhiCell(object):
             self.syns[syn_type] = syn
 
         nc = pc.gid_connect(source_gid, syn)
-        self.config_connection(syn, nc, syn_type, delay=delay, **syn_mech_params)
+        self.config_connection(syn_type, syn=syn, nc=nc, delay=delay, syn_mech_names=syn_mech_names,
+                               syn_mech_param_rules=syn_mech_param_rules, **syn_mech_params)
 
         return syn, nc
 
@@ -456,6 +456,21 @@ class FFCell(object):
 
     def is_art(self):
         return 1
+
+
+def get_pop_gid_ranges(pop_sizes):
+    """
+
+    :param pop_sizes: dict: {str: int}
+    :return: dict: {str: tuple of int}
+    """
+    prev_gid = 0
+    pop_gid_ranges = dict()
+    for pop_name in pop_sizes:
+        next_gid = prev_gid + pop_sizes[pop_name]
+        pop_gid_ranges[pop_name] = (prev_gid, next_gid)
+        prev_gid += pop_sizes[pop_name]
+    return pop_gid_ranges
 
 
 def get_inhom_poisson_spike_times_by_thinning(rate, t, dt=0.02, refractory=3., generator=None):
@@ -600,9 +615,9 @@ def get_pop_activity_stats(spikes_dict, firing_rates_dict, t, threshold=1., plot
     if plot:
         for pop_name in pop_fraction_active_dict:
             fig, axes = plt.subplots(1, 2)
-            axes[0].plot(t, pop_fraction_active_dict[pop_name])
+            axes[0].plot(t, pop_fraction_active_dict[pop_name], c='k')
             axes[0].set_title('Active fraction of cell population')
-            axes[1].plot(t, mean_rate_active_cells_dict[pop_name])
+            axes[1].plot(t, mean_rate_active_cells_dict[pop_name], c='k')
             axes[1].set_title('Mean firing rate of active cells')
             clean_axes(axes)
             fig.suptitle('Population: %s' % pop_name)
@@ -630,8 +645,8 @@ def get_butter_bandpass_filter(filter_band, sampling_rate, order, filter_label='
     if plot:
         fig = plt.figure()
         w, h = sosfreqz(sos, worN=2000)
-        plt.plot((sampling_rate * 0.5 / np.pi) * w, abs(h))
-        plt.plot([0, 0.5 * sampling_rate], [np.sqrt(0.5), np.sqrt(0.5)], '--', label='sqrt(0.5)')
+        plt.plot((sampling_rate * 0.5 / np.pi) * w, abs(h), c='k')
+        plt.plot([0, 0.5 * sampling_rate], [np.sqrt(0.5), np.sqrt(0.5)], '--', c='grey')
         plt.title('%s bandpass filter (%.1f:%.1f Hz), Order: %i' %
                   (filter_label, min(filter_band), max(filter_band), order))
         plt.xlabel('Frequency (Hz)')
@@ -644,7 +659,7 @@ def get_butter_bandpass_filter(filter_band, sampling_rate, order, filter_label='
 
 
 def get_bandpass_filtered_signal_stats(signal, t, sos, filter_band, signal_label='', filter_label='', pad=True,
-                                 pad_len=None, plot=False):
+                                 pad_len=None, plot=False, verbose=False):
     """
 
     :param signal: array
@@ -656,11 +671,13 @@ def get_bandpass_filtered_signal_stats(signal, t, sos, filter_band, signal_label
     :param pad: bool
     :param pad_len: int
     :param plot: bool
+    :param verbose: bool
     :return: tuple of array
     """
     if np.all(signal == 0.):
-        print('%s\n%s bandpass filter (%.1f:%.1f Hz); Failed - no signal' %
-              (signal_label, filter_label, min(filter_band), max(filter_band)))
+        if verbose:
+            print('%s\n%s bandpass filter (%.1f:%.1f Hz); Failed - no signal' %
+                  (signal_label, filter_label, min(filter_band), max(filter_band)))
         return signal, np.zeros_like(signal), 0., 0.
     if pad and pad_len is None:
         dt = t[1] - t[0]  # ms
@@ -688,19 +705,21 @@ def get_bandpass_filtered_signal_stats(signal, t, sos, filter_band, signal_label
         envelope_ratio = mean_envelope / mean_signal
 
     if plot:
-        fig, axes = plt.subplots(2,2)
-        axes[0][0].plot(t, np.subtract(signal, np.mean(signal)), c='k', label='Original signal')
-        axes[0][0].plot(t, filtered_signal, c='r', label='Filtered signal')
-        axes[0][1].plot(t, signal, label='Original signal', c='grey', alpha=0.5, zorder=1)
-        axes[0][1].plot(t, np.ones_like(t) * mean_signal, c='k', zorder=0)
-        axes[0][1].plot(t, envelope, label='Envelope amplitude', c='r', alpha=0.5, zorder=1)
-        axes[0][1].plot(t, np.ones_like(t) * mean_envelope, c='m', zorder=0)
+        fig, axes = plt.subplots(2,2, figsize=(8,7))
+        axes[0][0].plot(t, np.subtract(signal, np.mean(signal)), c='grey', alpha=0.5, label='Original signal')
+        axes[0][0].plot(t, filtered_signal, c='r', label='Filtered signal', alpha=0.5)
+        axes[0][1].plot(t, signal, label='Original signal', c='grey', alpha=0.5, zorder=2)
+        axes[0][1].plot(t, np.ones_like(t) * mean_signal, c='k', zorder=1)
+        axes[0][1].plot(t, envelope, label='Envelope amplitude', c='r', alpha=0.5, zorder=2)
+        axes[0][1].plot(t, np.ones_like(t) * mean_envelope, c='darkred', zorder=0)
         box = axes[0][0].get_position()
         axes[0][0].set_position([box.x0, box.y0, box.width, box.height * 0.8])
-        axes[0][0].legend(loc='upper center', bbox_to_anchor=(0.5, 1.1), frameon=False, framealpha=0.5)
+        axes[0][0].legend(loc='lower center', bbox_to_anchor=(0.5, 1.0), frameon=False, framealpha=0.5)
+        axes[0][0].set_xlabel('Time (ms)')
         box = axes[0][1].get_position()
         axes[0][1].set_position([box.x0, box.y0, box.width, box.height * 0.8])
-        axes[0][1].legend(loc='upper center', bbox_to_anchor=(0.5, 1.1), frameon=False, framealpha=0.5)
+        axes[0][1].legend(loc='lower center', bbox_to_anchor=(0.5, 1.0), frameon=False, framealpha=0.5)
+        axes[0][1].set_xlabel('Time (ms)')
 
         axes[1][0].plot(f, power, c='k')
         axes[1][0].set_xlabel('Frequency (Hz)')
@@ -708,17 +727,16 @@ def get_bandpass_filtered_signal_stats(signal, t, sos, filter_band, signal_label
         axes[1][0].set_xlim(min(filter_band)/2., max(filter_band) * 1.5)
 
         clean_axes(axes)
-        fig.suptitle('%s\n%s bandpass filter (%.1f:%.1f Hz); Envelope ratio: %.3f; Centroid freq: %.3f Hz' %
-                          (signal_label, filter_label, min(filter_band), max(filter_band), envelope_ratio,
-                           centroid_freq))
+        fig.suptitle('%s\n%s bandpass filter (%.1f:%.1f Hz)\nEnvelope ratio: %.3f; Centroid freq: %.3f Hz' %
+                     (signal_label, filter_label, min(filter_band), max(filter_band), envelope_ratio, centroid_freq))
         fig.tight_layout()
-        fig.subplots_adjust(top=0.8)
+        fig.subplots_adjust(top=0.8, hspace=0.3)
         fig.show()
 
     return filtered_signal, envelope, envelope_ratio, centroid_freq
 
 
-def get_pop_bandpass_filtered_signal_stats(signal_dict, t, filter_band_dict, order=15, plot=False):
+def get_pop_bandpass_filtered_signal_stats(signal_dict, t, filter_band_dict, order=15, plot=False, verbose=False):
     """
 
     :param signal_dict: array
@@ -726,6 +744,7 @@ def get_pop_bandpass_filtered_signal_stats(signal_dict, t, filter_band_dict, ord
     :param filter_band_dict: dict: {filter_label (str): list of float (Hz) }
     :param order: int
     :param plot: bool
+    :param verbose: bool
     :return: array
     """
     dt = t[1] - t[0]  # ms
@@ -746,7 +765,7 @@ def get_pop_bandpass_filtered_signal_stats(signal_dict, t, filter_band_dict, ord
             envelope_ratio_dict[filter_label][pop_name], centroid_freq_dict[filter_label][pop_name] = \
                 get_bandpass_filtered_signal_stats(signal, t, sos, filter_band,
                                                    signal_label='Population: %s' % pop_name,
-                                                   filter_label=filter_label, plot=plot)
+                                                   filter_label=filter_label, plot=plot, verbose=verbose)
 
     return filtered_signal_dict, envelope_dict, envelope_ratio_dict, centroid_freq_dict
 
@@ -841,11 +860,11 @@ def get_mirror_padded_time_series(t, pad_len):
     return padded_t
 
 
-def plot_inferred_spike_rates(spikes_dict, firing_rates_dict, t, active_rate_threshold=1., rows=3, cols=4,
+def plot_inferred_spike_rates(binned_spikes_dict, firing_rates_dict, t, active_rate_threshold=1., rows=3, cols=4,
                               pop_names=None):
     """
 
-    :param spikes_dict: dict of array
+    :param binned_spikes_dict: dict of array
     :param firing_rates_dict: dict of array
     :param t: array
     :param active_rate_threshold: float
@@ -854,9 +873,9 @@ def plot_inferred_spike_rates(spikes_dict, firing_rates_dict, t, active_rate_thr
     :param pop_names: list of str
     """
     if pop_names is None:
-        pop_names = list(spikes_dict.keys())
+        pop_names = list(binned_spikes_dict.keys())
     for pop_name in pop_names:
-        fig, axes = plt.subplots(rows, cols, sharex=True)
+        fig, axes = plt.subplots(rows, cols, sharex=True, sharey=True, figsize=(cols*3, rows*3))
         for j in xrange(cols):
             axes[rows-1][j].set_xlabel('Time (ms)')
         for i in xrange(rows):
@@ -868,34 +887,34 @@ def plot_inferred_spike_rates(spikes_dict, firing_rates_dict, t, active_rate_thr
         gid_sample = random.sample(active_gid_range, min(len(active_gid_range), rows * cols))
         for i, gid in enumerate(gid_sample):
             inferred_rate = firing_rates_dict[pop_name][gid]
-            spike_train = spikes_dict[pop_name][gid]
-            binned_spike_indexes = find_nearest(spike_train, t)
+            # spike_train = binned_spikes_dict[pop_name][gid]
+            binned_spike_indexes = np.where(binned_spikes_dict[pop_name][gid] > 0.)[0]  # find_nearest(spike_train, t)
             row = i / cols
             col = i % cols
-            axes[row][col].plot(t, inferred_rate, label='Inferred firing rate')
+            axes[row][col].plot(t, inferred_rate, label='Rate')
             axes[row][col].plot(t[binned_spike_indexes], np.ones(len(binned_spike_indexes)), 'k.', label='Spikes')
             axes[row][col].set_title('gid: %i' % gid)
-
-        axes[0][0].legend(loc='best')
+        axes[0][cols-1].legend(loc='center left', frameon=False, framealpha=0.5, bbox_to_anchor=(1., 0.5))
         clean_axes(axes)
         fig.suptitle('Inferred spike rates: %s population' % pop_name)
         fig.tight_layout()
-        fig.subplots_adjust(top=0.85)
+        fig.subplots_adjust(top=0.9, right=0.9)
         fig.show()
 
 
-def plot_voltage_traces(voltage_rec_dict, t, rows=3, cols=4, pop_names=None):
+def plot_voltage_traces(voltage_rec_dict, rec_t, spikes_dict=None, rows=3, cols=4, pop_names=None):
     """
 
     :param voltage_rec_dict: dict of array
-    :param t: array
+    :param rec_t: array
+    :param spikes_dict: nested dict of array
     :param cells_per_pop: int
     :param pop_names: list of str
     """
     if pop_names is None:
         pop_names = list(voltage_rec_dict.keys())
     for pop_name in pop_names:
-        fig, axes = plt.subplots(rows, cols, sharex=True)
+        fig, axes = plt.subplots(rows, cols, sharex=True, sharey=True, figsize=(cols*3, rows*3))
         for j in xrange(cols):
             axes[rows - 1][j].set_xlabel('Time (ms)')
         for i in xrange(rows):
@@ -906,13 +925,16 @@ def plot_voltage_traces(voltage_rec_dict, t, rows=3, cols=4, pop_names=None):
             rec = voltage_rec_dict[pop_name][gid]
             row = i / cols
             col = i % cols
-            axes[row][col].plot(t, rec)
+            axes[row][col].plot(rec_t, rec, label='Vm', c='grey')
+            if spikes_dict is not None:
+                binned_spike_indexes = find_nearest(spikes_dict[pop_name][gid], rec_t)
+                axes[row][col].plot(rec_t[binned_spike_indexes], rec[binned_spike_indexes], 'k.', label='Spikes')
             axes[row][col].set_title('gid: %i' % gid)
-        axes[0][0].legend(loc='best')
+        axes[0][cols-1].legend(loc='center left', frameon=False, framealpha=0.5, bbox_to_anchor=(1., 0.5))
         clean_axes(axes)
         fig.suptitle('Voltage recordings: %s population' % pop_name)
         fig.tight_layout()
-        fig.subplots_adjust(top=0.85)
+        fig.subplots_adjust(top=0.9, right=0.9)
         fig.show()
 
 

@@ -18,40 +18,40 @@ bounds:
     - 1.0E-4
     - 1.
   E_FF_mean_weight: !!python/tuple
-    - 0.
-    - .5
+    - 0.1
+    - 5.
   E_E_mean_weight: !!python/tuple
-    - 0.
-    - .5
+    - 0.1
+    - 5.
   E_I_mean_weight: !!python/tuple
-    - 0.
-    - .5
+    - 0.1
+    - 5.
   I_FF_mean_weight: !!python/tuple
-    - 0.
-    - .5
+    - 0.1
+    - 5.
   I_E_mean_weight: !!python/tuple
-    - 0.
-    - .5
+    - 0.1
+    - 5.
   I_I_mean_weight: !!python/tuple
-    - 0.
-    - .5
+    - 0.1
+    - 5.
   E_FF_weight_sigma_factor: !!python/tuple
-    - 0.
+    - 0.1
     - 1.
   E_E_weight_sigma_factor: !!python/tuple
-    - 0.
+    - 0.1
     - 1.
   E_I_weight_sigma_factor: !!python/tuple
-    - 0.
+    - 0.1
     - 1.
   I_FF_weight_sigma_factor: !!python/tuple
-    - 0.
+    - 0.1
     - 1.
   I_E_weight_sigma_factor: !!python/tuple
-    - 0.
+    - 0.1
     - 1.
   I_I_weight_sigma_factor: !!python/tuple
-    - 0.
+    - 0.1
     - 1.
   E_E_tau_offset: !!python/tuple
     - 2.
@@ -166,18 +166,18 @@ target_val:
   E_centroid_gamma_freq: 70.
   I_centroid_gamma_freq: 70.
 x0:
-  E_FF_prob_connection: 0.1
+  E_FF_prob_connection: 0.5
   E_E_prob_connection: 0.2
   E_I_prob_connection: 0.5
-  I_FF_prob_connection: 0.1
+  I_FF_prob_connection: 0.5
   I_E_prob_connection: 0.5
   I_I_prob_connection: 0.5
-  E_FF_mean_weight: .05
-  E_E_mean_weight: .005
-  E_I_mean_weight: .05
-  I_FF_mean_weight: .1
-  I_E_mean_weight: .005
-  I_I_mean_weight: .05
+  E_FF_mean_weight: 1.
+  E_E_mean_weight: 1.
+  E_I_mean_weight: 1.
+  I_FF_mean_weight: 1.
+  I_E_mean_weight: 1.
+  I_I_mean_weight: 1.
   E_FF_weight_sigma_factor: .1
   E_E_weight_sigma_factor: .1
   E_I_weight_sigma_factor: .1
