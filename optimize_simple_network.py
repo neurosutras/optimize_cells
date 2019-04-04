@@ -105,6 +105,7 @@ def init_context():
     if 'FF_mean_rate' not in context():
         raise RuntimeError('optimize_simple_network: missing required kwarg: FF_mean_rate')
 
+    nsyn = 100
     delay = 1.  # ms
     equilibrate = 250.  # ms
     tstop = 3000 + equilibrate  # ms
@@ -155,7 +156,8 @@ def update_context(x, local_context=None):
     local_context.connection_weight_sigma_factors['I']['FF'] = x_dict['I_FF_weight_sigma_factor']
     local_context.connection_weight_sigma_factors['I']['E'] = x_dict['I_E_weight_sigma_factor']
     local_context.connection_weight_sigma_factors['I']['I'] = x_dict['I_I_weight_sigma_factor']
-    
+
+    local_context.syn_proportion = x_dict['syn_proportion']
     local_context.input_pop_mean_rates['FF'] = local_context.FF_mean_rate
 
 
@@ -241,6 +243,7 @@ def compute_features(x, export=False):
                               input_pop_mean_rates=context.input_pop_mean_rates,
                               syn_mech_params=context.syn_mech_params, tstop=context.tstop,
                               equilibrate=context.equilibrate, dt=context.dt, delay=context.delay,
+                              nsyn=context.nsyn, syn_proportion=context.syn_proportion,
                               connection_seed=context.connection_seed, spikes_seed=context.spikes_seed,
                               verbose=context.verbose, debug=context.debug)
     if int(context.pc.id()) == 0 and context.verbose > 0:
