@@ -34,10 +34,64 @@ izhi_cell_type_param_dict = {
 izhi_cell_types = list(izhi_cell_type_param_dict.keys())
 
 
+syn_mech_names = \
+    {'E': 'SatExp2Syn',
+     'I': 'SatExp2Syn'
+     }
+
+"""
+syn_mech_names = \
+    {'E': 'ExpSyn',
+     'I': 'ExpSyn'
+     }
+"""
+
+syn_mech_param_rules = \
+    {'SatExp2Syn': {'mech_file': 'sat_exp2syn.mod',
+                    'mech_params': ['sat', 'dur_onset', 'tau_offset', 'e'],
+                    'netcon_params': {'weight': 0, 'g_unit': 1}
+                    },
+     'ExpSyn': {'mech_file': 'expsyn.mod',
+                'mech_params': ['tau', 'e'],
+                'netcon_params': {'weight': 0}
+                }
+     }
+
+
+default_syn_mech_params = \
+    {'E': {'sat': 0.9,
+           'dur_onset': 1.,  # ms
+           'tau_offset': 5.,  # ms
+           'g_unit': 1.,  # uS
+           'e': 0.,  # mV
+           'weight': 1.
+           },
+     'I': {'sat': 0.9,
+           'dur_onset': 1.,  # ms
+           'tau_offset': 10.,  # ms
+           'g_unit': 1.,  # uS
+           'e': -80.,  # mV
+           'weight': 1.
+           }
+     }
+"""
+default_syn_mech_params = \
+    {'E': {'tau': 5.,
+           'e': 0.,  # mV
+           'weight': 1.
+           },
+     'I': {'tau': 10.,
+           'e': -80.,  # mV
+           'weight': 1.
+           }
+     }
+"""
+
+
 class SimpleNetwork(object):
 
     def __init__(self, pc, pop_sizes, pop_gid_ranges, pop_cell_types, connection_syn_types, prob_connection,
-                 connection_weights_mean, connection_weight_sigma_factors, connection_kinetics,
+                 connection_weights_mean, connection_weight_sigma_factors, syn_mech_params,
                  input_pop_mean_rates=None, tstop=1000., equilibrate=250., dt=0.025, delay=1., connection_seed=0,
                  spikes_seed=100000, v_init=-65., verbose=1, debug=False):
         """
@@ -51,7 +105,7 @@ class SimpleNetwork(object):
         :param connection_weights_mean: nested dict of float: mean strengths of each connection type
         :param connection_weight_sigma_factors: nested dict of float: variances of connection strengths, normalized to
                                                 mean
-        :param connection_kinetics: nested dict of float: synaptic decay kinetics (ms)
+        :param syn_mech_params: nested dict of float: synaptic decay kinetics (ms)
         :param input_pop_mean_rates: dict of float: mean firing rate of each input population (Hz)
         :param tstop: int: simulation duration (ms)
         :param equilibrate: float: simulation equilibration duration (ms)
@@ -83,7 +137,7 @@ class SimpleNetwork(object):
         self.prob_connection = prob_connection
         self.connection_weights_mean = connection_weights_mean
         self.connection_weight_sigma_factors = connection_weight_sigma_factors
-        self.connection_kinetics = connection_kinetics
+        self.syn_mech_params = syn_mech_params
 
         self.spikes_dict = defaultdict(dict)
         self.input_pop_mean_rates = input_pop_mean_rates
@@ -92,8 +146,11 @@ class SimpleNetwork(object):
         self.connection_seed = connection_seed
         self.spikes_seed = spikes_seed
 
+        self.cells = defaultdict(dict)
+        self.ncdict = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
         self.mkcells()
-        self.verify_cell_types()
+        if self.debug:
+            self.verify_cell_types()
         self.connectcells()
         self.voltage_record()
         self.spike_record()
@@ -101,7 +158,6 @@ class SimpleNetwork(object):
     def mkcells(self):
         rank = int(self.pc.id())
         nhost = int(self.pc.nhost())
-        self.cells = defaultdict(dict)
 
         for pop_name, (gid_start, gid_stop) in self.pop_gid_ranges.iteritems():
             cell_type = self.pop_cell_types[pop_name]
@@ -120,8 +176,7 @@ class SimpleNetwork(object):
                             cell.load_vecstim(this_spike_train)
                             self.spikes_dict[pop_name][gid] = np.array(this_spike_train)
                     elif cell_type in izhi_cell_type_param_dict:
-                        cell = IzhiCell(pop_name, gid, tau_E=self.connection_kinetics[pop_name]['E'],
-                                        tau_I=self.connection_kinetics[pop_name]['I'], cell_type=cell_type)
+                        cell = IzhiCell(pop_name, gid, cell_type=cell_type)
                     else:
                         raise RuntimeError('SimpleNetwork.mkcells: %s gid: %i; unrecognized cell type: %s' %
                                            (pop_name, gid, cell_type))
@@ -165,7 +220,6 @@ class SimpleNetwork(object):
                       2) Weights cannot be negative
         """
         rank = int(self.pc.id())
-        self.ncdict = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
         for target_pop_name in self.prob_connection:
             for target_gid in self.cells[target_pop_name]:
                 self.local_random.seed(self.connection_seed + target_gid)
@@ -187,13 +241,13 @@ class SimpleNetwork(object):
                         if source_gid == target_gid:
                             continue
                         if self.local_random.random() <= this_prob_connection:
-                            this_syn = target_cell.syns[this_syn_type]
-                            this_nc = self.pc.gid_connect(source_gid, this_syn)
-                            this_nc.delay = self.delay
                             this_weight = self.local_random.gauss(mu, mu * sigma_factor)
                             while this_weight < 0.:
                                 this_weight = self.local_random.gauss(mu, mu * sigma_factor)
-                            this_nc.weight[0] = this_weight
+                            this_syn, this_nc = \
+                                target_cell.append_connection(self.pc, this_syn_type, source_gid, delay=self.delay,
+                                                              weight=this_weight,
+                                                              **self.syn_mech_params[target_pop_name][this_syn_type])
                             self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid] = this_nc
                     if self.verbose > 1:
                         print('SimpleNetwork.connectcells: rank: %i; target: %s gid: %i: source: %s; num_syns: %i' %
@@ -235,7 +289,7 @@ class SimpleNetwork(object):
             for gid, spike_train in self.spikes_dict[pop_name].iteritems():
                 spike_train_array = np.array(spike_train)
                 indexes = np.where(spike_train_array >= self.equilibrate)[0]
-                if np.any(indexes):
+                if len(indexes) > 0:
                     spike_train_array = np.subtract(spike_train_array[indexes], self.equilibrate)
                 spikes_dict[pop_name][gid] = spike_train_array
         return spikes_dict
@@ -277,13 +331,11 @@ class SimpleNetwork(object):
 class IzhiCell(object):
     # Integrate-and-fire-like neuronal cell models with additional tunable dynamic parameters (e.g. adaptation).
     # Derived from http://modeldb.yale.edu/39948
-    def __init__(self, pop_name=None, gid=None, tau_E=None, tau_I=None, cell_type='RS'):
+    def __init__(self, pop_name=None, gid=None, cell_type='RS'):
         """
 
         :param pop_name: str
         :param gid: int
-        :param tau_E: float (ms)
-        :param tau_I: float (ms)
         :param cell_type: str
         """
         self.cell_type = cell_type
@@ -303,13 +355,29 @@ class IzhiCell(object):
             raise ValueError('IzhiCell: cell_type: %s not recognized' % cell_type)
 
         for cell_type_param in izhi_cell_type_param_names:
-            setattr(self.izh, cell_type_param, getattr(izhi_cell_type_param_dict[cell_type], cell_type_param))
+            setattr(self.izh, cell_type_param, getattr(izhi_cell_type_param_dict[self.cell_type], cell_type_param))
 
         self.sec.cm = self.base_cm * self.izh.C
-        self.mksyns(tau_E, tau_I)
+        self.syns = dict()
 
-    def __del__(self):
-        pass
+    def config_connection(self, syn, nc, syn_type, delay=None, **syn_mech_params):
+        """
+
+        :param syn: NEURON point process object
+        :param nc: NEURON netcon object
+        :param syn_type: str
+        :param syn_mech_params: dict
+        """
+        print nc.pre(), syn_mech_params
+        if delay is not None:
+            nc.delay = delay
+        syn_mech_name = syn_mech_names[syn_type]
+        for param_name in syn_mech_params:
+            if param_name in syn_mech_param_rules[syn_mech_name]['mech_params']:
+                setattr(syn, param_name, syn_mech_params[param_name])
+            elif param_name in syn_mech_param_rules[syn_mech_name]['netcon_params']:
+                index = syn_mech_param_rules[syn_mech_name]['netcon_params'][param_name]
+                nc.weight[index] = syn_mech_params[param_name]
 
     def mksyns(self, tau_E=None, tau_I=None):
         """
@@ -331,9 +399,34 @@ class IzhiCell(object):
         s.e = -80.
         self.syns['I'] = s
 
+    def append_connection(self, pc, syn_type, source_gid, delay=None, syn_mech_params=None, **kwargs):
+        """
+
+        :param pc: :class:'h.ParallelContext'
+        :param syn_type: str
+        :param source_gid: int
+        :param delay: float
+        :param syn_mech_params: dict
+
+        """
+        syn_mech_name = syn_mech_names[syn_type]
+        if syn_mech_params is None:
+            syn_mech_params = dict(default_syn_mech_params[syn_type])
+        syn_mech_params.update(kwargs)
+        if syn_type in self.syns:
+            syn = self.syns[syn_type]
+        else:
+            syn = getattr(h, syn_mech_name)(self.sec(0.5))
+            self.syns[syn_type] = syn
+
+        nc = pc.gid_connect(source_gid, syn)
+        self.config_connection(syn, nc, syn_type, delay=delay, **syn_mech_params)
+
+        return syn, nc
+
     def connect2target(self, target):
         nc = h.NetCon(self.sec(1)._ref_v, target, sec=self.sec)
-        nc.threshold = 10
+        nc.threshold = izhi_cell_type_param_dict[self.cell_type].vpeak
         return nc
 
     def is_art(self):
@@ -435,11 +528,11 @@ def padded_baks(spike_times, t, alpha, beta, pad_dur=500.):
     pad_len = int(pad_dur/dt)
     padded_spike_times = np.array(spike_times)
     r_pad_indexes = np.where((spike_times > t[0]) & (spike_times <= t[pad_len]))[0]
-    if np.any(r_pad_indexes):
+    if len(r_pad_indexes) > 0:
         r_pad_spike_times = np.add(t[0], np.subtract(t[0], spike_times[r_pad_indexes])[::-1])
         padded_spike_times = np.append(r_pad_spike_times, padded_spike_times)
     l_pad_indexes = np.where((spike_times >= t[-pad_len]) & (spike_times < t[-1]))[0]
-    if np.any(l_pad_indexes):
+    if len(l_pad_indexes) > 0:
         l_pad_spike_times = np.add(t[-1]+dt, np.subtract(t[-1]+dt, spike_times[l_pad_indexes])[::-1])
         padded_spike_times = np.append(padded_spike_times, l_pad_spike_times)
     padded_t = np.concatenate((np.arange(-pad_dur, 0., dt), t, np.arange(t[-1] + dt, t[-1] + pad_dur + dt / 2., dt)))
@@ -489,12 +582,12 @@ def get_pop_activity_stats(spikes_dict, firing_rates_dict, t, threshold=1., plot
             peak_rate_dict[pop_name][gid] = np.max(this_firing_rate)
             binned_spike_count_dict[pop_name][gid] = get_binned_spike_count(spikes_dict[pop_name][gid], t)
             active_indexes = np.where(this_firing_rate >= threshold)[0]
-            if np.any(active_indexes):
+            if len(active_indexes) > 0:
                 this_active_cell_count[active_indexes] += 1.
                 this_summed_rate_active_cells[active_indexes] += this_firing_rate[active_indexes]
 
         active_indexes = np.where(this_active_cell_count > 0.)[0]
-        if np.any(active_indexes):
+        if len(active_indexes) > 0:
             mean_rate_active_cells_dict[pop_name] = np.array(this_summed_rate_active_cells)
             mean_rate_active_cells_dict[pop_name][active_indexes] = \
                 np.divide(this_summed_rate_active_cells[active_indexes], this_active_cell_count[active_indexes])
@@ -565,6 +658,10 @@ def get_bandpass_filtered_signal_stats(signal, t, sos, filter_band, signal_label
     :param plot: bool
     :return: tuple of array
     """
+    if np.all(signal == 0.):
+        print('%s\n%s bandpass filter (%.1f:%.1f Hz); Failed - no signal' %
+              (signal_label, filter_label, min(filter_band), max(filter_band)))
+        return signal, np.zeros_like(signal), 0., 0.
     if pad and pad_len is None:
         dt = t[1] - t[0]  # ms
         pad_dur = min(10. * 1000. / np.min(filter_band), len(t) * dt)  # ms
@@ -578,11 +675,17 @@ def get_bandpass_filtered_signal_stats(signal, t, sos, filter_band, signal_label
     padded_envelope = np.abs(hilbert(filtered_padded_signal))
     envelope = padded_envelope[pad_len:-pad_len]
     f, power = periodogram(filtered_signal, fs=1000./dt)
-    centroid_freq = f[get_center_of_mass_index(power)]
+    com_index = get_center_of_mass_index(power)
+    if com_index is None:
+        centroid_freq = 0.
+    centroid_freq = f[com_index]
 
     mean_envelope = np.mean(envelope)
     mean_signal = np.mean(signal)
-    envelope_ratio = mean_envelope / mean_signal
+    if mean_signal == 0.:
+        envelope_ratio = 0.
+    else:
+        envelope_ratio = mean_envelope / mean_signal
 
     if plot:
         fig, axes = plt.subplots(2,2)

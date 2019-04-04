@@ -96,7 +96,7 @@ def init_context():
     connection_weights_mean = defaultdict(dict)
     connection_weight_sigma_factors = defaultdict(dict)
     connection_syn_types = {'FF': 'E', 'E': 'E', 'I': 'I'}  # {'presynaptic population': syn_type}
-    connection_kinetics = defaultdict(dict)
+    syn_mech_params = defaultdict(lambda: defaultdict(dict))
     input_pop_mean_rates = defaultdict(dict)
     input_pop_fraction_active = defaultdict(dict)
     if 'FF_mean_rate' not in context():
@@ -132,10 +132,16 @@ def update_context(x, local_context=None):
     local_context.prob_connection['I']['E'] = x_dict['I_E_prob_connection']
     local_context.prob_connection['I']['I'] = x_dict['I_I_prob_connection']
 
-    local_context.connection_kinetics['E']['E'] = x_dict['E_tau_E']
-    local_context.connection_kinetics['E']['I'] = x_dict['E_tau_I']
-    local_context.connection_kinetics['I']['E'] = x_dict['I_tau_E']
-    local_context.connection_kinetics['I']['I'] = x_dict['I_tau_I']
+    local_context.syn_mech_params['E']['E']['tau_offset'] = x_dict['E_E_tau_offset']
+    local_context.syn_mech_params['E']['I']['tau_offset'] = x_dict['E_I_tau_offset']
+    local_context.syn_mech_params['I']['E']['tau_offset'] = x_dict['I_E_tau_offset']
+    local_context.syn_mech_params['I']['I']['tau_offset'] = x_dict['I_I_tau_offset']
+    """
+    local_context.syn_mech_params['E']['E']['tau'] = x_dict['E_E_tau_offset']
+    local_context.syn_mech_params['E']['I']['tau'] = x_dict['E_I_tau_offset']
+    local_context.syn_mech_params['I']['E']['tau'] = x_dict['I_E_tau_offset']
+    local_context.syn_mech_params['I']['I']['tau'] = x_dict['I_I_tau_offset']
+    """
 
     local_context.connection_weights_mean['E']['FF'] = x_dict['E_FF_mean_weight']
     local_context.connection_weights_mean['E']['E'] = x_dict['E_E_mean_weight']
@@ -182,9 +188,14 @@ def analyze_network_output(network, export=False, plot=False):
         binned_spike_count_dict, mean_rate_from_spike_count_dict = \
             get_pop_activity_stats(spikes_dict, firing_rates_dict, binned_t, threshold=context.active_rate_threshold,
                                    plot=plot)
+
         filtered_mean_rate_dict, filter_envelope_dict, filter_envelope_ratio_dict, centroid_freq_dict = \
             get_pop_bandpass_filtered_signal_stats(mean_rate_from_spike_count_dict, binned_t, context.filter_bands,
-                                               plot=plot)
+                                                   plot=plot)
+
+        if context.debug:
+            context.update(locals())
+            return dict()
 
         if plot:
             plot_inferred_spike_rates(spikes_dict, firing_rates_dict, binned_t, context.active_rate_threshold)
@@ -232,7 +243,7 @@ def compute_features(x, export=False):
                               connection_weights_mean=context.connection_weights_mean,
                               connection_weight_sigma_factors=context.connection_weight_sigma_factors,
                               input_pop_mean_rates=context.input_pop_mean_rates,
-                              connection_kinetics=context.connection_kinetics, tstop=context.tstop,
+                              syn_mech_params=context.syn_mech_params, tstop=context.tstop,
                               equilibrate=context.equilibrate, dt=context.dt, delay=context.delay,
                               connection_seed=context.connection_seed, spikes_seed=context.spikes_seed,
                               verbose=context.verbose, debug=context.debug)
