@@ -105,7 +105,7 @@ def init_context():
     if 'FF_mean_rate' not in context():
         raise RuntimeError('optimize_simple_network: missing required kwarg: FF_mean_rate')
 
-    nsyn = 100
+    nsyn = 300
     delay = 1.  # ms
     equilibrate = 250.  # ms
     tstop = 3000 + equilibrate  # ms
@@ -174,17 +174,17 @@ def analyze_network_output(network, export=False, plot=False):
     voltage_rec_dict, rec_t = network.get_voltage_rec_dict()
     firing_rates_dict = infer_firing_rates(spikes_dict, binned_t, alpha=context.baks_alpha, beta=context.baks_beta,
                                                pad_dur=context.baks_pad_dur)
-    connection_weights_dict = network.get_connection_weights()
+    #connection_weights_dict = network.get_connection_weights()
 
     spikes_dict = context.comm.gather(spikes_dict, root=0)
     voltage_rec_dict = context.comm.gather(voltage_rec_dict, root=0)
     firing_rates_dict = context.comm.gather(firing_rates_dict, root=0)
-    connection_weights_dict = context.comm.gather(connection_weights_dict, root=0)
+    #connection_weights_dict = context.comm.gather(connection_weights_dict, root=0)
     if context.comm.rank == 0:
         spikes_dict = merge_list_of_dict(spikes_dict)
         voltage_rec_dict = merge_list_of_dict(voltage_rec_dict)
         firing_rates_dict = merge_list_of_dict(firing_rates_dict)
-        connection_weights_dict = merge_list_of_dict(connection_weights_dict)
+        #connection_weights_dict = merge_list_of_dict(connection_weights_dict)
         mean_rate_dict, peak_rate_dict, mean_rate_active_cells_dict, pop_fraction_active_dict, \
         binned_spike_count_dict, mean_rate_from_spike_count_dict = \
             get_pop_activity_stats(spikes_dict, firing_rates_dict, binned_t, threshold=context.active_rate_threshold,
