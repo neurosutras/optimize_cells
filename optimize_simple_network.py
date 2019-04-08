@@ -84,6 +84,7 @@ def config_worker():
 
 def init_context():
     pop_sizes = {'FF': 1000, 'E': 100, 'I': 100}
+    nsyn_dict = {'E': 350, 'I' : 350}
     pop_gid_ranges = get_pop_gid_ranges(pop_sizes)
     pop_cell_types = {'FF': 'input', 'E': 'IB', 'I': 'FS'}
     # {'postsynaptic population': {'presynaptic population': float} }
@@ -105,7 +106,6 @@ def init_context():
     if 'FF_mean_rate' not in context():
         raise RuntimeError('optimize_simple_network: missing required kwarg: FF_mean_rate')
 
-    nsyn = 300
     delay = 1.  # ms
     equilibrate = 250.  # ms
     tstop = 3000 + equilibrate  # ms
@@ -157,7 +157,16 @@ def update_context(x, local_context=None):
     local_context.connection_weight_sigma_factors['I']['E'] = x_dict['I_E_weight_sigma_factor']
     local_context.connection_weight_sigma_factors['I']['I'] = x_dict['I_I_weight_sigma_factor']
 
-    local_context.syn_proportion = x_dict['syn_proportion']
+
+    syn_proportion_dict = defaultdict(lambda: defaultdict())
+    syn_proportion_dict['E']['FF'] = x_dict['E_E_syn_proportion'] * x_dict['E_E_FF_syn_proportion']
+    syn_proportion_dict['E']['E'] = 1. - syn_proportion_dict['E']['FF']
+    syn_proportion_dict['E']['I'] = 1. - x_dict['E_E_syn_proportion']
+    syn_proportion_dict['I']['FF'] = x_dict['I_E_syn_proportion'] * x_dict['I_E_FF_syn_proportion']
+    syn_proportion_dict['I']['E'] = 1. - syn_proportion_dict['I']['FF']
+    syn_proportion_dict['I']['I'] = 1. - x_dict['I_E_syn_proportion']
+    local_context.syn_proportion_dict = syn_proportion_dict
+
     local_context.input_pop_mean_rates['FF'] = local_context.FF_mean_rate
 
 
@@ -175,16 +184,17 @@ def analyze_network_output(network, export=False, plot=False):
     firing_rates_dict = infer_firing_rates(spikes_dict, binned_t, alpha=context.baks_alpha, beta=context.baks_beta,
                                                pad_dur=context.baks_pad_dur)
     #connection_weights_dict = network.get_connection_weights()
+    connection_weights_dict = network.get_connection_weights2()
 
     spikes_dict = context.comm.gather(spikes_dict, root=0)
     voltage_rec_dict = context.comm.gather(voltage_rec_dict, root=0)
     firing_rates_dict = context.comm.gather(firing_rates_dict, root=0)
-    #connection_weights_dict = context.comm.gather(connection_weights_dict, root=0)
+    connection_weights_dict = context.comm.gather(connection_weights_dict, root=0)
     if context.comm.rank == 0:
         spikes_dict = merge_list_of_dict(spikes_dict)
         voltage_rec_dict = merge_list_of_dict(voltage_rec_dict)
         firing_rates_dict = merge_list_of_dict(firing_rates_dict)
-        #connection_weights_dict = merge_list_of_dict(connection_weights_dict)
+        connection_weights_dict = merge_list_of_dict(connection_weights_dict)
         mean_rate_dict, peak_rate_dict, mean_rate_active_cells_dict, pop_fraction_active_dict, \
         binned_spike_count_dict, mean_rate_from_spike_count_dict = \
             get_pop_activity_stats(spikes_dict, firing_rates_dict, binned_t, threshold=context.active_rate_threshold,
@@ -243,7 +253,7 @@ def compute_features(x, export=False):
                               input_pop_mean_rates=context.input_pop_mean_rates,
                               syn_mech_params=context.syn_mech_params, tstop=context.tstop,
                               equilibrate=context.equilibrate, dt=context.dt, delay=context.delay,
-                              nsyn=context.nsyn, syn_proportion=context.syn_proportion,
+                              nsyn_dict=context.nsyn_dict, syn_proportion_dict=context.syn_proportion_dict,
                               connection_seed=context.connection_seed, spikes_seed=context.spikes_seed,
                               verbose=context.verbose, debug=context.debug)
     if int(context.pc.id()) == 0 and context.verbose > 0:

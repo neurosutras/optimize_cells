@@ -73,7 +73,7 @@ class SimpleNetwork(object):
     def __init__(self, pc, pop_sizes, pop_gid_ranges, pop_cell_types, connection_syn_types, prob_connection,
                  connection_weights_mean, connection_weight_sigma_factors, syn_mech_params, syn_mech_names=None,
                  syn_mech_param_rules=None, syn_mech_param_defaults=None, input_pop_mean_rates=None, tstop=1000.,
-                 equilibrate=250., dt=0.025, delay=1., connection_seed=0, nsyn=100, syn_proportion= .5,
+                 equilibrate=250., dt=0.025, delay=1., connection_seed=0, nsyn_dict=None, syn_proportion_dict=None,
                  spikes_seed=100000, v_init=-65., verbose=1, debug=False):
         """
 
@@ -116,8 +116,8 @@ class SimpleNetwork(object):
 
         self.pop_sizes = pop_sizes
         self.total_cells = np.sum(self.pop_sizes.values())
-        self.nsyn = nsyn
-        self.syn_proportion = syn_proportion
+        self.nsyn_dict = nsyn_dict
+        self.syn_proportion_dict = syn_proportion_dict
 
         self.pop_gid_ranges = pop_gid_ranges
         self.pop_cell_types = pop_cell_types
@@ -150,12 +150,13 @@ class SimpleNetwork(object):
         self.spikes_seed = spikes_seed
 
         self.cells = defaultdict(dict)
-        self.ncdict = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
         self.mkcells()
         if self.debug:
             self.verify_cell_types()
-        self.connectcells()
-        # self.connectcells2()
+        #self.ncdict = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
+        #self.connectcells()
+        self.ncdict = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(list))))
+        self.connectcells2()
         self.voltage_record()
         self.spike_record()
 
@@ -268,21 +269,29 @@ class SimpleNetwork(object):
         return None
 
     def connectcells2(self):
-        self.ncdict = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(list))))
         rank = int(self.pc.id())
         for target_pop_name in self.prob_connection:
-            Esyns = int(self.nsyn * self.syn_proportion)
+            nsyn = self.nsyn_dict[target_pop_name]
+            FF_syns = self.syn_proportion_dict[target_pop_name]['FF'] * nsyn
+            E_syns = self.syn_proportion_dict[target_pop_name]['E'] * nsyn
             for target_gid in self.cells[target_pop_name]:
                 self.local_random.seed(self.connection_seed + target_gid)
                 target_cell = self.cells[target_pop_name][target_gid]
 
-                for i in range(self.nsyn):
-                    if i < Esyns:
+                for i in range(nsyn):
+                    if i < FF_syns:
                         this_syn_type = 'E'
                         source_gid = int(self.local_random.random() * (self.pop_gid_ranges['FF'][1] -
-                                         self.pop_gid_ranges['E'][0]) + self.pop_gid_ranges['E'][0])
+                                         self.pop_gid_ranges['FF'][0]) + self.pop_gid_ranges['FF'][0])
                         while source_gid == target_gid:
                             source_gid = int(self.local_random.random() * (self.pop_gid_ranges['FF'][1] -
+                                             self.pop_gid_ranges['FF'][0]) + self.pop_gid_ranges['FF'][0])
+                    elif i < FF_syns + E_syns:
+                        this_syn_type = 'E'
+                        source_gid = int(self.local_random.random() * (self.pop_gid_ranges['E'][1] -
+                                         self.pop_gid_ranges['E'][0]) + self.pop_gid_ranges['E'][0])
+                        while source_gid == target_gid:
+                            source_gid = int(self.local_random.random() * (self.pop_gid_ranges['E'][1] -
                                              self.pop_gid_ranges['E'][0]) + self.pop_gid_ranges['E'][0])
                     else:
                         this_syn_type = 'I'
@@ -363,10 +372,32 @@ class SimpleNetwork(object):
         tvec_array = np.subtract(tvec_array[start_index:], self.equilibrate)
         return voltage_rec_dict, tvec_array
 
-    def get_connection_weights(self):
+    def get_connection_weights2(self):
         """
         Collate connection weights. Assign a value of zero to non-connected cells.
         """
+        weights = dict()
+        for target_pop_name in self.ncdict:
+            weights[target_pop_name] = dict()
+            for target_gid in self.ncdict[target_pop_name]:
+                weights[target_pop_name][target_gid] = dict()
+                for source_pop_name in self.prob_connection[target_pop_name]:
+                    weights[target_pop_name][target_gid][source_pop_name] = dict()
+                    start_gid = self.pop_gid_ranges[source_pop_name][0]
+                    stop_gid = self.pop_gid_ranges[source_pop_name][1]
+                    for source_gid in xrange(start_gid, stop_gid):
+                        if source_gid in self.ncdict[target_pop_name][target_gid][source_pop_name]:
+                            csum = 0.
+                            count = 0
+                            for nc in self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid]:
+                                csum += nc.weight[0]
+                                count += 1
+                            weights[target_pop_name][target_gid][source_pop_name][source_gid] = avg / count
+                        else:
+                            weights[target_pop_name][target_gid][source_pop_name][source_gid] = 0.
+        return weights
+
+    def get_connection_weights(self):
         weights = dict()
         for target_pop_name in self.ncdict:
             weights[target_pop_name] = dict()
