@@ -392,7 +392,7 @@ class SimpleNetwork(object):
                             for nc in self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid]:
                                 csum += nc.weight[0]
                                 count += 1
-                            weights[target_pop_name][target_gid][source_pop_name][source_gid] = avg / count
+                            weights[target_pop_name][target_gid][source_pop_name][source_gid] = csum / count
                         else:
                             weights[target_pop_name][target_gid][source_pop_name][source_gid] = 0.
         return weights
@@ -765,7 +765,7 @@ def get_bandpass_filtered_signal_stats(signal, t, sos, filter_band, signal_label
         if verbose:
             print('%s\n%s bandpass filter (%.1f:%.1f Hz); Failed - no signal' %
                   (signal_label, filter_label, min(filter_band), max(filter_band)))
-        return signal, np.zeros_like(signal), 0., 0.
+        return signal, np.zeros_like(signal), 0., 0., 0.
     if pad and pad_len is None:
         dt = t[1] - t[0]  # ms
         pad_dur = min(10. * 1000. / np.min(filter_band), len(t) * dt)  # ms
@@ -782,7 +782,10 @@ def get_bandpass_filtered_signal_stats(signal, t, sos, filter_band, signal_label
     com_index = get_center_of_mass_index(power)
     if com_index is None:
         centroid_freq = 0.
-    centroid_freq = f[com_index]
+        var = 0.
+    else:
+        centroid_freq = f[com_index]
+        var = get_2nd_moment(f, power, centroid_freq)
 
     mean_envelope = np.mean(envelope)
     mean_signal = np.mean(signal)
@@ -820,7 +823,7 @@ def get_bandpass_filtered_signal_stats(signal, t, sos, filter_band, signal_label
         fig.subplots_adjust(top=0.8, hspace=0.3)
         fig.show()
 
-    return filtered_signal, envelope, envelope_ratio, centroid_freq
+    return filtered_signal, envelope, envelope_ratio, centroid_freq, var
 
 
 def get_pop_bandpass_filtered_signal_stats(signal_dict, t, filter_band_dict, order=15, plot=False, verbose=False):
@@ -840,21 +843,23 @@ def get_pop_bandpass_filtered_signal_stats(signal_dict, t, filter_band_dict, ord
     envelope_dict = {}
     envelope_ratio_dict = {}
     centroid_freq_dict = {}
+    var_freq_dict = {}
     for filter_label, filter_band in filter_band_dict.iteritems():
         filtered_signal_dict[filter_label] = {}
         envelope_dict[filter_label] = {}
         envelope_ratio_dict[filter_label] = {}
         centroid_freq_dict[filter_label] = {}
+        var_freq_dict[filter_label] = {}
         sos = get_butter_bandpass_filter(filter_band, sampling_rate, filter_label=filter_label, order=order, plot=plot)
         for pop_name in signal_dict:
             signal = signal_dict[pop_name]
             filtered_signal_dict[filter_label][pop_name], envelope_dict[filter_label][pop_name], \
-            envelope_ratio_dict[filter_label][pop_name], centroid_freq_dict[filter_label][pop_name] = \
-                get_bandpass_filtered_signal_stats(signal, t, sos, filter_band,
-                                                   signal_label='Population: %s' % pop_name,
-                                                   filter_label=filter_label, plot=plot, verbose=verbose)
+                envelope_ratio_dict[filter_label][pop_name], centroid_freq_dict[filter_label][pop_name], \
+                var_freq_dict[filter_label][pop_name] = get_bandpass_filtered_signal_stats(signal, t,
+                sos, filter_band, signal_label='Population: %s' % pop_name, filter_label=filter_label,
+                plot=plot, verbose=verbose)
 
-    return filtered_signal_dict, envelope_dict, envelope_ratio_dict, centroid_freq_dict
+    return filtered_signal_dict, envelope_dict, envelope_ratio_dict, centroid_freq_dict, var_freq_dict
 
 
 def plot_heatmap_from_matrix(data, xticks=None, xtick_labels=None, yticks=None, ytick_labels=None, ax=None,
@@ -932,6 +937,10 @@ def get_mirror_padded_signal(signal, pad_len):
     padded_signal = np.concatenate((mirror_beginning, signal, mirror_end))
     return padded_signal
 
+def get_2nd_moment(f, power, center):
+    """get 2nd moment around the center of mass"""
+    moment = 2
+    return np.sum(power * (f - center) ** moment) / np.sum(power)
 
 def get_mirror_padded_time_series(t, pad_len):
     """

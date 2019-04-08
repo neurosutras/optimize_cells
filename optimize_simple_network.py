@@ -200,9 +200,9 @@ def analyze_network_output(network, export=False, plot=False):
             get_pop_activity_stats(spikes_dict, firing_rates_dict, binned_t, threshold=context.active_rate_threshold,
                                    plot=plot)
 
-        filtered_mean_rate_dict, filter_envelope_dict, filter_envelope_ratio_dict, centroid_freq_dict = \
-            get_pop_bandpass_filtered_signal_stats(mean_rate_from_spike_count_dict, binned_t, context.filter_bands,
-                                                   plot=plot, verbose=context.verbose>0)
+        filtered_mean_rate_dict, filter_envelope_dict, filter_envelope_ratio_dict, centroid_freq_dict,\
+            var_freq_dict = get_pop_bandpass_filtered_signal_stats(mean_rate_from_spike_count_dict, binned_t,
+            context.filter_bands, plot=plot, verbose=context.verbose>0)
 
         if plot:
             plot_inferred_spike_rates(binned_spike_count_dict, firing_rates_dict, binned_t,
@@ -229,6 +229,11 @@ def analyze_network_output(network, export=False, plot=False):
         result['I_centroid_theta_freq'] = centroid_freq_dict['Theta']['I']
         result['E_centroid_gamma_freq'] = centroid_freq_dict['Gamma']['E']
         result['I_centroid_gamma_freq'] = centroid_freq_dict['Gamma']['I']
+        result['E_theta_freq_var'] = var_freq_dict['Theta']['E']
+        result['I_theta_freq_var'] = var_freq_dict['Theta']['I']
+        result['E_gamma_freq_var'] = var_freq_dict['Gamma']['E']
+        result['I_gamma_freq_var'] = var_freq_dict['Gamma']['I']
+
 
         context.update(locals())
 

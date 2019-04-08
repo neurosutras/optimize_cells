@@ -94,6 +94,10 @@ feature_names:
 - I_centroid_theta_freq
 - E_centroid_gamma_freq
 - I_centroid_gamma_freq
+- E_theta_freq_var
+- I_theta_freq_var
+- E_gamma_freq_var
+- I_gamma_freq_var
 update_context:
 - - optimize_simple_network
   - update_context
@@ -122,6 +126,10 @@ objective_names:
 - I_centroid_theta_freq
 - E_centroid_gamma_freq
 - I_centroid_gamma_freq
+- E_theta_freq_var
+- I_theta_freq_var
+- E_gamma_freq_var
+- I_gamma_freq_var
 optimization_title: random_network
 param_gen: PopulationAnnealing
 param_names:
@@ -166,6 +174,10 @@ target_range:
   I_centroid_theta_freq: 0.05
   E_centroid_gamma_freq: 0.5
   I_centroid_gamma_freq: 0.5
+  E_theta_freq_var: 25.
+  I_theta_freq_var: 25.
+  E_gamma_freq_var: 50.
+  I_gamma_freq_var: 50.
 target_val:
   E_peak_rate: 40.
   I_peak_rate: 40.
@@ -181,6 +193,10 @@ target_val:
   I_centroid_theta_freq: 7.
   E_centroid_gamma_freq: 70.
   I_centroid_gamma_freq: 70.
+  E_theta_freq_var: 50.
+  I_theta_freq_var: 50.
+  E_gamma_freq_var: 100.
+  I_gamma_freq_var: 100.
 x0:
   E_FF_prob_connection: 0.5
   E_E_prob_connection: 0.2
