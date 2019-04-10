@@ -9,7 +9,7 @@ context = Context()
 
 @click.command()
 @click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='config/optimize_simple_network_config.yaml')
+              default='config/optimize_simple_network_uniform_connections_config.yaml')
 @click.option("--export", is_flag=True)
 @click.option("--output-dir", type=str, default='data')
 @click.option("--export-file-path", type=str, default=None)
@@ -84,14 +84,14 @@ def config_worker():
 
 def init_context():
     pop_sizes = {'FF': 1000, 'E': 100, 'I': 100}
-    nsyn_dict = {'E': 350, 'I' : 350}
+    pop_syn_counts = {'E': 350, 'I': 350}  # {'target_pop_name': int}
     pop_gid_ranges = get_pop_gid_ranges(pop_sizes)
     pop_cell_types = {'FF': 'input', 'E': 'IB', 'I': 'FS'}
-    # {'postsynaptic population': {'presynaptic population': float} }
-    prob_connection = defaultdict(dict)
-    connection_weights_mean = defaultdict(dict)
-    connection_weight_sigma_factors = defaultdict(dict)
-    connection_syn_types = {'FF': 'E', 'E': 'E', 'I': 'I'}  # {'presynaptic population': syn_type}
+
+    # {'target_pop_name': {'syn_type: {'source_pop_name': float} } }
+    pop_syn_proportions = defaultdict(lambda: defaultdict(dict))
+    connection_weights_mean = defaultdict(dict)  # {'target_pop_name': {'source_pop_name': float} }
+    connection_weight_sigma_factors = defaultdict(dict)  # {'target_pop_name': {'source_pop_name': float} }
 
     syn_mech_params = defaultdict(lambda: defaultdict(dict))
     syn_mech_params['I']['FF']['g_unit'] = 0.0001925
@@ -129,12 +129,6 @@ def update_context(x, local_context=None):
     if local_context is None:
         local_context = context
     x_dict = param_array_to_dict(x, context.param_names)
-    local_context.prob_connection['E']['FF'] = x_dict['E_FF_prob_connection']
-    local_context.prob_connection['E']['E'] = x_dict['E_E_prob_connection']
-    local_context.prob_connection['E']['I'] = x_dict['E_I_prob_connection']
-    local_context.prob_connection['I']['FF'] = x_dict['I_FF_prob_connection']
-    local_context.prob_connection['I']['E'] = x_dict['I_E_prob_connection']
-    local_context.prob_connection['I']['I'] = x_dict['I_I_prob_connection']
 
     local_context.syn_mech_params['E']['FF']['tau_offset'] = x_dict['E_E_tau_offset']
     local_context.syn_mech_params['E']['E']['tau_offset'] = x_dict['E_E_tau_offset']
@@ -157,15 +151,14 @@ def update_context(x, local_context=None):
     local_context.connection_weight_sigma_factors['I']['E'] = x_dict['I_E_weight_sigma_factor']
     local_context.connection_weight_sigma_factors['I']['I'] = x_dict['I_I_weight_sigma_factor']
 
-
-    syn_proportion_dict = defaultdict(lambda: defaultdict())
-    syn_proportion_dict['E']['FF'] = x_dict['E_E_syn_proportion'] * x_dict['E_E_FF_syn_proportion']
-    syn_proportion_dict['E']['E'] = 1. - syn_proportion_dict['E']['FF']
-    syn_proportion_dict['E']['I'] = 1. - x_dict['E_E_syn_proportion']
-    syn_proportion_dict['I']['FF'] = x_dict['I_E_syn_proportion'] * x_dict['I_E_FF_syn_proportion']
-    syn_proportion_dict['I']['E'] = 1. - syn_proportion_dict['I']['FF']
-    syn_proportion_dict['I']['I'] = 1. - x_dict['I_E_syn_proportion']
-    local_context.syn_proportion_dict = syn_proportion_dict
+    local_context.pop_syn_proportions['E']['E']['FF'] = x_dict['E_E_syn_proportion'] * x_dict['E_E_FF_syn_proportion']
+    local_context.pop_syn_proportions['E']['E']['E'] = x_dict['E_E_syn_proportion'] * \
+                                                       (1. - x_dict['E_E_FF_syn_proportion'])
+    local_context.pop_syn_proportions['E']['I']['I'] = 1. - x_dict['E_E_syn_proportion']
+    local_context.pop_syn_proportions['I']['E']['FF'] = x_dict['I_E_syn_proportion'] * x_dict['I_E_FF_syn_proportion']
+    local_context.pop_syn_proportions['I']['E']['E'] = x_dict['I_E_syn_proportion'] * \
+                                                       (1. - x_dict['I_E_FF_syn_proportion'])
+    local_context.pop_syn_proportions['I']['I']['I'] = 1. - x_dict['I_E_syn_proportion']
 
     local_context.input_pop_mean_rates['FF'] = local_context.FF_mean_rate
 
@@ -183,8 +176,7 @@ def analyze_network_output(network, export=False, plot=False):
     voltage_rec_dict, rec_t = network.get_voltage_rec_dict()
     firing_rates_dict = infer_firing_rates(spikes_dict, binned_t, alpha=context.baks_alpha, beta=context.baks_beta,
                                                pad_dur=context.baks_pad_dur)
-    #connection_weights_dict = network.get_connection_weights()
-    connection_weights_dict = network.get_connection_weights2()
+    connection_weights_dict = network.get_connection_weights()
 
     spikes_dict = context.comm.gather(spikes_dict, root=0)
     voltage_rec_dict = context.comm.gather(voltage_rec_dict, root=0)
@@ -249,20 +241,28 @@ def compute_features(x, export=False):
     update_source_contexts(x, context)
     context.pc.gid_clear()
     start_time = time.time()
-    context.network = SimpleNetwork(pc=context.pc, pop_sizes=context.pop_sizes, pop_gid_ranges=context.pop_gid_ranges,
-                              pop_cell_types=context.pop_cell_types, connection_syn_types=context.connection_syn_types,
-                              prob_connection=context.prob_connection,
-                              connection_weights_mean=context.connection_weights_mean,
-                              connection_weight_sigma_factors=context.connection_weight_sigma_factors,
-                              input_pop_mean_rates=context.input_pop_mean_rates,
-                              syn_mech_params=context.syn_mech_params, tstop=context.tstop,
-                              equilibrate=context.equilibrate, dt=context.dt, delay=context.delay,
-                              nsyn_dict=context.nsyn_dict, syn_proportion_dict=context.syn_proportion_dict,
-                              connection_seed=context.connection_seed, spikes_seed=context.spikes_seed,
-                              verbose=context.verbose, debug=context.debug)
+    context.network = SimpleNetwork(
+        pc=context.pc, pop_sizes=context.pop_sizes, pop_gid_ranges=context.pop_gid_ranges,
+        pop_cell_types=context.pop_cell_types, pop_syn_counts=context.pop_syn_counts,
+        pop_syn_proportions=context.pop_syn_proportions, connection_weights_mean=context.connection_weights_mean,
+        connection_weight_sigma_factors=context.connection_weight_sigma_factors,
+        input_pop_mean_rates=context.input_pop_mean_rates, syn_mech_params=context.syn_mech_params, tstop=context.tstop,
+        equilibrate=context.equilibrate, dt=context.dt, delay=context.delay, connection_seed=context.connection_seed,
+        spikes_seed=context.spikes_seed, verbose=context.verbose, debug=context.debug)
+
+    if context.connectivity_type == 'uniform':
+        context.network.connect_cells_uniform()
+    elif context.connectivity_type == 'gaussian':
+        # TODO: Determine dimensions of space, assign positions to cells; determine axon_extents for each projection
+        context.network.connect_cells_gaussian(context.dim, context.pop_axon_extents, context.pop_cell_positions)
     if int(context.pc.id()) == 0 and context.verbose > 0:
         print('NETWORK BUILD RUNTIME: %.2f s' % (time.time() - start_time))
     current_time = time.time()
+
+    if context.debug:
+        context.update(locals())
+        return dict()
+
     context.network.run()
     if int(context.pc.id()) == 0 and context.verbose > 0:
         print('NETWORK SIMULATION RUNTIME: %.2f s' % (time.time() - current_time))

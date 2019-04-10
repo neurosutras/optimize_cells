@@ -1,22 +1,4 @@
 bounds:
-  E_FF_prob_connection: !!python/tuple
-    - 0.
-    - 1.
-  E_E_prob_connection: !!python/tuple
-    - 1.0E-4
-    - 1.
-  E_I_prob_connection: !!python/tuple
-    - 1.0E-4
-    - 1.
-  I_FF_prob_connection: !!python/tuple
-    - 0.
-    - 1.
-  I_E_prob_connection: !!python/tuple
-    - 1.0E-4
-    - 1.
-  I_I_prob_connection: !!python/tuple
-    - 1.0E-4
-    - 1.
   E_FF_mean_weight: !!python/tuple
     - 0.1
     - 5.
@@ -66,17 +48,17 @@ bounds:
     - 2.
     - 30.
   E_E_syn_proportion: !!python/tuple
-    - 0.
-    - 1.
+    - 0.01
+    - 0.99
   E_E_FF_syn_proportion: !!python/tuple
-    - 0.
-    - 1.
+    - 0.01
+    - 0.99
   I_E_syn_proportion: !!python/tuple
-    - 0.
-    - 1.
+    - 0.01
+    - 0.99
   I_E_FF_syn_proportion: !!python/tuple
-    - 0.
-    - 1.
+    - 0.01
+    - 0.99
 feature_names:
 - E_peak_rate
 - I_peak_rate
@@ -94,10 +76,10 @@ feature_names:
 - I_centroid_theta_freq
 - E_centroid_gamma_freq
 - I_centroid_gamma_freq
-- E_theta_freq_var
-- I_theta_freq_var
-- E_gamma_freq_var
-- I_gamma_freq_var
+- E_theta_sig2noise
+- I_theta_sig2noise
+- E_gamma_sig2noise
+- I_gamma_sig2noise
 update_context:
 - - optimize_simple_network
   - update_context
@@ -110,6 +92,7 @@ kwargs:
   verbose: 1
   connection_seed: 0
   spikes_seed: 1000000
+  connectivity_type: uniform
   FF_mean_rate: 20.  # Hz
 objective_names:
 - E_peak_rate
@@ -126,19 +109,13 @@ objective_names:
 - I_centroid_theta_freq
 - E_centroid_gamma_freq
 - I_centroid_gamma_freq
-- E_theta_freq_var
-- I_theta_freq_var
-- E_gamma_freq_var
-- I_gamma_freq_var
-optimization_title: random_network
+- E_theta_sig2noise
+- I_theta_sig2noise
+- E_gamma_sig2noise
+- I_gamma_sig2noise
+optimization_title: simple_network_uniform_connections
 param_gen: PopulationAnnealing
 param_names:
-- E_FF_prob_connection
-- E_E_prob_connection
-- E_I_prob_connection
-- I_FF_prob_connection
-- I_E_prob_connection
-- I_I_prob_connection
 - E_FF_mean_weight
 - E_E_mean_weight
 - E_I_mean_weight
@@ -174,10 +151,10 @@ target_range:
   I_centroid_theta_freq: 0.05
   E_centroid_gamma_freq: 0.5
   I_centroid_gamma_freq: 0.5
-  E_theta_freq_var: 25.
-  I_theta_freq_var: 25.
-  E_gamma_freq_var: 50.
-  I_gamma_freq_var: 50.
+  E_theta_sig2noise: 5.
+  I_theta_sig2noise: 5.
+  E_gamma_sig2noise: 10.
+  I_gamma_sig2noise: 10.
 target_val:
   E_peak_rate: 40.
   I_peak_rate: 40.
@@ -193,17 +170,11 @@ target_val:
   I_centroid_theta_freq: 7.
   E_centroid_gamma_freq: 70.
   I_centroid_gamma_freq: 70.
-  E_theta_freq_var: 50.
-  I_theta_freq_var: 50.
-  E_gamma_freq_var: 100.
-  I_gamma_freq_var: 100.
+  E_theta_sig2noise: 50.
+  I_theta_sig2noise: 50.
+  E_gamma_sig2noise: 100.
+  I_gamma_sig2noise: 100.
 x0:
-  E_FF_prob_connection: 0.5
-  E_E_prob_connection: 0.2
-  E_I_prob_connection: 0.5
-  I_FF_prob_connection: 0.5
-  I_E_prob_connection: 0.5
-  I_I_prob_connection: 0.5
   E_FF_mean_weight: 1.
   E_E_mean_weight: 1.
   E_I_mean_weight: 1.
