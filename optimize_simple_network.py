@@ -265,7 +265,6 @@ def compute_features(x, export=False):
     if context.connectivity_type == 'uniform':
         context.network.connect_cells_uniform()
     elif context.connectivity_type == 'gaussian':
-        # TODO: Determine dimensions of space, assign positions to cells; determine axon_extents for each projection
         context.network.connect_cells_gaussian(context.dim, context.pop_axon_extents, context.pop_cell_positions)
     if int(context.pc.id()) == 0 and context.verbose > 0:
         print('NETWORK BUILD RUNTIME: %.2f s' % (time.time() - start_time))

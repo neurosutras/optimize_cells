@@ -306,7 +306,6 @@ class SimpleNetwork(object):
 
     def connect_cells_gaussian(self, dim, pop_axon_extents, pop_cell_positions):
         """
-
         :param dim: array of float; spatial dimensions for anatomical distribution of cells
         :param pop_axon_extents: dict; full floor width of gaussian; {pop_name: float}
         :param pop_cell_positions: nested dict; {pop_name: {gid: array with shape matching dim} }
@@ -358,14 +357,10 @@ class SimpleNetwork(object):
                                   (rank, target_pop_name, target_gid, source_pop_name, syn_type, this_syn_count))
 
     def visualize_connections(self, pop_cell_positions, n=1):
-        # if not self.spatial:
-        #     print("Cannot visualize connections without setting --spatial.")
-        #     return -1
         for target_pop_name in self.pop_syn_proportions:
             target_gids = random.sample(range(self.pop_gid_ranges[target_pop_name][0], self.pop_gid_ranges[target_pop_name][1]), n)
             for target_gid in target_gids:
                 target_loc = pop_cell_positions[target_pop_name][target_gid]
-                #source_gids = list(self.ncdict())
                 for syn_type in self.pop_syn_proportions[target_pop_name]:
                     for source_pop_name in self.pop_syn_proportions[target_pop_name][syn_type]:
                         source_gids = list(self.ncdict[target_pop_name][target_gid][source_pop_name].keys())
@@ -377,40 +372,7 @@ class SimpleNetwork(object):
                         vals, xedge, yedge = np.histogram2d(x=xs, y=ys, bins=np.linspace(-1.0, 1.0, 21))
                         plt.pcolor(xedge, yedge, vals)
                         plt.title("Cell {} at {}, {} to {} via {} syn".format(target_gid, target_loc, source_pop_name, target_pop_name, syn_type))
-                        #plt.title("Cell " + str(target_gid) + " at " + str(target_loc) + ", " + str(connection) + " connections")
                         plt.show()
-
-
-        # for connection in ['ff2i', 'ff2e', 'e2e', 'e2i', 'i2i', 'i2e']:
-        #     if connection in ['ff2i', 'ff2e']:
-        #         presyn_code = 'FF'
-        #         presyn_key = 'excitatory_presyn'
-        #     elif connection in ['e2e', 'e2i']:
-        #         presyn_code = 'E'
-        #         presyn_key = 'excitatory_presyn'
-        #     else:
-        #         presyn_code = 'I'
-        #         presyn_key = 'inhibitory_presyn'
-        #     indices = self.connectivity_index_dict[connection]
-        #     inp, out = indices
-        #     target_gids = random.sample(range(out[0], out[1]), n)
-        #     for target_gid in target_gids:
-        #         target_loc = self.locations[target_gid]
-        #         print(target_loc)
-        #         presyn_gids = list(self.ncdict[target_gid].keys())
-        #         xs = []
-        #         ys = []
-        #         for presyn_gid in presyn_gids:
-        #             if presyn_gid in range(inp[0], inp[1]):
-        #                 xs.append(self.locations[presyn_gid][0])
-        #                 ys.append(self.locations[presyn_gid][1])
-        #         print(xs)
-        #         print(ys)
-        #         vals, xedge, yedge = np.histogram2d(x=xs, y=ys, bins=np.linspace(-1.0, 1.0, 21))
-        #         #plt.imshow(vals)
-        #         plt.pcolor(xedge, yedge, vals)
-        #         plt.title("Cell " + str(target_gid) + " at " + str(target_loc) + ", " + str(connection) + " connections")
-        #         plt.show()
 
     # Instrumentation - stimulation and recording
     def spike_record(self):
