@@ -318,7 +318,7 @@ class SimpleNetwork(object):
                 self.local_np_random.seed(self.connection_seed + target_gid)
                 self.local_random.seed(self.connection_seed + target_gid)
                 target_cell = self.cells[target_pop_name][target_gid]
-                target_position = pop_cell_positions[target_gid]
+                target_position = pop_cell_positions[target_pop_name][target_gid]
                 for syn_type in self.pop_syn_proportions[target_pop_name]:
                     for source_pop_name in self.pop_syn_proportions[target_pop_name][syn_type]:
                         p_syn_count = self.pop_syn_proportions[target_pop_name][syn_type][source_pop_name]
@@ -327,7 +327,7 @@ class SimpleNetwork(object):
                         for source_gid in range(self.pop_gid_ranges[source_pop_name][0], self.pop_gid_ranges[source_pop_name][1]):
                             if source_gid == target_gid:
                                 continue
-                            source_position = pop_cell_positions[source_gid]
+                            source_position = pop_cell_positions[source_pop_name][source_gid]
                             dist = np.sqrt(np.sum([(target_position[i] - source_position[i])**2 for i in range(dim)]))
                             sigma = pop_axon_extents[source_pop_name]
                             # if dist > sigma: # or some factor of sigma
@@ -341,16 +341,76 @@ class SimpleNetwork(object):
                         for i in range(len(presyn_probs)):
                             idxs += [presyn_probs[i][0]] * int(presyn_probs[i][1])
                         for source_gid in idxs:
+                            mu = self.connection_weights_mean[target_pop_name][source_pop_name]
+                            sigma_factor = self.connection_weight_sigma_factors[target_pop_name][source_pop_name]
+                            this_weight = self.local_random.gauss(mu, mu * sigma_factor)
+                            while this_weight <= 0.:
+                                    this_weight = self.local_random.gauss(mu, mu * sigma_factor)
                             this_syn, this_nc = target_cell.append_connection(
-                                self.pc, syn_type, source_gid, delay=self.delay, weight=this.weight,
+                                self.pc, syn_type, source_gid, delay=self.delay, weight=this_weight,
                                 syn_mech_names=self.syn_mech_names, syn_mech_param_rules=self.syn_mech_param_rules,
                                 syn_mech_param_defaults=self.syn_mech_param_defaults[target_pop_name][source_pop_name],
                                 **self.syn_mech_params[target_pop_name][source_pop_name])
-                            self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid].append(thic_nc)
+                            self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid].append(this_nc)
                         if self.verbose > 1:
-                            print('SimpleNetwork.connect_cells_uniform: rank: %i; target: %s gid: %i; syn_type: %s; '
+                            print('SimpleNetwork.connect_cells_gaussian: rank: %i; target: %s gid: %i; syn_type: %s; '
                                   'source: %s; syn_count: %i' %
                                   (rank, target_pop_name, target_gid, source_pop_name, syn_type, this_syn_count))
+
+    def visualize_connections(self, pop_cell_positions, n=1):
+        # if not self.spatial:
+        #     print("Cannot visualize connections without setting --spatial.")
+        #     return -1
+        for target_pop_name in self.pop_syn_proportions:
+            target_gids = random.sample(range(self.pop_gid_ranges[target_pop_name][0], self.pop_gid_ranges[target_pop_name][1]), n)
+            for target_gid in target_gids:
+                target_loc = pop_cell_positions[target_pop_name][target_gid]
+                #source_gids = list(self.ncdict())
+                for syn_type in self.pop_syn_proportions[target_pop_name]:
+                    for source_pop_name in self.pop_syn_proportions[target_pop_name][syn_type]:
+                        source_gids = list(self.ncdict[target_pop_name][target_gid][source_pop_name].keys())
+                        xs = []
+                        ys = []
+                        for source_gid in source_gids:
+                            xs.append(pop_cell_positions[source_pop_name][source_gid][0])
+                            ys.append(pop_cell_positions[source_pop_name][source_gid][1])
+                        vals, xedge, yedge = np.histogram2d(x=xs, y=ys, bins=np.linspace(-1.0, 1.0, 21))
+                        plt.pcolor(xedge, yedge, vals)
+                        plt.title("Cell {} at {}, {} to {} via {} syn".format(target_gid, target_loc, source_pop_name, target_pop_name, syn_type))
+                        #plt.title("Cell " + str(target_gid) + " at " + str(target_loc) + ", " + str(connection) + " connections")
+                        plt.show()
+
+
+        # for connection in ['ff2i', 'ff2e', 'e2e', 'e2i', 'i2i', 'i2e']:
+        #     if connection in ['ff2i', 'ff2e']:
+        #         presyn_code = 'FF'
+        #         presyn_key = 'excitatory_presyn'
+        #     elif connection in ['e2e', 'e2i']:
+        #         presyn_code = 'E'
+        #         presyn_key = 'excitatory_presyn'
+        #     else:
+        #         presyn_code = 'I'
+        #         presyn_key = 'inhibitory_presyn'
+        #     indices = self.connectivity_index_dict[connection]
+        #     inp, out = indices
+        #     target_gids = random.sample(range(out[0], out[1]), n)
+        #     for target_gid in target_gids:
+        #         target_loc = self.locations[target_gid]
+        #         print(target_loc)
+        #         presyn_gids = list(self.ncdict[target_gid].keys())
+        #         xs = []
+        #         ys = []
+        #         for presyn_gid in presyn_gids:
+        #             if presyn_gid in range(inp[0], inp[1]):
+        #                 xs.append(self.locations[presyn_gid][0])
+        #                 ys.append(self.locations[presyn_gid][1])
+        #         print(xs)
+        #         print(ys)
+        #         vals, xedge, yedge = np.histogram2d(x=xs, y=ys, bins=np.linspace(-1.0, 1.0, 21))
+        #         #plt.imshow(vals)
+        #         plt.pcolor(xedge, yedge, vals)
+        #         plt.title("Cell " + str(target_gid) + " at " + str(target_loc) + ", " + str(connection) + " connections")
+        #         plt.show()
 
     # Instrumentation - stimulation and recording
     def spike_record(self):

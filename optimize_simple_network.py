@@ -121,8 +121,9 @@ def init_context():
     pop_axon_extents = {'FF': 0.3, 'E': 0.3, 'I': 0.3}
 
     local_random = random.Random()
+    pop_cell_positions = defaultdict(dict)
     if context.connectivity_type == 'gaussian':
-        pop_cell_positions = defaultdict(dict)
+        #pop_cell_positions = defaultdict(dict)
         for pop_name in pop_gid_ranges:
             for gid in range(pop_gid_ranges[pop_name][0], pop_gid_ranges[pop_name][1]):
                 local_random.seed(context.location_seed + gid)
@@ -268,6 +269,8 @@ def compute_features(x, export=False):
         context.network.connect_cells_gaussian(context.dim, context.pop_axon_extents, context.pop_cell_positions)
     if int(context.pc.id()) == 0 and context.verbose > 0:
         print('NETWORK BUILD RUNTIME: %.2f s' % (time.time() - start_time))
+    if context.plot and context.connectivity_type == 'gaussian':
+        context.network.visualize_connections(context.pop_cell_positions, n=1)
     current_time = time.time()
 
     if context.debug:
