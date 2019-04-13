@@ -92,7 +92,9 @@ kwargs:
   verbose: 1
   connection_seed: 0
   spikes_seed: 1000000
-  connectivity_type: uniform
+  location_seed: 2000000
+  connectivity_type: gaussian
+  dim: 2
   FF_mean_rate: 20.  # Hz
 objective_names:
 - E_peak_rate

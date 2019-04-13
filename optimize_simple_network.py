@@ -117,6 +117,17 @@ def init_context():
     baks_beta = 0.41969058927343522
     baks_pad_dur = 1000.  # ms
     filter_bands = {'Theta': [4., 10.], 'Gamma': [30., 100.]}
+
+    pop_axon_extents = {'FF': 0.3, 'E': 0.3, 'I': 0.3}
+
+    local_random = random.Random()
+    if context.connectivity_type == 'gaussian':
+        pop_cell_positions = defaultdict(dict)
+        for pop_name in pop_gid_ranges:
+            for gid in range(pop_gid_ranges[pop_name][0], pop_gid_ranges[pop_name][1]):
+                local_random.seed(context.location_seed + gid)
+                pop_cell_positions[pop_name][gid] = [local_random.random() * 2 - 1 for _ in range(context.dim)]
+
     context.update(locals())
 
 
