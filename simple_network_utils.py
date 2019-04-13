@@ -364,6 +364,8 @@ class SimpleNetwork(object):
                 for syn_type in self.pop_syn_proportions[target_pop_name]:
                     for source_pop_name in self.pop_syn_proportions[target_pop_name][syn_type]:
                         source_gids = list(self.ncdict[target_pop_name][target_gid][source_pop_name].keys())
+                        if not source_gids:  # if the list is empty
+                            continue
                         xs = []
                         ys = []
                         for source_gid in source_gids:
