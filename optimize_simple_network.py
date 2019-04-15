@@ -299,8 +299,12 @@ def get_objectives(features, export=False):
     if int(context.pc.id()) == 0:
         objectives = {}
         for objective_name in context.objective_names:
-            objectives[objective_name] = ((context.target_val[objective_name] - features[objective_name]) /
-                                          context.target_range[objective_name]) ** 2.
+            if objective_name.find('sig2noise') != -1 and \
+                features[objective_name] >= context.target_val[objective_name] + context.target_range[objective_name]:
+                objectives[objective_name] = 0.
+            else:
+                objectives[objective_name] = ((context.target_val[objective_name] - features[objective_name]) /
+                                            context.target_range[objective_name]) ** 2.
         return features, objectives
 
 

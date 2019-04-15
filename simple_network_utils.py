@@ -442,7 +442,7 @@ class SimpleNetwork(object):
                             this_weight_list = [this_nc.weight[0] for this_nc in
                                                 self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid]]
                             weights[target_pop_name][target_gid][source_pop_name][source_gid] = \
-                                np.mean(this_weight_list)
+                                np.sum(this_weight_list)
                         else:
                             weights[target_pop_name][target_gid][source_pop_name][source_gid] = 0.
 
