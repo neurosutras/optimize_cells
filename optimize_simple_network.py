@@ -121,13 +121,16 @@ def init_context():
     pop_axon_extents = {'FF': 0.3, 'E': 0.3, 'I': 0.3}
 
     local_random = random.Random()
-    pop_cell_positions = defaultdict(dict)
+
     if context.connectivity_type == 'gaussian':
-        #pop_cell_positions = defaultdict(dict)
+        if 'spatial_dim' not in context():
+            raise RuntimeError('optimize_simple_network: spatial_dim parameter not found; required for gaussian '
+                               'connectivity')
+        pop_cell_positions = defaultdict(dict)
         for pop_name in pop_gid_ranges:
-            for gid in range(pop_gid_ranges[pop_name][0], pop_gid_ranges[pop_name][1]):
+            for gid in xrange(pop_gid_ranges[pop_name][0], pop_gid_ranges[pop_name][1]):
                 local_random.seed(context.location_seed + gid)
-                pop_cell_positions[pop_name][gid] = [local_random.random() * 2 - 1 for _ in range(context.dim)]
+                pop_cell_positions[pop_name][gid] = (local_random.random() * 2 - 1 for _ in range(context.spatial_dim))
 
     context.update(locals())
 
@@ -204,9 +207,10 @@ def analyze_network_output(network, export=False, plot=False):
             get_pop_activity_stats(spikes_dict, firing_rates_dict, binned_t, threshold=context.active_rate_threshold,
                                    plot=plot)
 
-        filtered_mean_rate_dict, filter_envelope_dict, filter_envelope_ratio_dict, centroid_freq_dict,\
-            noise_dict = get_pop_bandpass_filtered_signal_stats(mean_rate_from_spike_count_dict, binned_t,
-            context.filter_bands, plot=plot, verbose=context.verbose>0)
+        filtered_mean_rate_dict, filter_envelope_dict, filter_envelope_ratio_dict, centroid_freq_dict, \
+        freq_tuning_index_dict = \
+            get_pop_bandpass_filtered_signal_stats(mean_rate_from_spike_count_dict, binned_t, context.filter_bands,
+                                                   plot=plot, verbose=context.verbose>0)
 
         if plot:
             plot_inferred_spike_rates(binned_spike_count_dict, firing_rates_dict, binned_t,
@@ -233,10 +237,10 @@ def analyze_network_output(network, export=False, plot=False):
         result['I_centroid_theta_freq'] = centroid_freq_dict['Theta']['I']
         result['E_centroid_gamma_freq'] = centroid_freq_dict['Gamma']['E']
         result['I_centroid_gamma_freq'] = centroid_freq_dict['Gamma']['I']
-        result['E_theta_sig2noise'] = noise_dict['Theta']['E']
-        result['I_theta_sig2noise'] = noise_dict['Theta']['I']
-        result['E_gamma_sig2noise'] = noise_dict['Gamma']['E']
-        result['I_gamma_sig2noise'] = noise_dict['Gamma']['I']
+        result['E_theta_tuning_index'] = freq_tuning_index_dict['Theta']['E']
+        result['I_theta_tuning_index'] = freq_tuning_index_dict['Theta']['I']
+        result['E_gamma_tuning_index'] = freq_tuning_index_dict['Gamma']['E']
+        result['I_gamma_tuning_index'] = freq_tuning_index_dict['Gamma']['I']
 
         context.update(locals())
 
@@ -265,7 +269,7 @@ def compute_features(x, export=False):
     if context.connectivity_type == 'uniform':
         context.network.connect_cells_uniform()
     elif context.connectivity_type == 'gaussian':
-        context.network.connect_cells_gaussian(context.dim, context.pop_axon_extents, context.pop_cell_positions)
+        context.network.connect_cells_gaussian(context.pop_axon_extents, context.pop_cell_positions)
     if int(context.pc.id()) == 0 and context.verbose > 0:
         print('NETWORK BUILD RUNTIME: %.2f s' % (time.time() - start_time))
     if context.plot and context.connectivity_type == 'gaussian':
@@ -299,8 +303,8 @@ def get_objectives(features, export=False):
     if int(context.pc.id()) == 0:
         objectives = {}
         for objective_name in context.objective_names:
-            if objective_name.find('sig2noise') != -1 and \
-                features[objective_name] >= context.target_val[objective_name] + context.target_range[objective_name]:
+            if objective_name.find('tuning_index') != -1 and \
+                    features[objective_name] >= context.target_val[objective_name]:
                 objectives[objective_name] = 0.
             else:
                 objectives[objective_name] = ((context.target_val[objective_name] - features[objective_name]) /

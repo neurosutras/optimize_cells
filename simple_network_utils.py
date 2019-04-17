@@ -282,9 +282,9 @@ class SimpleNetwork(object):
                 for syn_type in self.pop_syn_proportions[target_pop_name]:
                     for source_pop_name in self.pop_syn_proportions[target_pop_name][syn_type]:
                         p_syn_count = self.pop_syn_proportions[target_pop_name][syn_type][source_pop_name]
-                        this_syn_count = np.random.binomial(total_syn_count, p_syn_count)
+                        this_syn_count = self.local_np_random.binomial(total_syn_count, p_syn_count)
                         p_connection = self.get_prob_connection_uniform(target_gid, self.pop_gid_ranges[source_pop_name])
-                        this_source_gids = np.random.choice(
+                        this_source_gids = self.local_np_random.choice(
                             xrange(self.pop_gid_ranges[source_pop_name][0], self.pop_gid_ranges[source_pop_name][1], 1),
                             size=this_syn_count, p=p_connection)
                         for source_gid in this_source_gids:
@@ -292,7 +292,7 @@ class SimpleNetwork(object):
                             sigma_factor = self.connection_weight_sigma_factors[target_pop_name][source_pop_name]
                             this_weight = self.local_random.gauss(mu, mu * sigma_factor)
                             while this_weight <= 0.:
-                                    this_weight = self.local_random.gauss(mu, mu * sigma_factor)
+                                this_weight = self.local_random.gauss(mu, mu * sigma_factor)
                             this_syn, this_nc = target_cell.append_connection(
                                 self.pc, syn_type, source_gid, delay=self.delay, weight=this_weight,
                                 syn_mech_names=self.syn_mech_names, syn_mech_param_rules=self.syn_mech_param_rules,
@@ -304,11 +304,10 @@ class SimpleNetwork(object):
                                   'source: %s; syn_count: %i' %
                                   (rank, target_pop_name, target_gid, source_pop_name, syn_type, this_syn_count))
 
-    def connect_cells_gaussian(self, dim, pop_axon_extents, pop_cell_positions):
+    def connect_cells_gaussian(self, pop_axon_extents, pop_cell_positions):
         """
-        :param dim: array of float; spatial dimensions for anatomical distribution of cells
         :param pop_axon_extents: dict; full floor width of gaussian; {pop_name: float}
-        :param pop_cell_positions: nested dict; {pop_name: {gid: array with shape matching dim} }
+        :param pop_cell_positions: nested dict; {pop_name: {gid: array} }
         """
         rank = int(self.pc.id())
         for target_pop_name in self.pop_syn_proportions:
@@ -318,23 +317,26 @@ class SimpleNetwork(object):
                 self.local_random.seed(self.connection_seed + target_gid)
                 target_cell = self.cells[target_pop_name][target_gid]
                 target_position = pop_cell_positions[target_pop_name][target_gid]
+                spatial_dim = len(target_position)
                 for syn_type in self.pop_syn_proportions[target_pop_name]:
                     for source_pop_name in self.pop_syn_proportions[target_pop_name][syn_type]:
                         p_syn_count = self.pop_syn_proportions[target_pop_name][syn_type][source_pop_name]
-                        this_syn_count = np.random.binomial(total_syn_count, p_syn_count)
+                        this_syn_count = self.local_np_random.binomial(total_syn_count, p_syn_count)
                         presyn_probs = []
-                        for source_gid in range(self.pop_gid_ranges[source_pop_name][0], self.pop_gid_ranges[source_pop_name][1]):
+                        for source_gid in xrange(self.pop_gid_ranges[source_pop_name][0],
+                                                self.pop_gid_ranges[source_pop_name][1]):
                             if source_gid == target_gid:
                                 continue
                             source_position = pop_cell_positions[source_pop_name][source_gid]
-                            dist = np.sqrt(np.sum([(target_position[i] - source_position[i])**2 for i in range(dim)]))
+                            dist = np.sqrt(np.sum([(target_position[i] - source_position[i]) ** 2.
+                                                   for i in xrange(spatial_dim)]))
                             sigma = pop_axon_extents[source_pop_name]
                             # if dist > sigma: # or some factor of sigma
                             #     continue
                             presyn_probs.append((source_gid, 1./(np.sqrt(2 * np.pi * sigma**2)) * (np.e ** (-(dist ** 2) / (2 * sigma**2)))))
                         presyn_probs = np.array(presyn_probs)
                         presyn_probs[:, 1] /= np.sum(presyn_probs[:, 1])
-                        counts = np.random.multinomial(this_syn_count, presyn_probs[:, 1])
+                        counts = self.local_np_random.multinomial(this_syn_count, presyn_probs[:, 1])
                         presyn_probs[:, 1] = counts
                         idxs = []
                         for i in range(len(presyn_probs)):
@@ -358,7 +360,8 @@ class SimpleNetwork(object):
 
     def visualize_connections(self, pop_cell_positions, n=1):
         for target_pop_name in self.pop_syn_proportions:
-            target_gids = random.sample(range(self.pop_gid_ranges[target_pop_name][0], self.pop_gid_ranges[target_pop_name][1]), n)
+            target_gids = random.sample(range(self.pop_gid_ranges[target_pop_name][0],
+                                              self.pop_gid_ranges[target_pop_name][1]), n)
             for target_gid in target_gids:
                 target_loc = pop_cell_positions[target_pop_name][target_gid]
                 for syn_type in self.pop_syn_proportions[target_pop_name]:
@@ -373,7 +376,8 @@ class SimpleNetwork(object):
                             ys.append(pop_cell_positions[source_pop_name][source_gid][1])
                         vals, xedge, yedge = np.histogram2d(x=xs, y=ys, bins=np.linspace(-1.0, 1.0, 21))
                         plt.pcolor(xedge, yedge, vals)
-                        plt.title("Cell {} at {}, {} to {} via {} syn".format(target_gid, target_loc, source_pop_name, target_pop_name, syn_type))
+                        plt.title("Cell {} at {}, {} to {} via {} syn".format(target_gid, target_loc, source_pop_name,
+                                                                              target_pop_name, syn_type))
                         plt.show()
 
     # Instrumentation - stimulation and recording
@@ -777,8 +781,55 @@ def get_butter_bandpass_filter(filter_band, sampling_rate, order, filter_label='
     return sos
 
 
+def PSTI(f, power, quantile=0.25, band=None, debug=False):
+    """
+    'Power spectral tuning index'. Signal and noise partitioned as a quantile of the power distribution. Standard
+    deviation in the frequency domain is normalized to the bandwidth. Resulting frequency tuning index is proportional
+    to the amplitude ratio of signal power to noise power, and inversely proportional to the standard deviation in the
+    frequency domain.
+    :param f: array of float; frequency (Hz)
+    :param power: array of float; power spectral density (units^2/Hz)
+    :param quantile: float in (0., 0.5]
+    :param band: tuple of float
+    :param debug: bool
+    :return: float
+    """
+    if not 0. < quantile <= 0.5:
+        raise ValueError('PSTI: extrema quantile must be between 0 and 0.5')
+    if band is None:
+        band = (np.min(f), np.max(f))
+    f_indexes = np.where((f >= band[0]) & (f <= band[1]))[0]
+    if len(f_indexes) == 0:
+        raise ValueError('PSTI: sample does not contain specified band')
+    power_std = np.std(power[f_indexes])
+    if power_std == 0.:
+        return 0.
+    bandwidth = band[1] - band[0]
+    norm_power = np.subtract(power[f_indexes], np.min(power[f_indexes]))
+    norm_power /= np.max(norm_power)
+    bottom_indexes = np.where(norm_power <= quantile)[0]
+    top_indexes = np.where(norm_power >= (1. - quantile))[0]
+    if len(bottom_indexes) == 0 or len(top_indexes) == 0:
+        raise ValueError('PSTI: power extrema not well-defined')
+    bottom_val = np.mean(power[f_indexes][bottom_indexes])
+    top_val = np.mean(power[f_indexes][top_indexes])
+    if bottom_val == 0.:
+        bottom_f_norm_std = 0.
+    else:
+        bottom_f_norm_std = np.sqrt(np.cov(f[f_indexes][bottom_indexes], aweights=power[f_indexes][bottom_indexes])) / \
+                            bandwidth
+    if top_val == 0.:
+        return 0.
+    top_f_norm_std = np.sqrt(np.cov(f[f_indexes][top_indexes], aweights=power[f_indexes][top_indexes])) / bandwidth
+    this_PSTI = (top_val - bottom_val) / (top_val + bottom_val) / (bottom_f_norm_std + top_f_norm_std)
+    if debug:
+        print 'delta_power: %.5f; f_norm_std: bottom: %.5f, top: %.5f' % \
+            (top_val - bottom_val, bottom_f_norm_std, top_f_norm_std)
+    return this_PSTI
+
+
 def get_bandpass_filtered_signal_stats(signal, t, sos, filter_band, signal_label='', filter_label='', pad=True,
-                                 pad_len=None, plot=False, verbose=False):
+                                       pad_len=None, plot=False, verbose=False):
     """
 
     :param signal: array
@@ -814,10 +865,9 @@ def get_bandpass_filtered_signal_stats(signal, t, sos, filter_band, signal_label
     com_index = get_center_of_mass_index(power)
     if com_index is None:
         centroid_freq = 0.
-        var = 0.
     else:
         centroid_freq = f[com_index]
-        var = get_2nd_moment(f, power, centroid_freq)
+    freq_tuning_index = PSTI(f, power, band=filter_band)
 
     mean_envelope = np.mean(envelope)
     mean_signal = np.mean(signal)
@@ -849,13 +899,14 @@ def get_bandpass_filtered_signal_stats(signal, t, sos, filter_band, signal_label
         axes[1][0].set_xlim(min(filter_band)/2., max(filter_band) * 1.5)
 
         clean_axes(axes)
-        fig.suptitle('%s\n%s bandpass filter (%.1f:%.1f Hz)\nEnvelope ratio: %.3f; Centroid freq: %.3f Hz' %
-                     (signal_label, filter_label, min(filter_band), max(filter_band), envelope_ratio, centroid_freq))
+        fig.suptitle('%s: %s bandpass filter (%.1f:%.1f Hz)\nEnvelope ratio: %.3f; Centroid freq: %.3f Hz\n'
+                     'Frequency tuning index: %.3f' % (signal_label, filter_label, min(filter_band), max(filter_band),
+                                                       envelope_ratio, centroid_freq, freq_tuning_index))
         fig.tight_layout()
         fig.subplots_adjust(top=0.8, hspace=0.3)
         fig.show()
 
-    return filtered_signal, envelope, envelope_ratio, centroid_freq, var
+    return filtered_signal, envelope, envelope_ratio, centroid_freq, freq_tuning_index
 
 
 def get_pop_bandpass_filtered_signal_stats(signal_dict, t, filter_band_dict, order=15, plot=False, verbose=False):
@@ -875,23 +926,24 @@ def get_pop_bandpass_filtered_signal_stats(signal_dict, t, filter_band_dict, ord
     envelope_dict = {}
     envelope_ratio_dict = {}
     centroid_freq_dict = {}
-    var_freq_dict = {}
+    freq_tuning_index_dict = {}
     for filter_label, filter_band in filter_band_dict.iteritems():
         filtered_signal_dict[filter_label] = {}
         envelope_dict[filter_label] = {}
         envelope_ratio_dict[filter_label] = {}
         centroid_freq_dict[filter_label] = {}
-        var_freq_dict[filter_label] = {}
+        freq_tuning_index_dict[filter_label] = {}
         sos = get_butter_bandpass_filter(filter_band, sampling_rate, filter_label=filter_label, order=order, plot=plot)
         for pop_name in signal_dict:
             signal = signal_dict[pop_name]
             filtered_signal_dict[filter_label][pop_name], envelope_dict[filter_label][pop_name], \
-                envelope_ratio_dict[filter_label][pop_name], centroid_freq_dict[filter_label][pop_name], \
-                var_freq_dict[filter_label][pop_name] = get_bandpass_filtered_signal_stats(signal, t,
-                sos, filter_band, signal_label='Population: %s' % pop_name, filter_label=filter_label,
-                plot=plot, verbose=verbose)
+            envelope_ratio_dict[filter_label][pop_name], centroid_freq_dict[filter_label][pop_name], \
+            freq_tuning_index_dict[filter_label][pop_name] = \
+                get_bandpass_filtered_signal_stats(signal, t, sos, filter_band,
+                                                   signal_label='Population: %s' % pop_name, filter_label=filter_label,
+                                                   plot=plot, verbose=verbose)
 
-    return filtered_signal_dict, envelope_dict, envelope_ratio_dict, centroid_freq_dict, var_freq_dict
+    return filtered_signal_dict, envelope_dict, envelope_ratio_dict, centroid_freq_dict, freq_tuning_index_dict
 
 
 def plot_heatmap_from_matrix(data, xticks=None, xtick_labels=None, yticks=None, ytick_labels=None, ax=None,
@@ -969,10 +1021,6 @@ def get_mirror_padded_signal(signal, pad_len):
     padded_signal = np.concatenate((mirror_beginning, signal, mirror_end))
     return padded_signal
 
-def get_2nd_moment(f, power, center):
-    """get 2nd moment around the center of mass"""
-    moment = 2
-    return np.sum(power * (f - center) ** moment) / np.sum(power)
 
 def get_mirror_padded_time_series(t, pad_len):
     """
