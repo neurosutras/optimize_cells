@@ -820,11 +820,18 @@ def PSTI(f, power, quantile=0.25, band=None, debug=False):
                             bandwidth
     if top_val == 0.:
         return 0.
-    top_f_norm_std = np.sqrt(np.cov(f[f_indexes][top_indexes], aweights=power[f_indexes][top_indexes])) / bandwidth
-    this_PSTI = (top_val - bottom_val) / (top_val + bottom_val) / (bottom_f_norm_std + top_f_norm_std)
+    print len(top_indexes)
+    if len(top_indexes) <= 1:
+        top_f_norm_std = 0.
+    else:
+        top_f_norm_std = np.sqrt(np.cov(f[f_indexes][top_indexes], aweights=power[f_indexes][top_indexes])) / bandwidth
+
     if debug:
         print 'delta_power: %.5f; f_norm_std: bottom: %.5f, top: %.5f' % \
-            (top_val - bottom_val, bottom_f_norm_std, top_f_norm_std)
+              (top_val - bottom_val, bottom_f_norm_std, top_f_norm_std)
+    if np.isnan(top_f_norm_std) or (bottom_f_norm_std + top_f_norm_std == 0.):
+        return np.inf
+    this_PSTI = (top_val - bottom_val) / (top_val + bottom_val) / (bottom_f_norm_std + top_f_norm_std)
     return this_PSTI
 
 
