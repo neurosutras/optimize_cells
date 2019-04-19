@@ -88,6 +88,19 @@ def init_context():
     pop_gid_ranges = get_pop_gid_ranges(pop_sizes)
     pop_cell_types = {'FF': 'input', 'E': 'IB', 'I': 'FS'}
 
+    if context.connectivity_type == 'mixed':
+        proj_and_connectivity_dict = {'uniform': {'E': ['FF'], 'I': ['FF']},
+                                      'gaussian': {'E': ['E', 'I'], 'I': ['E', 'I']}}
+    elif context.connectivity_type == 'uniform':
+        proj_and_connectivity_dict = {'uniform': {'E': ['FF', 'E', 'I'], 'I': ['FF', 'E', 'I']}}
+    elif context.connectivity_type == 'gaussian':
+        proj_and_connectivity_dict = {'gaussian': {'E': ['FF', 'E', 'I'], 'I': ['FF', 'E', 'I']}}
+    else:
+        raise RuntimeError('SimpleNetwork.init_context: connectivity type \'%s\' specified in .yaml file is not '
+                           'valid' % (context.connectivity_type))
+
+    syn_types_dict = {'E' : 'E', 'I' : 'I', 'FF' : 'E'}
+
     # {'target_pop_name': {'syn_type: {'source_pop_name': float} } }
     pop_syn_proportions = defaultdict(lambda: defaultdict(dict))
     connection_weights_mean = defaultdict(dict)  # {'target_pop_name': {'source_pop_name': float} }
@@ -122,7 +135,7 @@ def init_context():
 
     local_random = random.Random()
 
-    if context.connectivity_type == 'gaussian':
+    if context.connectivity_type in ['gaussian', 'mixed']:
         if 'spatial_dim' not in context():
             raise RuntimeError('optimize_simple_network: spatial_dim parameter not found; required for gaussian '
                                'connectivity')
@@ -130,8 +143,9 @@ def init_context():
         for pop_name in pop_gid_ranges:
             for gid in xrange(pop_gid_ranges[pop_name][0], pop_gid_ranges[pop_name][1]):
                 local_random.seed(context.location_seed + gid)
-                pop_cell_positions[pop_name][gid] = (local_random.random() * 2 - 1 for _ in range(context.spatial_dim))
-
+                pop_cell_positions[pop_name][gid] = ([local_random.random() * 2 - 1 for _ in range(context.spatial_dim)])
+    else:
+        pop_cell_positions = None
     context.update(locals())
 
 
@@ -262,14 +276,13 @@ def compute_features(x, export=False):
         pop_cell_types=context.pop_cell_types, pop_syn_counts=context.pop_syn_counts,
         pop_syn_proportions=context.pop_syn_proportions, connection_weights_mean=context.connection_weights_mean,
         connection_weight_sigma_factors=context.connection_weight_sigma_factors,
-        input_pop_mean_rates=context.input_pop_mean_rates, syn_mech_params=context.syn_mech_params, tstop=context.tstop,
-        equilibrate=context.equilibrate, dt=context.dt, delay=context.delay, connection_seed=context.connection_seed,
-        spikes_seed=context.spikes_seed, verbose=context.verbose, debug=context.debug)
+        input_pop_mean_rates=context.input_pop_mean_rates, syn_mech_params=context.syn_mech_params,
+        syn_types_dict=context.syn_types_dict, tstop=context.tstop, equilibrate=context.equilibrate, dt=context.dt,
+        delay=context.delay, connection_seed=context.connection_seed, spikes_seed=context.spikes_seed,
+        verbose=context.verbose, debug=context.debug)
 
-    if context.connectivity_type == 'uniform':
-        context.network.connect_cells_uniform()
-    elif context.connectivity_type == 'gaussian':
-        context.network.connect_cells_gaussian(context.pop_axon_extents, context.pop_cell_positions)
+    context.network.connect_based_on_projection(context.pop_axon_extents, context.pop_cell_positions,
+                                                context.proj_and_connectivity_dict)
     if int(context.pc.id()) == 0 and context.verbose > 0:
         print('NETWORK BUILD RUNTIME: %.2f s' % (time.time() - start_time))
     if context.plot and context.connectivity_type == 'gaussian':

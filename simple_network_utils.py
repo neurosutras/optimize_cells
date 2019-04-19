@@ -72,9 +72,9 @@ class SimpleNetwork(object):
 
     def __init__(self, pc, pop_sizes, pop_gid_ranges, pop_cell_types, pop_syn_counts, pop_syn_proportions,
                  connection_weights_mean, connection_weight_sigma_factors, syn_mech_params, syn_mech_names=None,
-                 syn_mech_param_rules=None, syn_mech_param_defaults=None, input_pop_mean_rates=None, tstop=1000.,
-                 equilibrate=250., dt=0.025, delay=1., connection_seed=0, spikes_seed=100000, v_init=-65., verbose=1,
-                 debug=False):
+                 syn_mech_param_rules=None, syn_mech_param_defaults=None, syn_types_dict=None, input_pop_mean_rates=None,
+                 tstop=1000., equilibrate=250., dt=0.025, delay=1., connection_seed=0, spikes_seed=100000, v_init=-65.,
+                 verbose=1, debug=False):
         """
 
         :param pc: ParallelContext object
@@ -117,6 +117,7 @@ class SimpleNetwork(object):
         self.pop_sizes = pop_sizes
         self.total_cells = np.sum(self.pop_sizes.values())
 
+        self.syn_types_dict = syn_types_dict
         self.pop_gid_ranges = pop_gid_ranges
         self.pop_cell_types = pop_cell_types
         self.pop_syn_counts = pop_syn_counts
@@ -211,6 +212,111 @@ class SimpleNetwork(object):
                 else:
                     raise RuntimeError('SimpleNetwork.verify_cell_types: %s gid: %i is an unknown type: %s' %
                                        (pop_name, gid, type(this_cell)))
+
+    def connect_based_on_projection(self, pop_axon_extents, pop_cell_positions, proj_and_connectivity_dict):
+        """
+
+        :param proj_and_connectivity_dict: key = str, 'gaussian' or 'uniform', val = dict s.t. key =
+        str representing target (e.g. 'E'), val = list of str representing source
+        :return:
+        """
+        for connection_type in proj_and_connectivity_dict.keys():
+            for target_pop_name in proj_and_connectivity_dict[connection_type].keys():
+                for source_pop_name in proj_and_connectivity_dict[connection_type][target_pop_name]:
+                    if connection_type == 'gaussian':
+                        self.connect_cells_gaussian2(pop_axon_extents, pop_cell_positions, target_pop_name,
+                                                     source_pop_name)
+                    elif connection_type == 'uniform':
+                        self.connect_cells_uniform2(target_pop_name, source_pop_name)
+                    else:
+                        raise RuntimeError('SimpleNetwork: undefined connection type of %s', connection_type)
+
+    def connect_cells_uniform2(self, target_pop_name, source_pop_name):
+        rank = int(self.pc.id())
+        total_syn_count = self.pop_syn_counts[target_pop_name]
+        for target_gid in self.cells[target_pop_name]:
+            self.local_np_random.seed(self.connection_seed + target_gid)
+            self.local_random.seed(self.connection_seed + target_gid)
+            target_cell = self.cells[target_pop_name][target_gid]
+            syn_type = self.syn_types_dict[source_pop_name]
+            p_syn_count = self.pop_syn_proportions[target_pop_name][syn_type][source_pop_name]
+            this_syn_count = self.local_np_random.binomial(total_syn_count, p_syn_count)
+            p_connection = self.get_prob_connection_uniform(target_gid,
+                                                            self.pop_gid_ranges[source_pop_name])
+            this_source_gids = self.local_np_random.choice(
+                xrange(self.pop_gid_ranges[source_pop_name][0], self.pop_gid_ranges[source_pop_name][1],
+                       1), size=this_syn_count, p=p_connection)
+            for source_gid in this_source_gids:
+                mu = self.connection_weights_mean[target_pop_name][source_pop_name]
+                sigma_factor = self.connection_weight_sigma_factors[target_pop_name][source_pop_name]
+                this_weight = self.local_random.gauss(mu, mu * sigma_factor)
+                while this_weight <= 0.:
+                    this_weight = self.local_random.gauss(mu, mu * sigma_factor)
+                this_syn, this_nc = target_cell.append_connection(
+                    self.pc, syn_type, source_gid, delay=self.delay, weight=this_weight,
+                    syn_mech_names=self.syn_mech_names, syn_mech_param_rules=self.syn_mech_param_rules,
+                    syn_mech_param_defaults=self.syn_mech_param_defaults[target_pop_name][
+                        source_pop_name],
+                    **self.syn_mech_params[target_pop_name][source_pop_name])
+                self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid].append(this_nc)
+            if self.verbose > 1:
+                print('SimpleNetwork.connect_cells_uniform: rank: %i; target: %s gid: %i; syn_type: %s; '
+                      'source: %s; syn_count: %i' %
+                      (rank, target_pop_name, target_gid, source_pop_name, syn_type,
+                       this_syn_count))
+
+
+    def connect_cells_gaussian2(self, pop_axon_extents, pop_cell_positions, target_pop_name, source_pop_name):
+        """
+        :param pop_axon_extents: dict; full floor width of gaussian; {pop_name: float}
+        :param pop_cell_positions: nested dict; {pop_name: {gid: array} }
+        """
+        rank = int(self.pc.id())
+        total_syn_count = self.pop_syn_counts[target_pop_name]
+        for target_gid in self.cells[target_pop_name]:
+            self.local_np_random.seed(self.connection_seed + target_gid)
+            self.local_random.seed(self.connection_seed + target_gid)
+            target_cell = self.cells[target_pop_name][target_gid]
+            target_position = pop_cell_positions[target_pop_name][target_gid]
+            spatial_dim = len(target_position)
+            syn_type = self.syn_types_dict[source_pop_name]
+            p_syn_count = self.pop_syn_proportions[target_pop_name][syn_type][source_pop_name]
+            this_syn_count = self.local_np_random.binomial(total_syn_count, p_syn_count)
+            presyn_probs = []
+            for source_gid in xrange(self.pop_gid_ranges[source_pop_name][0], self.pop_gid_ranges[source_pop_name][1]):
+                if source_gid == target_gid:
+                        continue
+                source_position = pop_cell_positions[source_pop_name][source_gid]
+                dist = np.sqrt(np.sum([(target_position[i] - source_position[i]) ** 2.
+                                       for i in xrange(spatial_dim)]))
+                sigma = pop_axon_extents[source_pop_name]
+                # if dist > sigma: # or some factor of sigma
+                #     continue
+                presyn_probs.append(
+                    (source_gid, 1. / (np.sqrt(2 * np.pi * sigma ** 2)) * (np.e ** (-(dist ** 2) / (2 * sigma ** 2)))))
+            presyn_probs = np.array(presyn_probs)
+            presyn_probs[:, 1] /= np.sum(presyn_probs[:, 1])
+            counts = self.local_np_random.multinomial(this_syn_count, presyn_probs[:, 1])
+            presyn_probs[:, 1] = counts
+            idxs = []
+            for i in range(len(presyn_probs)):
+                idxs += [presyn_probs[i][0]] * int(presyn_probs[i][1])
+            for source_gid in idxs:
+                mu = self.connection_weights_mean[target_pop_name][source_pop_name]
+                sigma_factor = self.connection_weight_sigma_factors[target_pop_name][source_pop_name]
+                this_weight = self.local_random.gauss(mu, mu * sigma_factor)
+                while this_weight <= 0.:
+                    this_weight = self.local_random.gauss(mu, mu * sigma_factor)
+                this_syn, this_nc = target_cell.append_connection(
+                    self.pc, syn_type, source_gid, delay=self.delay, weight=this_weight,
+                    syn_mech_names=self.syn_mech_names, syn_mech_param_rules=self.syn_mech_param_rules,
+                    syn_mech_param_defaults=self.syn_mech_param_defaults[target_pop_name][source_pop_name],
+                    **self.syn_mech_params[target_pop_name][source_pop_name])
+                self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid].append(this_nc)
+            if self.verbose > 1:
+                print('SimpleNetwork.connect_cells_gaussian: rank: %i; target: %s gid: %i; syn_type: %s; '
+                      'source: %s; syn_count: %i' %
+                      (rank, target_pop_name, target_gid, source_pop_name, syn_type, this_syn_count))
 
     def connect_cells_original(self):
         """
