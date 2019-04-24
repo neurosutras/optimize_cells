@@ -802,6 +802,8 @@ def PSTI(f, power, quantile=0.25, band=None, debug=False):
         return 0.
     bandwidth = band[1] - band[0]
     norm_power = np.subtract(power[f_indexes], np.min(power[f_indexes]))
+    if np.max(norm_power) == 0.:
+        return 0.
     norm_power /= np.max(norm_power)
     bottom_indexes = np.where(norm_power <= quantile)[0]
     top_indexes = np.where(norm_power >= (1. - quantile))[0]
@@ -809,7 +811,8 @@ def PSTI(f, power, quantile=0.25, band=None, debug=False):
         raise ValueError('PSTI: power extrema not well-defined')
     bottom_val = np.mean(power[f_indexes][bottom_indexes])
     top_val = np.mean(power[f_indexes][top_indexes])
-    if bottom_val == 0.:
+
+    if bottom_val == 0. or len(bottom_indexes) == 1:
         bottom_f_norm_std = 0.
     else:
         bottom_f_norm_std = np.sqrt(np.cov(f[f_indexes][bottom_indexes], aweights=power[f_indexes][bottom_indexes])) / \
@@ -817,7 +820,7 @@ def PSTI(f, power, quantile=0.25, band=None, debug=False):
     if top_val == 0.:
         return 0.
 
-    if len(top_indexes) <= 1:
+    if len(top_indexes) == 1:
         top_f_norm_std = 0.
     else:
         top_f_norm_std = np.sqrt(np.cov(f[f_indexes][top_indexes], aweights=power[f_indexes][top_indexes])) / bandwidth
