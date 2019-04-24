@@ -5,13 +5,6 @@ from scipy.signal import butter, sosfiltfilt, sosfreqz, hilbert, periodogram
 from collections import namedtuple, defaultdict
 
 
-# for h.lambda_f
-h.load_file('stdlib.hoc')
-# for h.stdinit
-h.load_file('stdrun.hoc')
-h.celsius = 35.  # degrees C
-
-
 # Based on http://modeldb.yale.edu/39948
 izhi_cell_type_param_names = ['C', 'k', 'vr', 'vt', 'vpeak', 'a', 'b', 'c', 'd', 'celltype']
 izhi_cell_type_params = namedtuple('izhi_cell_type_params', izhi_cell_type_param_names)
@@ -174,7 +167,9 @@ class SimpleNetwork(object):
                                 [self.input_pop_mean_rates[pop_name], self.input_pop_mean_rates[pop_name]],
                                 [0., float(self.tstop)], dt=self.dt, generator=self.local_random)
                             cell.load_vecstim(this_spike_train)
-                            self.spikes_dict[pop_name][gid] = np.array(this_spike_train)
+                            # self.spikes_dict[pop_name][gid] = np.array(this_spike_train)
+                    elif cell_type == 'minimal':
+                        cell = MinimalCell(pop_name, gid)
                     elif cell_type in izhi_cell_type_param_dict:
                         cell = IzhiCell(pop_name, gid, cell_type=cell_type)
                     else:
@@ -182,7 +177,7 @@ class SimpleNetwork(object):
                                            (pop_name, gid, cell_type))
                     self.cells[pop_name][gid] = cell
                     self.pc.set_gid2node(gid, rank)
-                    nc = cell.connect2target(None)
+                    nc = cell.spike_detector
                     self.pc.cell(gid, nc)
 
     def verify_cell_types(self):
@@ -212,63 +207,17 @@ class SimpleNetwork(object):
                     raise RuntimeError('SimpleNetwork.verify_cell_types: %s gid: %i is an unknown type: %s' %
                                        (pop_name, gid, type(this_cell)))
 
-    def connect_cells_original(self):
-        """
-        Consult prob_connections dict to assign connections. Consult connection_weights_mean and
-        connection_weight_sigma_factor to assign synaptic weights.
-        Restrictions: 1) Cells do not form connections with self
-                      2) Weights cannot be negative
-        TODO: Deprecated.
-        """
-        rank = int(self.pc.id())
-        for target_pop_name in self.prob_connection:
-            for target_gid in self.cells[target_pop_name]:
-                self.local_random.seed(self.connection_seed + target_gid)
-                target_cell = self.cells[target_pop_name][target_gid]
-                for source_pop_name in self.prob_connection[target_pop_name]:
-                    this_prob_connection = self.prob_connection[target_pop_name][source_pop_name]
-                    this_syn_type = self.connection_syn_types[source_pop_name]
-                    start_gid = self.pop_gid_ranges[source_pop_name][0]
-                    stop_gid = self.pop_gid_ranges[source_pop_name][1]
-                    mu = self.connection_weights_mean[target_pop_name][source_pop_name]
-                    sigma_factor = self.connection_weight_sigma_factors[target_pop_name][source_pop_name]
-                    if sigma_factor >= 2. / 3. / np.sqrt(2.):
-                        orig_sigma_factor = sigma_factor
-                        sigma_factor = 2. / 3. / np.sqrt(2.)
-                        print('SimpleNetwork.connectcells: %s: %s connection; reducing weight_sigma_factor to avoid '
-                              'negative weights; orig: %.2f, new: %.2f' %
-                              (source_pop_name, target_pop_name, orig_sigma_factor, sigma_factor))
-                    for source_gid in xrange(start_gid, stop_gid):
-                        if source_gid == target_gid:
-                            continue
-                        if self.local_random.random() <= this_prob_connection:
-                            this_weight = self.local_random.gauss(mu, mu * sigma_factor)
-                            while this_weight < 0.:
-                                this_weight = self.local_random.gauss(mu, mu * sigma_factor)
-                            this_syn, this_nc = \
-                                target_cell.append_connection(
-                                    self.pc, this_syn_type, source_gid, delay=self.delay, weight=this_weight,
-                                    syn_mech_names=self.syn_mech_names, syn_mech_param_rules=self.syn_mech_param_rules,
-                                    syn_mech_param_defaults=
-                                    self.syn_mech_param_defaults[target_pop_name][source_pop_name],
-                                    **self.syn_mech_params[target_pop_name][source_pop_name])
-                            self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid] = this_nc
-                    if self.verbose > 1:
-                        print('SimpleNetwork.connectcells: rank: %i; target: %s gid: %i: source: %s; num_syns: %i' %
-                              (rank, target_pop_name, target_gid, source_pop_name,
-                               len(self.ncdict[target_pop_name][target_gid][source_pop_name])))
-
-    def get_prob_connection_uniform(self, target_gid, source_gid_range):
+    def get_prob_connection_uniform(self, potential_source_gids):
         """
 
-        :param target_gid: int
-        :param source_gid_range: tuple of int
-        :return: array of int
+        :param potential_source_gids: array of int
+        :return: array of float
         """
-        p_connection = np.ones(source_gid_range[1]-source_gid_range[0], dtype='float32')
-        if source_gid_range[0] <= target_gid < source_gid_range[1]:
-            p_connection[target_gid-source_gid_range[0]] = 0.
-        p_connection /= np.sum(p_connection)
+        p_connection = np.ones(len(potential_source_gids), dtype='float32')
+        p_sum = np.sum(p_connection)
+        if p_sum == 0.:
+            return None
+        p_connection /= p_sum
         return p_connection
 
     def connect_cells_uniform(self, **kwargs):
@@ -283,26 +232,32 @@ class SimpleNetwork(object):
                     for source_pop_name in self.pop_syn_proportions[target_pop_name][syn_type]:
                         p_syn_count = self.pop_syn_proportions[target_pop_name][syn_type][source_pop_name]
                         this_syn_count = self.local_np_random.binomial(total_syn_count, p_syn_count)
-                        p_connection = self.get_prob_connection_uniform(target_gid, self.pop_gid_ranges[source_pop_name])
-                        this_source_gids = self.local_np_random.choice(
-                            xrange(self.pop_gid_ranges[source_pop_name][0], self.pop_gid_ranges[source_pop_name][1], 1),
-                            size=this_syn_count, p=p_connection)
+                        potential_source_gids = np.arange(self.pop_gid_ranges[source_pop_name][0],
+                                                          self.pop_gid_ranges[source_pop_name][1], 1)
+                        # avoid connections to self
+                        potential_source_gids = potential_source_gids[potential_source_gids != target_gid]
+                        p_connection = self.get_prob_connection_uniform(potential_source_gids)
+                        if p_connection is None:
+                            continue
+                        this_source_gids = self.local_np_random.choice(potential_source_gids, size=this_syn_count,
+                                                                       p=p_connection)
                         for source_gid in this_source_gids:
                             mu = self.connection_weights_mean[target_pop_name][source_pop_name]
                             sigma_factor = self.connection_weight_sigma_factors[target_pop_name][source_pop_name]
                             this_weight = self.local_random.gauss(mu, mu * sigma_factor)
                             while this_weight <= 0.:
                                 this_weight = self.local_random.gauss(mu, mu * sigma_factor)
-                            this_syn, this_nc = target_cell.append_connection(
-                                self.pc, syn_type, source_gid, delay=self.delay, weight=this_weight,
-                                syn_mech_names=self.syn_mech_names, syn_mech_param_rules=self.syn_mech_param_rules,
+                            this_syn, this_nc = append_connection(
+                                target_cell, self.pc, source_pop_name, syn_type, source_gid, delay=self.delay,
+                                weight=this_weight, syn_mech_names=self.syn_mech_names,
+                                syn_mech_param_rules=self.syn_mech_param_rules,
                                 syn_mech_param_defaults=self.syn_mech_param_defaults[target_pop_name][source_pop_name],
                                 **self.syn_mech_params[target_pop_name][source_pop_name])
                             self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid].append(this_nc)
                         if self.verbose > 1:
                             print('SimpleNetwork.connect_cells_uniform: rank: %i; target: %s gid: %i; syn_type: %s; '
                                   'source: %s; syn_count: %i' %
-                                  (rank, target_pop_name, target_gid, source_pop_name, syn_type, this_syn_count))
+                                  (rank, target_pop_name, target_gid, syn_type, source_pop_name, this_syn_count))
 
     def connect_cells_gaussian(self, pop_axon_extents, pop_cell_positions):
         """
@@ -356,7 +311,7 @@ class SimpleNetwork(object):
                         if self.verbose > 1:
                             print('SimpleNetwork.connect_cells_gaussian: rank: %i; target: %s gid: %i; syn_type: %s; '
                                   'source: %s; syn_count: %i' %
-                                  (rank, target_pop_name, target_gid, source_pop_name, syn_type, this_syn_count))
+                                  (rank, target_pop_name, target_gid, syn_type, source_pop_name, this_syn_count))
 
     def visualize_connections(self, pop_cell_positions, n=1):
         for target_pop_name in self.pop_syn_proportions:
@@ -384,26 +339,29 @@ class SimpleNetwork(object):
     def spike_record(self):
         for pop_name in self.cells:
             for gid, cell in self.cells[pop_name].iteritems():
-                if cell.is_art(): continue
                 tvec = h.Vector()
-                nc = cell.connect2target(None)
+                nc = cell.spike_detector
                 nc.record(tvec)
                 self.spikes_dict[pop_name][gid] = tvec
 
     def voltage_record(self):
+        has_cells = False
         self.voltage_tvec = h.Vector()
-        self.voltage_tvec.record(h._ref_t)
         self.voltage_recvec = defaultdict(dict)
         for pop_name in self.cells:
             for gid, cell in self.cells[pop_name].iteritems():
                 if cell.is_art(): continue
+                if not has_cells:
+                    self.voltage_tvec.record(h._ref_t)
+                    has_cells = True
                 rec = h.Vector()
                 rec.record(getattr(cell.sec(.5), '_ref_v'))
                 self.voltage_recvec[pop_name][gid] = rec
 
     def run(self):
-        self.pc.set_maxstep(10)
-        h.stdinit()
+        h.celsius = 35.  # degrees C
+        self.pc.set_maxstep(10.)
+        # h.stdinit()
         h.dt = self.dt
         h.finitialize(self.v_init)
         self.pc.psolve(self.tstop)
@@ -413,16 +371,22 @@ class SimpleNetwork(object):
         for pop_name in self.spikes_dict:
             spikes_dict[pop_name] = dict()
             for gid, spike_train in self.spikes_dict[pop_name].iteritems():
-                spike_train_array = np.array(spike_train)
+                spike_train_array = np.array(spike_train, dtype='float32')
                 indexes = np.where(spike_train_array >= self.equilibrate)[0]
                 if len(indexes) > 0:
                     spike_train_array = np.subtract(spike_train_array[indexes], self.equilibrate)
+                else:
+                    spike_train_array = np.array([], dtype='float32')
                 spikes_dict[pop_name][gid] = spike_train_array
         return spikes_dict
 
     def get_voltage_rec_dict(self):
         tvec_array = np.array(self.voltage_tvec)
-        start_index = np.where(tvec_array >= self.equilibrate)[0][0]
+        start_index = np.where(tvec_array >= self.equilibrate)[0]
+        if len(start_index) > 0:
+            start_index = start_index[0]
+        else:
+            return dict(), tvec_array
         voltage_rec_dict = dict()
         for pop_name in self.voltage_recvec:
             voltage_rec_dict[pop_name] = dict()
@@ -451,6 +415,71 @@ class SimpleNetwork(object):
                             weights[target_pop_name][target_gid][source_pop_name][source_gid] = 0.
 
         return weights
+
+
+def config_connection(syn_type, syn=None, nc=None, delay=None, syn_mech_names=None, syn_mech_param_rules=None,
+                      **syn_mech_params):
+    """
+    :param syn_type: str
+    :param syn: NEURON point process object
+    :param nc: NEURON netcon object
+    :param delay: float
+    :param syn_mech_names: dict
+    :param syn_mech_param_rules: dict
+    :param syn_mech_params: dict
+    """
+    if syn is None and nc is None:
+        raise RuntimeError('config_connection: must provide at least one: synaptic point process or netcon object')
+    if nc is not None and delay is not None:
+        nc.delay = delay
+    if syn_mech_names is None:
+        syn_mech_names = default_syn_mech_names
+    syn_mech_name = syn_mech_names[syn_type]
+    if syn_mech_param_rules is None:
+        syn_mech_param_rules = default_syn_mech_param_rules
+    for param_name in syn_mech_params:
+        if param_name in syn_mech_param_rules[syn_mech_name]['mech_params'] and syn is not None:
+            setattr(syn, param_name, syn_mech_params[param_name])
+        elif param_name in syn_mech_param_rules[syn_mech_name]['netcon_params'] and nc is not None:
+            index = syn_mech_param_rules[syn_mech_name]['netcon_params'][param_name]
+            nc.weight[index] = syn_mech_params[param_name]
+
+
+def append_connection(cell, pc, source_pop_name, syn_type, source_gid, delay=None, syn_mech_names=None,
+                      syn_mech_param_rules=None, syn_mech_param_defaults=None, **kwargs):
+    """
+
+    :param cell: e.g. :class:'IzhiCell', :class:'MinimalCell'
+    :param pc: :class:'h.ParallelContext'
+    :param source_pop_name: str
+    :param syn_type: str
+    :param source_gid: int
+    :param delay: float
+    :param syn_mech_names: dict
+    :param syn_mech_param_rules: nested dict
+    :param syn_mech_param_defaults: nested dict
+    :param kwargs: dict
+
+    """
+    if syn_mech_names is None:
+        syn_mech_names = default_syn_mech_names
+    syn_mech_name = syn_mech_names[syn_type]
+    if syn_mech_param_defaults is None:
+        syn_mech_params = dict(default_syn_type_mech_params[syn_type])
+    else:
+        syn_mech_params = dict(syn_mech_param_defaults)
+    syn_mech_params.update(kwargs)
+    if syn_type in cell.syns and source_pop_name in cell.syns[syn_type]:
+        syn = cell.syns[syn_type][source_pop_name]
+    else:
+        syn = getattr(h, syn_mech_name)(cell.sec(0.5))
+        cell.syns[syn_type][source_pop_name] = syn
+
+    nc = pc.gid_connect(source_gid, syn)
+    config_connection(syn_type, syn=syn, nc=nc, delay=delay, syn_mech_names=syn_mech_names,
+                      syn_mech_param_rules=syn_mech_param_rules, **syn_mech_params)
+
+    return syn, nc
 
 
 class IzhiCell(object):
@@ -483,71 +512,37 @@ class IzhiCell(object):
             setattr(self.izh, cell_type_param, getattr(izhi_cell_type_param_dict[self.cell_type], cell_type_param))
 
         self.sec.cm = self.base_cm * self.izh.C
-        self.syns = dict()
+        self.syns = defaultdict(dict)
+        self.spike_detector = self.connect2target()
 
-    def config_connection(self, syn_type, syn=None, nc=None, delay=None, syn_mech_names=None,
-                          syn_mech_param_rules=None, **syn_mech_params):
-        """
-        :param syn_type: str
-        :param syn: NEURON point process object
-        :param nc: NEURON netcon object
-        :param delay: float
-        :param syn_mech_names: dict
-        :param syn_mech_param_rules: dict
-        :param syn_mech_params: dict
-        """
-        if syn is None and nc is None:
-            raise RuntimeError('IzhiCell.config_connection: must provide at least one: synaptic point process or '
-                               'netcon object')
-        if nc is not None and delay is not None:
-            nc.delay = delay
-        if syn_mech_names is None:
-            syn_mech_names = default_syn_mech_names
-        syn_mech_name = syn_mech_names[syn_type]
-        if syn_mech_param_rules is None:
-            syn_mech_param_rules = default_syn_mech_param_rules
-        for param_name in syn_mech_params:
-            if param_name in syn_mech_param_rules[syn_mech_name]['mech_params'] and syn is not None:
-                setattr(syn, param_name, syn_mech_params[param_name])
-            elif param_name in syn_mech_param_rules[syn_mech_name]['netcon_params'] and nc is not None:
-                index = syn_mech_param_rules[syn_mech_name]['netcon_params'][param_name]
-                nc.weight[index] = syn_mech_params[param_name]
+    def connect2target(self, target=None):
+        nc = h.NetCon(self.sec(1)._ref_v, target, sec=self.sec)
+        nc.threshold = izhi_cell_type_param_dict[self.cell_type].vpeak - 1.
+        return nc
 
-    def append_connection(self, pc, syn_type, source_gid, delay=None, syn_mech_names=None, syn_mech_param_rules=None,
-                          syn_mech_param_defaults=None, **kwargs):
+    def is_art(self):
+        return 0
+
+
+class MinimalCell(object):
+    def __init__(self, pop_name, gid):
         """
 
-        :param pc: :class:'h.ParallelContext'
-        :param syn_type: str
-        :param source_gid: int
-        :param delay: float
-        :param syn_mech_names: dict
-        :param syn_mech_param_rules: nested dict
-        :param syn_mech_param_defaults: nested dict
-        :param kwargs: dict
-
+        :param pop_name: str
+        :param gid: int
         """
-        if syn_mech_names is None:
-            syn_mech_names = default_syn_mech_names
-        syn_mech_name = syn_mech_names[syn_type]
-        if syn_mech_param_defaults is None:
-            syn_mech_params = dict(default_syn_type_mech_params[syn_type])
-        else:
-            syn_mech_params = dict(syn_mech_param_defaults)
-        syn_mech_params.update(kwargs)
-        if syn_type in self.syns:
-            syn = self.syns[syn_type]
-        else:
-            syn = getattr(h, syn_mech_name)(self.sec(0.5))
-            self.syns[syn_type] = syn
+        self.pop_name = pop_name
+        self.gid = gid
+        self.name = '%s%s' % (pop_name, gid)
+        self.sec = h.Section(cell=self)
+        self.sec.L, self.sec.diam = 10., 10.
+        self.sec.cm = 31.831
+        self.sec.insert('pas')
+        self.sec(0.5).e_pas = -65.  # mv
+        self.syns = defaultdict(dict)
+        self.spike_detector = self.connect2target()
 
-        nc = pc.gid_connect(source_gid, syn)
-        self.config_connection(syn_type, syn=syn, nc=nc, delay=delay, syn_mech_names=syn_mech_names,
-                               syn_mech_param_rules=syn_mech_param_rules, **syn_mech_params)
-
-        return syn, nc
-
-    def connect2target(self, target):
+    def connect2target(self, target=None):
         nc = h.NetCon(self.sec(1)._ref_v, target, sec=self.sec)
         nc.threshold = izhi_cell_type_param_dict[self.cell_type].vpeak
         return nc
@@ -567,9 +562,10 @@ class FFCell(object):
         self.gid = gid
         self.name = '%s%s' % (pop_name, gid)
         self.vs = h.VecStim()
+        self.spike_detector = self.connect2target()
         self.spike_train = []
 
-    def connect2target(self, target):
+    def connect2target(self, target=None):
         nc = h.NetCon(self.vs, target)
         return nc
 
@@ -820,7 +816,7 @@ def PSTI(f, power, quantile=0.25, band=None, debug=False):
                             bandwidth
     if top_val == 0.:
         return 0.
-    print len(top_indexes)
+
     if len(top_indexes) <= 1:
         top_f_norm_std = 0.
     else:
@@ -1189,4 +1185,3 @@ def plot_firing_rate_heatmaps(firing_rates_dict, t, pop_names=None):
         clean_axes(axes)
         fig.tight_layout()
         fig.show()
-    plt.show()

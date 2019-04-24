@@ -83,8 +83,8 @@ def config_worker():
 
 
 def init_context():
-    pop_sizes = {'FF': 1000, 'E': 100, 'I': 100}
-    pop_syn_counts = {'E': 350, 'I': 350}  # {'target_pop_name': int}
+    pop_sizes = {'FF': 1000, 'E': 200, 'I': 200}
+    pop_syn_counts = {'E': 1000, 'I': 1000}  # {'target_pop_name': int}
     pop_gid_ranges = get_pop_gid_ranges(pop_sizes)
     pop_cell_types = {'FF': 'input', 'E': 'IB', 'I': 'FS'}
 
@@ -190,7 +190,7 @@ def analyze_network_output(network, export=False, plot=False):
     spikes_dict = network.get_spikes_dict()
     voltage_rec_dict, rec_t = network.get_voltage_rec_dict()
     firing_rates_dict = infer_firing_rates(spikes_dict, binned_t, alpha=context.baks_alpha, beta=context.baks_beta,
-                                               pad_dur=context.baks_pad_dur)
+                                           pad_dur=context.baks_pad_dur)
     connection_weights_dict = network.get_connection_weights()
 
     spikes_dict = context.comm.gather(spikes_dict, root=0)
@@ -218,6 +218,13 @@ def analyze_network_output(network, export=False, plot=False):
             plot_voltage_traces(voltage_rec_dict, rec_t, spikes_dict)
             plot_weight_matrix(connection_weights_dict)
             plot_firing_rate_heatmaps(firing_rates_dict, binned_t)
+            plt.show()
+
+        """
+        if context.debug:
+            context.update(locals())
+            return dict()
+        """
 
         result = dict()
 
@@ -276,9 +283,11 @@ def compute_features(x, export=False):
         context.network.visualize_connections(context.pop_cell_positions, n=1)
     current_time = time.time()
 
+
     if context.debug:
         context.update(locals())
         return dict()
+
 
     context.network.run()
     if int(context.pc.id()) == 0 and context.verbose > 0:
