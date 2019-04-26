@@ -85,6 +85,8 @@ def config_worker():
 def init_context():
     pop_sizes = {'FF': 1000, 'E': 100, 'I': 100}
     pop_syn_counts = {'E': 350, 'I': 350}  # {'target_pop_name': int}
+    # pop_sizes = {'FF': 4, 'E': 4, 'I': 4}
+    # pop_syn_counts = {'E': 350, 'I': 350}
     pop_gid_ranges = get_pop_gid_ranges(pop_sizes)
     pop_cell_types = {'FF': 'input', 'E': 'IB', 'I': 'FS'}
 
@@ -130,7 +132,7 @@ def init_context():
         for pop_name in pop_gid_ranges:
             for gid in xrange(pop_gid_ranges[pop_name][0], pop_gid_ranges[pop_name][1]):
                 local_random.seed(context.location_seed + gid)
-                pop_cell_positions[pop_name][gid] = (local_random.random() * 2 - 1 for _ in range(context.spatial_dim))
+                pop_cell_positions[pop_name][gid] = tuple([local_random.random() * 2 - 1 for _ in range(context.spatial_dim)])
 
     context.update(locals())
 

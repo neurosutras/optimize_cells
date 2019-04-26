@@ -1,0 +1,1 @@
+../ampa_kin.mod

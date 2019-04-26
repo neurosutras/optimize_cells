@@ -304,6 +304,37 @@ class SimpleNetwork(object):
                                   'source: %s; syn_count: %i' %
                                   (rank, target_pop_name, target_gid, source_pop_name, syn_type, this_syn_count))
 
+    def get_prob_connection_gaussian(self, target_gid, target_position, spatial_dim, sigma, pop_pos):
+        """
+
+        :param target_gid: int
+        :param source_gid_range: tuple of int
+        :return: array of int
+        """
+        #dist = lambda tpos, spos: np.sqrt(np.sum([(tpos[i] - spos[i]) ** 2. for i in xrange(spatial_dim)]))
+
+        # dist = lambda tdot, tpos, spos: np.sqrt(tdot - 2 * np.dot(tpos, spos) + np.dot(spos, spos.T))
+        # v_dist = np.vectorize(dist, excluded=['tpos', 'tdot'])
+        # tpos = np.array([target_position])
+        # tdot = np.dot(tpos, tpos.T)
+        # distances = v_dist(tdot, tpos, np.array(pop_pos.values()))
+        # p_connection = np.exp(-np.power((distances / sigma), 2))
+        tpos = np.array([target_position])
+        sourcepos = np.array(pop_pos.values())
+        print(sourcepos.shape)
+        p_connection = np.sqrt(np.dot(tpos, tpos.T) - 2 * np.dot(tpos, sourcepos.T) + np.dot(sourcepos, sourcepos.T)).diagonal().copy()
+        print(p_connection.shape)
+        if target_gid in pop_pos.keys():
+            p_connection[pop_pos.keys().index(target_gid)] = 0
+        print(p_connection)
+        # p_connection = [np.exp(-(dist(target_position, pop_pos[source_gid], target_gid, source_gid) / sigma)**2) \
+        # if source_gid != target_gid else 0 for source_gid in pop_pos]
+        #p_connection = np.ones(source_gid_range[1]-source_gid_range[0], dtype='float32')
+#         if source_gid_range[0] <= target_gid < source_gid_range[1]:
+#             p_connection[target_gid-source_gid_range[0]] = 0.
+        p_connection /= np.sum(p_connection)
+        return p_connection
+
     def connect_cells_gaussian(self, pop_axon_extents, pop_cell_positions):
         """
         :param pop_axon_extents: dict; full floor width of gaussian; {pop_name: float}
@@ -323,24 +354,30 @@ class SimpleNetwork(object):
                         p_syn_count = self.pop_syn_proportions[target_pop_name][syn_type][source_pop_name]
                         this_syn_count = self.local_np_random.binomial(total_syn_count, p_syn_count)
                         presyn_probs = []
-                        for source_gid in xrange(self.pop_gid_ranges[source_pop_name][0],
-                                                self.pop_gid_ranges[source_pop_name][1]):
-                            if source_gid == target_gid:
-                                continue
-                            source_position = pop_cell_positions[source_pop_name][source_gid]
-                            dist = np.sqrt(np.sum([(target_position[i] - source_position[i]) ** 2.
-                                                   for i in xrange(spatial_dim)]))
-                            sigma = pop_axon_extents[source_pop_name]
-                            # if dist > sigma: # or some factor of sigma
-                            #     continue
-                            presyn_probs.append((source_gid, 1./(np.sqrt(2 * np.pi * sigma**2)) * (np.e ** (-(dist ** 2) / (2 * sigma**2)))))
-                        presyn_probs = np.array(presyn_probs)
-                        presyn_probs[:, 1] /= np.sum(presyn_probs[:, 1])
-                        counts = self.local_np_random.multinomial(this_syn_count, presyn_probs[:, 1])
-                        presyn_probs[:, 1] = counts
-                        idxs = []
-                        for i in range(len(presyn_probs)):
-                            idxs += [presyn_probs[i][0]] * int(presyn_probs[i][1])
+                        sigma = pop_axon_extents[source_pop_name] / (3 * np.sqrt(2))
+#                         for source_gid in xrange(self.pop_gid_ranges[source_pop_name][0],
+#                                                 self.pop_gid_ranges[source_pop_name][1]):
+#                             if source_gid == target_gid:
+#                                 continue
+#                             source_position = pop_cell_positions[source_pop_name][source_gid]
+#                             dist = np.sqrt(np.sum([(target_position[i] - source_position[i]) ** 2.
+#                                                    for i in xrange(spatial_dim)]))
+
+#                             # if dist > sigma: # or some factor of sigma
+#                             #     continue
+#                             presyn_probs.append((source_gid, 1./(np.sqrt(2 * np.pi * sigma**2)) * (np.exp(-(dist ** 2) / (2 * sigma**2)))))
+                        # presyn_probs = [(1./(np.sqrt(2 * np.pi * sigma**2)) * (np.exp(-(np.sqrt(np.sum([(target_position[i] - pop_cell_positions[source_pop_name][source_gid][i]) ** 2. for i in xrange(spatial_dim)])) ** 2) / (2 * sigma**2))) if source_gid != target_gid else 0) for source_gid in xrange(self.pop_gid_ranges[source_pop_name][0], self.pop_gid_ranges[source_pop_name][1])]
+                        # presyn_probs /= np.sum(presyn_probs)
+                        presyn_probs = self.get_prob_connection_gaussian(target_gid, target_position, spatial_dim, sigma, pop_cell_positions[source_pop_name])
+#                         presyn_probs = np.array(presyn_probs)
+#                         presyn_probs[:, 1] /= np.sum(presyn_probs[:, 1])
+#                         counts = self.local_np_random.multinomial(this_syn_count, presyn_probs[:, 1])
+#                         presyn_probs[:, 1] = counts
+#                         idxs = []
+#                         for i in range(len(presyn_probs)):
+#                             idxs += [presyn_probs[i][0]] * int(presyn_probs[i][1])
+                        #idxs = self.local_np_random.choice(xrange(self.pop_gid_ranges[source_pop_name][0], self.pop_gid_ranges[source_pop_name][1]), size=this_syn_count, replace=True, p=presyn_probs)
+                        idxs = self.local_np_random.choice(pop_cell_positions[source_pop_name].keys(), size=this_syn_count, replace=True, p=presyn_probs)
                         for source_gid in idxs:
                             mu = self.connection_weights_mean[target_pop_name][source_pop_name]
                             sigma_factor = self.connection_weight_sigma_factors[target_pop_name][source_pop_name]
