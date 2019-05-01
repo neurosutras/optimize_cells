@@ -283,11 +283,9 @@ def compute_features(x, export=False):
         context.network.visualize_connections(context.pop_cell_positions, n=1)
     current_time = time.time()
 
-
     if context.debug:
         context.update(locals())
         return dict()
-
 
     context.network.run()
     if int(context.pc.id()) == 0 and context.verbose > 0:
