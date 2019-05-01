@@ -777,7 +777,7 @@ def get_butter_bandpass_filter(filter_band, sampling_rate, order, filter_label='
     return sos
 
 
-def PSTI(f, power, quantile=0.25, band=None, debug=False):
+def PSTI(f, power, band=None, debug=False):
     """
     'Power spectral tuning index'. Signal and noise partitioned as a quantile of the power distribution. Standard
     deviation in the frequency domain is normalized to the bandwidth. Resulting frequency tuning index is proportional
@@ -785,52 +785,62 @@ def PSTI(f, power, quantile=0.25, band=None, debug=False):
     frequency domain.
     :param f: array of float; frequency (Hz)
     :param power: array of float; power spectral density (units^2/Hz)
-    :param quantile: float in (0., 0.5]
     :param band: tuple of float
     :param debug: bool
     :return: float
     """
-    if not 0. < quantile <= 0.5:
-        raise ValueError('PSTI: extrema quantile must be between 0 and 0.5')
     if band is None:
         band = (np.min(f), np.max(f))
-    f_indexes = np.where((f >= band[0]) & (f <= band[1]))[0]
-    if len(f_indexes) == 0:
+    band_indexes = np.where((f >= band[0]) & (f <= band[1]))[0]
+    if debug:
+        print('band: %s; len(f_indexes): %i' % (str(band), len(band_indexes)))
+    if len(band_indexes) == 0:
         raise ValueError('PSTI: sample does not contain specified band')
-    power_std = np.std(power[f_indexes])
+    power_std = np.std(power[band_indexes])
     if power_std == 0.:
         return 0.
     bandwidth = band[1] - band[0]
-    norm_power = np.subtract(power[f_indexes], np.min(power[f_indexes]))
-    if np.max(norm_power) == 0.:
-        return 0.
-    norm_power /= np.max(norm_power)
-    bottom_indexes = np.where(norm_power <= quantile)[0]
-    top_indexes = np.where(norm_power >= (1. - quantile))[0]
-    if len(bottom_indexes) == 0 or len(top_indexes) == 0:
-        raise ValueError('PSTI: power extrema not well-defined')
-    bottom_val = np.mean(power[f_indexes][bottom_indexes])
-    top_val = np.mean(power[f_indexes][top_indexes])
-
-    if bottom_val == 0. or len(bottom_indexes) == 1:
-        bottom_f_norm_std = 0.
-    else:
-        bottom_f_norm_std = np.sqrt(np.cov(f[f_indexes][bottom_indexes], aweights=power[f_indexes][bottom_indexes])) / \
-                            bandwidth
-    if top_val == 0.:
+    min_power = np.min(power[band_indexes])
+    if min_power < 0.:
+        raise ValueError('PTSI: power density array must be non-negative')
+    if np.max(power[band_indexes]) - min_power == 0.:
         return 0.
 
-    if len(top_indexes) == 1:
-        top_f_norm_std = 0.
+    left_width_index, right_width_index = get_mass_index(power[band_indexes], 0.25), \
+                                          get_mass_index(power[band_indexes], 0.75)
+    if debug:
+        print('left_width_index: %i, right_width_index: %i' % (left_width_index, right_width_index))
+
+    norm_f_signal_width = (f[band_indexes][right_width_index] - f[band_indexes][left_width_index]) / bandwidth
+    signal_indexes = np.arange(left_width_index, right_width_index, 1)
+    signal_mean = np.mean(power[band_indexes][signal_indexes])
+    if signal_mean == 0.:
+        return 0.
+
+    if len(signal_indexes) == 1:
+        signal_std = 0.
     else:
-        top_f_norm_std = np.sqrt(np.cov(f[f_indexes][top_indexes], aweights=power[f_indexes][top_indexes])) / bandwidth
+        signal_std = np.std(power[band_indexes][signal_indexes])
 
     if debug:
-        print 'delta_power: %.5f; f_norm_std: bottom: %.5f, top: %.5f' % \
-              (top_val - bottom_val, bottom_f_norm_std, top_f_norm_std)
-    if np.isnan(top_f_norm_std) or (bottom_f_norm_std + top_f_norm_std == 0.):
+        print('len(signal_indexes): %i; signal_mean: %.5f' % (len(signal_indexes), signal_mean))
+
+    noise_indexes = np.delete(range(len(band_indexes)), range(left_width_index, right_width_index, 1))
+    noise_mean = np.mean(power[band_indexes][noise_indexes])
+    if debug:
+        print('len(noise_indexes): %i; noise_mean: %.5f' % (len(noise_indexes), noise_mean))
+
+    if noise_mean == 0. or len(noise_indexes) == 1:
+        noise_std = 0.
+    else:
+        noise_std = np.std(power[band_indexes][noise_indexes])
+
+    if debug:
+        print 'delta_power: %.5f; norm_f_signal_width: %.5f, signal_std: %.5f, noise_std: %.5f' % \
+              (signal_mean - noise_mean, norm_f_signal_width, signal_std, noise_std)
+    if np.isnan(signal_std) or (signal_std + noise_std == 0.) or (norm_f_signal_width == 0.):
         return np.inf
-    this_PSTI = (top_val - bottom_val) / (top_val + bottom_val) / (bottom_f_norm_std + top_f_norm_std)
+    this_PSTI = (signal_mean - noise_mean) / (signal_mean + noise_mean) / (signal_std + noise_std) / norm_f_signal_width
     return this_PSTI
 
 
@@ -868,12 +878,13 @@ def get_bandpass_filtered_signal_stats(signal, t, sos, filter_band, signal_label
     padded_envelope = np.abs(hilbert(filtered_padded_signal))
     envelope = padded_envelope[pad_len:-pad_len]
     f, power = periodogram(filtered_signal, fs=1000./dt)
-    com_index = get_center_of_mass_index(power)
+    com_index = get_mass_index(power, 0.5)
     if com_index is None:
         centroid_freq = 0.
+        freq_tuning_index = 0.
     else:
         centroid_freq = f[com_index]
-    freq_tuning_index = PSTI(f, power, band=filter_band)
+        freq_tuning_index = PSTI(f, power, band=filter_band)
 
     mean_envelope = np.mean(envelope)
     mean_signal = np.mean(signal)
@@ -996,14 +1007,17 @@ def plot_heatmap_from_matrix(data, xticks=None, xtick_labels=None, yticks=None, 
              rotation_mode="anchor")
 
 
-def get_center_of_mass_index(signal, subtract_min=True):
+def get_mass_index(signal, fraction=0.5, subtract_min=True):
     """
     Return the index of the center of mass of a signal, or None if the signal is mean zero. By default searches for
     area above the signal minimum.
-    :param signal:
+    :param signal: array
+    :param fraction: float in [0, 1]
     :param subtract_min: bool
     :return: int
     """
+    if fraction < 0. or fraction > 1.:
+        raise ValueError('get_mass_index: value of mass fraction must be between 0 and 1')
     if subtract_min:
         this_signal = np.subtract(signal, np.min(signal))
     else:
@@ -1012,7 +1026,7 @@ def get_center_of_mass_index(signal, subtract_min=True):
     if cumsum[-1] == 0.:
         return None
     normalized_cumsum = cumsum / cumsum[-1]
-    return np.argwhere(normalized_cumsum >= 0.5)[0][0]
+    return np.argwhere(normalized_cumsum >= fraction)[0][0]
 
 
 def get_mirror_padded_signal(signal, pad_len):

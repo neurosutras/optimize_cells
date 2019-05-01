@@ -102,7 +102,6 @@ def init_context():
     syn_mech_params['E']['I']['g_unit'] = 0.0005275
 
     input_pop_mean_rates = defaultdict(dict)
-    input_pop_peak_rates = defaultdict(dict)
     input_pop_fraction_active = defaultdict(dict)
     if 'FF_mean_rate' not in context():
         raise RuntimeError('optimize_simple_network: missing required kwarg: FF_mean_rate')
@@ -131,7 +130,8 @@ def init_context():
         for pop_name in pop_gid_ranges:
             for gid in xrange(pop_gid_ranges[pop_name][0], pop_gid_ranges[pop_name][1]):
                 local_random.seed(context.location_seed + gid)
-                pop_cell_positions[pop_name][gid] = ([local_random.random() * 2 - 1 for _ in range(context.spatial_dim)])
+                pop_cell_positions[pop_name][gid] = \
+                    tuple([local_random.random() * 2 - 1 for _ in range(context.spatial_dim)])
 
     context.update(locals())
 
@@ -177,8 +177,6 @@ def update_context(x, local_context=None):
     local_context.pop_syn_proportions['I']['I']['I'] = 1. - x_dict['I_E_syn_proportion']
 
     local_context.input_pop_mean_rates['FF'] = local_context.FF_mean_rate
-    local_context.input_pop_peak_rates['FF'] = local_context.FF_peak_rate
-    local_context.floorwidth_percentage = x_dict['floorwidth_percentage']
 
 
 def analyze_network_output(network, export=False, plot=False):
@@ -272,20 +270,14 @@ def compute_features(x, export=False):
         pop_cell_types=context.pop_cell_types, pop_syn_counts=context.pop_syn_counts,
         pop_syn_proportions=context.pop_syn_proportions, connection_weights_mean=context.connection_weights_mean,
         connection_weight_sigma_factors=context.connection_weight_sigma_factors,
-        input_pop_mean_rates=context.input_pop_mean_rates, input_pop_peak_rates=context.input_pop_peak_rates,
-        structured=(context.distribution is 'structured'), syn_mech_params=context.syn_mech_params,
-        floorwidth_percentage=context.floorwidth_percentage, tstop=context.tstop, equilibrate=context.equilibrate,
-        dt=context.dt, delay=context.delay, connection_seed=context.connection_seed,spikes_seed=context.spikes_seed,
-        verbose=context.verbose, debug=context.debug)
+        input_pop_mean_rates=context.input_pop_mean_rates, syn_mech_params=context.syn_mech_params, tstop=context.tstop,
+        equilibrate=context.equilibrate, dt=context.dt, delay=context.delay, connection_seed=context.connection_seed,
+        spikes_seed=context.spikes_seed, verbose=context.verbose, debug=context.debug)
 
-    if context.distribution is 'log_normal':
-        log_normal = True
-    else:
-        log_normal = False
     if context.connectivity_type == 'uniform':
-        context.network.connect_cells_uniform(log_normal)
+        context.network.connect_cells_uniform()
     elif context.connectivity_type == 'gaussian':
-        context.network.connect_cells_gaussian(context.pop_axon_extents, context.pop_cell_positions, log_normal)
+        context.network.connect_cells_gaussian(context.pop_axon_extents, context.pop_cell_positions)
     if int(context.pc.id()) == 0 and context.verbose > 0:
         print('NETWORK BUILD RUNTIME: %.2f s' % (time.time() - start_time))
     if context.plot and context.connectivity_type == 'gaussian':
