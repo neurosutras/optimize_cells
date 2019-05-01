@@ -110,9 +110,3 @@ NET_RECEIVE(weight, g_unit (umho), onset, count, g0, t0 (ms)) {
 	: printf("weight:%g\tg_unit:%g\tonset:%g\tcount:%g\tt:%g\ng0:%.25f\tsyn_onset:%.25f\tg_onset:%.25f\tg_offset:%.25f\n",
 	:	weight, g_unit, onset, count, t, g0, syn_onset, g_onset, g_offset)
 }
-
-FUNCTION trap_negative(val) {
-	if (val < 0.){
-		val = 0.
-    }
-}
