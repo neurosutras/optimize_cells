@@ -65,9 +65,9 @@ class SimpleNetwork(object):
 
     def __init__(self, pc, pop_sizes, pop_gid_ranges, pop_cell_types, pop_syn_counts, pop_syn_proportions,
                  connection_weights_mean, connection_weight_sigma_factors, syn_mech_params, syn_mech_names=None,
-                 syn_mech_param_rules=None, syn_mech_param_defaults=None, input_pop_mean_rates=None, tstop=1000.,
-                 equilibrate=250., dt=0.025, delay=1., connection_seed=0, spikes_seed=100000, v_init=-65., verbose=1,
-                 debug=False):
+                 syn_mech_param_rules=None, syn_mech_param_defaults=None, input_pop_mean_rates=None,
+                 input_pop_peak_rates=None, structured=None, floorwidth_percentage=.1, tstop=1000., equilibrate=250.,
+                 dt=0.025, delay=1., connection_seed=0, spikes_seed=100000, v_init=-65., verbose=1, debug=False):
         """
 
         :param pc: ParallelContext object
@@ -134,11 +134,15 @@ class SimpleNetwork(object):
 
         self.spikes_dict = defaultdict(dict)
         self.input_pop_mean_rates = input_pop_mean_rates
+        self.input_pop_peak_rates = input_pop_peak_rates
 
         self.local_random = random.Random()
         self.local_np_random = np.random.RandomState()
         self.connection_seed = connection_seed
         self.spikes_seed = spikes_seed
+        self.structured = structured
+        self.FF_gaussian_sigma = floorwidth_percentage * tstop / 3. / np.sqrt(2)
+        self.FF_floorwidth = tstop * floorwidth_percentage
 
         self.cells = defaultdict(dict)
         self.mkcells()
@@ -151,6 +155,8 @@ class SimpleNetwork(object):
     def mkcells(self):
         rank = int(self.pc.id())
         nhost = int(self.pc.nhost())
+        gauss_function = gaussian_activity(
+            self.FF_floorwidth, self.dt, self.input_pop_peak_rates['FF'], self.FF_gaussian_sigma, self.FF_floorwidth / 2.)
 
         for pop_name, (gid_start, gid_stop) in self.pop_gid_ranges.iteritems():
             cell_type = self.pop_cell_types[pop_name]
@@ -163,9 +169,13 @@ class SimpleNetwork(object):
                         cell = FFCell(pop_name, gid)
                         if self.input_pop_mean_rates is not None and pop_name in self.input_pop_mean_rates:
                             self.local_random.seed(self.spikes_seed + gid)
-                            this_spike_train = get_inhom_poisson_spike_times_by_thinning(
-                                [self.input_pop_mean_rates[pop_name], self.input_pop_mean_rates[pop_name]],
-                                [0., float(self.tstop)], dt=self.dt, generator=self.local_random)
+                            if self.structured:
+                                this_spike_train = cell.structured_activity(self.dt, self.tstop, self.local_random,
+                                    self.pop_sizes['FF'], self.FF_floorwidth, self.pop_gid_ranges['FF'], gauss_function)
+                            else:
+                                this_spike_train = get_inhom_poisson_spike_times_by_thinning(
+                                    [self.input_pop_mean_rates[pop_name], self.input_pop_mean_rates[pop_name]],
+                                    [0., float(self.tstop)], dt=self.dt, generator=self.local_random)
                             cell.load_vecstim(this_spike_train)
                             # self.spikes_dict[pop_name][gid] = np.array(this_spike_train)
                     elif cell_type == 'minimal':
@@ -220,7 +230,7 @@ class SimpleNetwork(object):
         p_connection /= p_sum
         return p_connection
 
-    def connect_cells_uniform(self, **kwargs):
+    def connect_cells_uniform(self, log_normal=False, **kwargs):
         rank = int(self.pc.id())
         for target_pop_name in self.pop_syn_proportions:
             total_syn_count = self.pop_syn_counts[target_pop_name]
@@ -247,6 +257,7 @@ class SimpleNetwork(object):
                             this_weight = self.local_random.gauss(mu, mu * sigma_factor)
                             while this_weight <= 0.:
                                 this_weight = self.local_random.gauss(mu, mu * sigma_factor)
+                            if log_normal: this_weight = np.exp(this_weight)
                             this_syn, this_nc = append_connection(
                                 target_cell, self.pc, source_pop_name, syn_type, source_gid, delay=self.delay,
                                 weight=this_weight, syn_mech_names=self.syn_mech_names,
@@ -259,7 +270,7 @@ class SimpleNetwork(object):
                                   'source: %s; syn_count: %i' %
                                   (rank, target_pop_name, target_gid, syn_type, source_pop_name, this_syn_count))
 
-    def connect_cells_gaussian(self, pop_axon_extents, pop_cell_positions):
+    def connect_cells_gaussian(self, pop_axon_extents, pop_cell_positions, log_normal=False):
         """
         :param pop_axon_extents: dict; full floor width of gaussian; {pop_name: float}
         :param pop_cell_positions: nested dict; {pop_name: {gid: array} }
@@ -302,6 +313,7 @@ class SimpleNetwork(object):
                             this_weight = self.local_random.gauss(mu, mu * sigma_factor)
                             while this_weight <= 0.:
                                     this_weight = self.local_random.gauss(mu, mu * sigma_factor)
+                            if log_normal: this_weight = np.exp(this_weight)
                             this_syn, this_nc = target_cell.append_connection(
                                 self.pc, syn_type, source_gid, delay=self.delay, weight=this_weight,
                                 syn_mech_names=self.syn_mech_names, syn_mech_param_rules=self.syn_mech_param_rules,
@@ -575,6 +587,24 @@ class FFCell(object):
 
     def is_art(self):
         return 1
+
+    def structured_activity(self, dt, tstop, local_random, FF_ncell, floor_width, rng, gauss_function):
+        FF_id = self.gid - rng[0]
+        start_time = tstop / (FF_ncell + 1) * FF_id
+        active_spike_train = get_inhom_poisson_spike_times_by_thinning(gauss_function,
+            np.linspace(start_time, start_time + floor_width, int(floor_width / dt)), dt=dt, generator=local_random)
+        self.spike_train = active_spike_train
+        return active_spike_train
+
+
+
+def gaussian_activity(dur, dt, peak_rate, std, mu):
+    x = np.linspace(0, dur, int(dur/dt))
+    term1 = -.5 * ((x - mu)/std) ** 2
+    term2 = std * ((2. * np.pi) ** .5)
+    g = np.divide(np.exp(term1), term2)
+    g *= peak_rate / g.max()
+    return g
 
 
 def get_pop_gid_ranges(pop_sizes):
@@ -1188,3 +1218,4 @@ def plot_firing_rate_heatmaps(firing_rates_dict, t, pop_names=None):
         clean_axes(axes)
         fig.tight_layout()
         fig.show()
+    plt.show()
