@@ -59,9 +59,6 @@ bounds:
   I_E_FF_syn_proportion: !!python/tuple
     - 0.01
     - 0.99
-  floorwidth_percentage: !!python/tuple
-    - 0.01
-    - 0.99
 feature_names:
 - E_peak_rate
 - I_peak_rate
@@ -97,9 +94,15 @@ kwargs:
   spikes_seed: 1000000
   location_seed: 2000000
   connectivity_type: uniform
-  distribution: normal
-  FF_mean_rate: 20.  # Hz
-  FF_peak_rate: 35.
+  weight_distribution_type: normal
+  input_types:
+    FF: gaussian
+  input_max_rates:
+    FF: 20.
+  input_min_rates:
+    FF: 0.
+  input_norm_tuning_widths:
+    FF: 0.2
 objective_names:
 - E_peak_rate
 - I_peak_rate
@@ -142,7 +145,6 @@ param_names:
 - E_E_FF_syn_proportion
 - I_E_syn_proportion
 - I_E_FF_syn_proportion
-- floorwidth_percentage
 target_range:
   E_peak_rate: 0.1
   I_peak_rate: 0.1
@@ -202,4 +204,3 @@ x0:
   E_E_FF_syn_proportion: .7
   I_E_syn_proportion: .8
   I_E_FF_syn_proportion: .7
-  floorwidth_percentage: .1

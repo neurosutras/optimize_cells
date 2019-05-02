@@ -65,9 +65,9 @@ class SimpleNetwork(object):
 
     def __init__(self, pc, pop_sizes, pop_gid_ranges, pop_cell_types, pop_syn_counts, pop_syn_proportions,
                  connection_weights_mean, connection_weight_sigma_factors, syn_mech_params, syn_mech_names=None,
-                 syn_mech_param_rules=None, syn_mech_param_defaults=None, input_pop_mean_rates=None,
-                 input_pop_peak_rates=None, structured=None, floorwidth_percentage=.1, tstop=1000., equilibrate=250.,
-                 dt=0.025, delay=1., connection_seed=0, spikes_seed=100000, v_init=-65., verbose=1, debug=False):
+                 syn_mech_param_rules=None, syn_mech_param_defaults=None, input_pop_t=None,
+                 input_pop_firing_rates=None, tstop=1000., equilibrate=250., dt=0.025, delay=1., connection_seed=0,
+                 spikes_seed=100000, v_init=-65., verbose=1, debug=False):
         """
 
         :param pc: ParallelContext object
@@ -85,7 +85,8 @@ class SimpleNetwork(object):
         :param syn_mech_names: dict: {syn_name (str): name of hoc point process (str)}
         :param syn_mech_param_rules: nested dict
         :param syn_mech_param_defaults: nested dict
-        :param input_pop_mean_rates: dict of float: mean firing rate of each input population (Hz)
+        :param input_pop_t: nested dict: {pop_name: array of times (float)}}
+        :param input_pop_firing_rates: nested dict: {pop_name: {gid: array of spike times (ms) (float)}}
         :param tstop: int: simulation duration (ms)
         :param equilibrate: float: simulation equilibration duration (ms)
         :param dt: float: simulation timestep (ms)
@@ -133,16 +134,15 @@ class SimpleNetwork(object):
                             default_syn_type_mech_params[syn_type]
 
         self.spikes_dict = defaultdict(dict)
-        self.input_pop_mean_rates = input_pop_mean_rates
-        self.input_pop_peak_rates = input_pop_peak_rates
+        self.input_pop_t = input_pop_t
+        self.input_pop_firing_rates = input_pop_firing_rates
 
         self.local_random = random.Random()
         self.local_np_random = np.random.RandomState()
         self.connection_seed = connection_seed
         self.spikes_seed = spikes_seed
-        self.structured = structured
-        self.FF_gaussian_sigma = floorwidth_percentage * tstop / 3. / np.sqrt(2)
-        self.FF_floorwidth = tstop * floorwidth_percentage
+
+        # self.FF_gaussian_sigma = floorwidth_percentage * tstop / 3. / np.sqrt(2)
 
         self.cells = defaultdict(dict)
         self.mkcells()
@@ -155,8 +155,8 @@ class SimpleNetwork(object):
     def mkcells(self):
         rank = int(self.pc.id())
         nhost = int(self.pc.nhost())
-        gauss_function = gaussian_activity(
-            self.FF_floorwidth, self.dt, self.input_pop_peak_rates['FF'], self.FF_gaussian_sigma, self.FF_floorwidth / 2.)
+        # gauss_function = gaussian_activity(
+        #    self.FF_floorwidth, self.dt, self.input_pop_peak_rates['FF'], self.FF_gaussian_sigma, self.FF_floorwidth / 2.)
 
         for pop_name, (gid_start, gid_stop) in self.pop_gid_ranges.iteritems():
             cell_type = self.pop_cell_types[pop_name]
@@ -167,17 +167,17 @@ class SimpleNetwork(object):
                         print('SimpleNetwork.mkcells: rank: %i got %s gid: %i' % (rank, pop_name, gid))
                     if cell_type == 'input':
                         cell = FFCell(pop_name, gid)
-                        if self.input_pop_mean_rates is not None and pop_name in self.input_pop_mean_rates:
+                        if self.input_pop_firing_rates is not None and pop_name in self.input_pop_firing_rates and \
+                                gid in self.input_pop_firing_rates[pop_name]:
+                            if self.input_pop_t is None or pop_name not in self.input_pop_t:
+                                raise RuntimeError('mkcells: time base not specified; cannot generate spikes for input '
+                                                   'population: %s' % pop_name)
                             self.local_random.seed(self.spikes_seed + gid)
-                            if self.structured:
-                                this_spike_train = cell.structured_activity(self.dt, self.tstop, self.local_random,
-                                    self.pop_sizes['FF'], self.FF_floorwidth, self.pop_gid_ranges['FF'], gauss_function)
-                            else:
-                                this_spike_train = get_inhom_poisson_spike_times_by_thinning(
-                                    [self.input_pop_mean_rates[pop_name], self.input_pop_mean_rates[pop_name]],
-                                    [0., float(self.tstop)], dt=self.dt, generator=self.local_random)
+                            this_spike_train = \
+                                get_inhom_poisson_spike_times_by_thinning(self.input_pop_firing_rates[pop_name][gid],
+                                                                          self.input_pop_t[pop_name], dt=self.dt,
+                                                                          generator=self.local_random)
                             cell.load_vecstim(this_spike_train)
-                            # self.spikes_dict[pop_name][gid] = np.array(this_spike_train)
                     elif cell_type == 'minimal':
                         cell = MinimalCell(pop_name, gid)
                     elif cell_type in izhi_cell_type_param_dict:
@@ -230,7 +230,39 @@ class SimpleNetwork(object):
         p_connection /= p_sum
         return p_connection
 
-    def connect_cells_uniform(self, log_normal=False, **kwargs):
+    def get_prob_connection_gaussian(self, potential_source_gids, target_gid, source_pop_name, target_pop_name,
+                                     pop_cell_positions, pop_axon_extents):
+        """
+
+        :param potential_source_gids: array of int
+        :param target_gid: int
+        :param source_pop_name: str
+        :param target_pop_name: str
+        :param pop_cell_positions: tuple of float
+        :param pop_axon_extents: float
+        :return: array of float
+        """
+        raise RuntimeError('get_prob_connection_gaussian: not yet implemented')
+        """
+        source_position = pop_cell_positions[source_pop_name][source_gid]
+        dist = np.sqrt(np.sum([(target_position[i] - source_position[i]) ** 2.
+                               for i in xrange(spatial_dim)]))
+        sigma = pop_axon_extents[source_pop_name]
+        # if dist > sigma: # or some factor of sigma
+        #     continue
+        presyn_probs.append(
+            (source_gid, 1. / (np.sqrt(2 * np.pi * sigma ** 2)) * (np.e ** (-(dist ** 2) / (2 * sigma ** 2)))))
+
+        presyn_probs = np.array(presyn_probs)
+        presyn_probs[:, 1] /= np.sum(presyn_probs[:, 1])
+        """
+
+    def connect_cells(self, connectivity_type='uniform', weight_distribution_type='normal', **kwargs):
+        """
+
+        :param connectivity_type: str
+        :param weight_distribution_type: str
+        """
         rank = int(self.pc.id())
         for target_pop_name in self.pop_syn_proportions:
             total_syn_count = self.pop_syn_counts[target_pop_name]
@@ -246,7 +278,12 @@ class SimpleNetwork(object):
                                                           self.pop_gid_ranges[source_pop_name][1], 1)
                         # avoid connections to self
                         potential_source_gids = potential_source_gids[potential_source_gids != target_gid]
-                        p_connection = self.get_prob_connection_uniform(potential_source_gids)
+                        if connectivity_type == 'uniform':
+                            p_connection = self.get_prob_connection_uniform(potential_source_gids)
+                        elif connectivity_type == 'gaussian':
+                            p_connection = \
+                                self.get_prob_connection_gaussian(potential_source_gids, target_gid, source_pop_name,
+                                                                  target_pop_name, **kwargs)
                         if p_connection is None:
                             continue
                         this_source_gids = self.local_np_random.choice(potential_source_gids, size=this_syn_count,
@@ -254,10 +291,16 @@ class SimpleNetwork(object):
                         for source_gid in this_source_gids:
                             mu = self.connection_weights_mean[target_pop_name][source_pop_name]
                             sigma_factor = self.connection_weight_sigma_factors[target_pop_name][source_pop_name]
-                            this_weight = self.local_random.gauss(mu, mu * sigma_factor)
+                            this_weight = 0.
                             while this_weight <= 0.:
-                                this_weight = self.local_random.gauss(mu, mu * sigma_factor)
-                            if log_normal: this_weight = np.exp(this_weight)
+                                if weight_distribution_type == 'normal':
+                                    this_weight = self.local_random.gauss(mu, mu * sigma_factor)
+                                elif weight_distribution_type == 'log-normal':
+                                    raise RuntimeError('connect_cells: log-normal weight distribution not yet '
+                                                       'implemented')
+                                else:
+                                    raise RuntimeError('connect_cells: invalid weight_distribution_type specified: '
+                                                       '%s' % weight_distribution_type)
                             this_syn, this_nc = append_connection(
                                 target_cell, self.pc, source_pop_name, syn_type, source_gid, delay=self.delay,
                                 weight=this_weight, syn_mech_names=self.syn_mech_names,
@@ -267,61 +310,6 @@ class SimpleNetwork(object):
                             self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid].append(this_nc)
                         if self.verbose > 1:
                             print('SimpleNetwork.connect_cells_uniform: rank: %i; target: %s gid: %i; syn_type: %s; '
-                                  'source: %s; syn_count: %i' %
-                                  (rank, target_pop_name, target_gid, syn_type, source_pop_name, this_syn_count))
-
-    def connect_cells_gaussian(self, pop_axon_extents, pop_cell_positions, log_normal=False):
-        """
-        :param pop_axon_extents: dict; full floor width of gaussian; {pop_name: float}
-        :param pop_cell_positions: nested dict; {pop_name: {gid: array} }
-        """
-        rank = int(self.pc.id())
-        for target_pop_name in self.pop_syn_proportions:
-            total_syn_count = self.pop_syn_counts[target_pop_name]
-            for target_gid in self.cells[target_pop_name]:
-                self.local_np_random.seed(self.connection_seed + target_gid)
-                self.local_random.seed(self.connection_seed + target_gid)
-                target_cell = self.cells[target_pop_name][target_gid]
-                target_position = pop_cell_positions[target_pop_name][target_gid]
-                spatial_dim = len(target_position)
-                for syn_type in self.pop_syn_proportions[target_pop_name]:
-                    for source_pop_name in self.pop_syn_proportions[target_pop_name][syn_type]:
-                        p_syn_count = self.pop_syn_proportions[target_pop_name][syn_type][source_pop_name]
-                        this_syn_count = self.local_np_random.binomial(total_syn_count, p_syn_count)
-                        presyn_probs = []
-                        for source_gid in xrange(self.pop_gid_ranges[source_pop_name][0],
-                                                self.pop_gid_ranges[source_pop_name][1]):
-                            if source_gid == target_gid:
-                                continue
-                            source_position = pop_cell_positions[source_pop_name][source_gid]
-                            dist = np.sqrt(np.sum([(target_position[i] - source_position[i]) ** 2.
-                                                   for i in xrange(spatial_dim)]))
-                            sigma = pop_axon_extents[source_pop_name]
-                            # if dist > sigma: # or some factor of sigma
-                            #     continue
-                            presyn_probs.append((source_gid, 1./(np.sqrt(2 * np.pi * sigma**2)) * (np.e ** (-(dist ** 2) / (2 * sigma**2)))))
-                        presyn_probs = np.array(presyn_probs)
-                        presyn_probs[:, 1] /= np.sum(presyn_probs[:, 1])
-                        counts = self.local_np_random.multinomial(this_syn_count, presyn_probs[:, 1])
-                        presyn_probs[:, 1] = counts
-                        idxs = []
-                        for i in range(len(presyn_probs)):
-                            idxs += [presyn_probs[i][0]] * int(presyn_probs[i][1])
-                        for source_gid in idxs:
-                            mu = self.connection_weights_mean[target_pop_name][source_pop_name]
-                            sigma_factor = self.connection_weight_sigma_factors[target_pop_name][source_pop_name]
-                            this_weight = self.local_random.gauss(mu, mu * sigma_factor)
-                            while this_weight <= 0.:
-                                    this_weight = self.local_random.gauss(mu, mu * sigma_factor)
-                            if log_normal: this_weight = np.exp(this_weight)
-                            this_syn, this_nc = target_cell.append_connection(
-                                self.pc, syn_type, source_gid, delay=self.delay, weight=this_weight,
-                                syn_mech_names=self.syn_mech_names, syn_mech_param_rules=self.syn_mech_param_rules,
-                                syn_mech_param_defaults=self.syn_mech_param_defaults[target_pop_name][source_pop_name],
-                                **self.syn_mech_params[target_pop_name][source_pop_name])
-                            self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid].append(this_nc)
-                        if self.verbose > 1:
-                            print('SimpleNetwork.connect_cells_gaussian: rank: %i; target: %s gid: %i; syn_type: %s; '
                                   'source: %s; syn_count: %i' %
                                   (rank, target_pop_name, target_gid, syn_type, source_pop_name, this_syn_count))
 
@@ -807,7 +795,7 @@ def get_butter_bandpass_filter(filter_band, sampling_rate, order, filter_label='
     return sos
 
 
-def PSTI(f, power, quantile=0.25, band=None, debug=False):
+def PSTI(f, power, band=None, verbose=False):
     """
     'Power spectral tuning index'. Signal and noise partitioned as a quantile of the power distribution. Standard
     deviation in the frequency domain is normalized to the bandwidth. Resulting frequency tuning index is proportional
@@ -815,63 +803,71 @@ def PSTI(f, power, quantile=0.25, band=None, debug=False):
     frequency domain.
     :param f: array of float; frequency (Hz)
     :param power: array of float; power spectral density (units^2/Hz)
-    :param quantile: float in (0., 0.5]
     :param band: tuple of float
-    :param debug: bool
+    :param verbose: bool
     :return: float
     """
-    if not 0. < quantile <= 0.5:
-        raise ValueError('PSTI: extrema quantile must be between 0 and 0.5')
     if band is None:
         band = (np.min(f), np.max(f))
-    f_indexes = np.where((f >= band[0]) & (f <= band[1]))[0]
-    if len(f_indexes) == 0:
+    band_indexes = np.where((f >= band[0]) & (f <= band[1]))[0]
+    if len(band_indexes) == 0:
         raise ValueError('PSTI: sample does not contain specified band')
-    power_std = np.std(power[f_indexes])
+    power_std = np.std(power[band_indexes])
     if power_std == 0.:
         return 0.
     bandwidth = band[1] - band[0]
-    norm_power = np.subtract(power[f_indexes], np.min(power[f_indexes]))
-    if np.max(norm_power) == 0.:
-        return 0.
-    norm_power /= np.max(norm_power)
-    bottom_indexes = np.where(norm_power <= quantile)[0]
-    top_indexes = np.where(norm_power >= (1. - quantile))[0]
-    if len(bottom_indexes) == 0 or len(top_indexes) == 0:
-        raise ValueError('PSTI: power extrema not well-defined')
-    bottom_val = np.mean(power[f_indexes][bottom_indexes])
-    top_val = np.mean(power[f_indexes][top_indexes])
-
-    if bottom_val == 0. or len(bottom_indexes) == 1:
-        bottom_f_norm_std = 0.
-    else:
-        bottom_f_norm_std = np.sqrt(np.cov(f[f_indexes][bottom_indexes], aweights=power[f_indexes][bottom_indexes])) / \
-                            bandwidth
-    if top_val == 0.:
+    min_power = np.min(power[band_indexes])
+    if min_power < 0.:
+        raise ValueError('PTSI: power density array must be non-negative')
+    if np.max(power[band_indexes]) - min_power == 0.:
         return 0.
 
-    if len(top_indexes) == 1:
-        top_f_norm_std = 0.
-    else:
-        top_f_norm_std = np.sqrt(np.cov(f[f_indexes][top_indexes], aweights=power[f_indexes][top_indexes])) / bandwidth
+    left_width_index, right_width_index = get_mass_index(power[band_indexes], 0.25), \
+                                          get_mass_index(power[band_indexes], 0.75)
 
-    if debug:
-        print 'delta_power: %.5f; f_norm_std: bottom: %.5f, top: %.5f' % \
-              (top_val - bottom_val, bottom_f_norm_std, top_f_norm_std)
-    if np.isnan(top_f_norm_std) or (bottom_f_norm_std + top_f_norm_std == 0.):
+    signal_indexes = np.arange(left_width_index, right_width_index, 1)
+    if left_width_index == right_width_index:
+        norm_f_signal_width = (f[band_indexes][1] - f[band_indexes][0]) / bandwidth
+        signal_mean = power[band_indexes][left_width_index]
+        noise_indexes = np.delete(range(len(band_indexes)), left_width_index)
+    else:
+        norm_f_signal_width = (f[band_indexes][right_width_index] - f[band_indexes][left_width_index]) / bandwidth
+        signal_mean = np.mean(power[band_indexes][signal_indexes])
+        noise_indexes = np.delete(range(len(band_indexes)), signal_indexes)
+
+    if signal_mean == 0.:
+        return 0.
+
+    if len(signal_indexes) <= 1:
+        signal_std = 0.
+    else:
+        signal_std = np.std(power[band_indexes][signal_indexes])
+
+    noise_mean = np.mean(power[band_indexes][noise_indexes])
+
+    if noise_mean == 0. or len(noise_indexes) <= 1:
+        noise_std = 0.
+    else:
+        noise_std = np.std(power[band_indexes][noise_indexes])
+
+    if verbose:
+        print 'delta_power: %.5f; norm_f_signal_width: %.5f, signal_std: %.5f, noise_std: %.5f' % \
+              (signal_mean - noise_mean, norm_f_signal_width, signal_std, noise_std)
+    if (signal_std + noise_std == 0.) or (norm_f_signal_width == 0.):
         return np.inf
-    this_PSTI = (top_val - bottom_val) / (top_val + bottom_val) / (bottom_f_norm_std + top_f_norm_std)
+    this_PSTI = (signal_mean - noise_mean) / (signal_mean + noise_mean) / (signal_std + noise_std) / norm_f_signal_width
     return this_PSTI
 
 
-def get_bandpass_filtered_signal_stats(signal, t, sos, filter_band, signal_label='', filter_label='', pad=True,
-                                       pad_len=None, plot=False, verbose=False):
+def get_bandpass_filtered_signal_stats(signal, t, sos, filter_band, bins=100, signal_label='', filter_label='',
+                                       pad=True, pad_len=None, plot=False, verbose=False):
     """
 
     :param signal: array
     :param t: array (ms)
     :param sos: array
     :param filter_band: list of float (Hz)
+    :param bins: number of frequency bins to compute in band
     :param signal_label: str
     :param filter_label: str
     :param pad: bool
@@ -897,13 +893,17 @@ def get_bandpass_filtered_signal_stats(signal, t, sos, filter_band, signal_label
     filtered_signal = filtered_padded_signal[pad_len:-pad_len]
     padded_envelope = np.abs(hilbert(filtered_padded_signal))
     envelope = padded_envelope[pad_len:-pad_len]
-    f, power = periodogram(filtered_signal, fs=1000./dt)
-    com_index = get_center_of_mass_index(power)
+    bandwidth = filter_band[1] - filter_band[0]
+    fs = 1000./dt
+    nfft = int(fs * bins / bandwidth)
+    f, power = periodogram(filtered_signal, fs=fs, nfft=nfft)
+    com_index = get_mass_index(power, 0.5)
     if com_index is None:
         centroid_freq = 0.
+        freq_tuning_index = 0.
     else:
         centroid_freq = f[com_index]
-    freq_tuning_index = PSTI(f, power, band=filter_band)
+        freq_tuning_index = PSTI(f, power, band=filter_band, verbose=verbose)
 
     mean_envelope = np.mean(envelope)
     mean_signal = np.mean(signal)
@@ -1026,14 +1026,17 @@ def plot_heatmap_from_matrix(data, xticks=None, xtick_labels=None, yticks=None, 
              rotation_mode="anchor")
 
 
-def get_center_of_mass_index(signal, subtract_min=True):
+def get_mass_index(signal, fraction=0.5, subtract_min=True):
     """
     Return the index of the center of mass of a signal, or None if the signal is mean zero. By default searches for
     area above the signal minimum.
-    :param signal:
+    :param signal: array
+    :param fraction: float in [0, 1]
     :param subtract_min: bool
     :return: int
     """
+    if fraction < 0. or fraction > 1.:
+        raise ValueError('get_mass_index: value of mass fraction must be between 0 and 1')
     if subtract_min:
         this_signal = np.subtract(signal, np.min(signal))
     else:
@@ -1042,7 +1045,7 @@ def get_center_of_mass_index(signal, subtract_min=True):
     if cumsum[-1] == 0.:
         return None
     normalized_cumsum = cumsum / cumsum[-1]
-    return np.argwhere(normalized_cumsum >= 0.5)[0][0]
+    return np.argwhere(normalized_cumsum >= fraction)[0][0]
 
 
 def get_mirror_padded_signal(signal, pad_len):
@@ -1218,4 +1221,3 @@ def plot_firing_rate_heatmaps(firing_rates_dict, t, pop_names=None):
         clean_axes(axes)
         fig.tight_layout()
         fig.show()
-    plt.show()

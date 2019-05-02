@@ -9,7 +9,7 @@ context = Context()
 
 @click.command()
 @click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='config/optimize_simple_network_uniform_connections_config.yaml')
+              default='config/optimize_simple_network_uniform_connections_normal_weights_constant_inputs_config.yaml')
 @click.option("--export", is_flag=True)
 @click.option("--output-dir", type=str, default='data')
 @click.option("--export-file-path", type=str, default=None)
@@ -101,15 +101,9 @@ def init_context():
     syn_mech_params['E']['E']['g_unit'] = 0.0005275
     syn_mech_params['E']['I']['g_unit'] = 0.0005275
 
-    input_pop_mean_rates = defaultdict(dict)
-    input_pop_peak_rates = defaultdict(dict)
-    input_pop_fraction_active = defaultdict(dict)
-    if 'FF_mean_rate' not in context():
-        raise RuntimeError('optimize_simple_network: missing required kwarg: FF_mean_rate')
-
     delay = 1.  # ms
     equilibrate = 250.  # ms
-    tstop = 3000 + equilibrate  # ms
+    tstop = 3000. + equilibrate  # ms
     dt = 0.025
     binned_dt = 1.  # ms
     filter_dt = 1.  # ms
@@ -119,19 +113,67 @@ def init_context():
     baks_pad_dur = 1000.  # ms
     filter_bands = {'Theta': [4., 10.], 'Gamma': [30., 100.]}
 
-    pop_axon_extents = {'FF': 0.3, 'E': 0.3, 'I': 0.3}
-
     local_random = random.Random()
 
+    if context.comm.rank == 0:
+        input_pop_t = dict()
+        input_pop_firing_rates = dict()
+        for pop_name in context.input_types:
+            if pop_name not in pop_cell_types or pop_cell_types[pop_name] != 'input':
+                raise RuntimeError('optimize_simple_network: %s not specified as an input population' % pop_name)
+            if context.input_types[pop_name] == 'constant':
+                try:
+                    this_mean_rate = context.input_mean_rates[pop_name]
+                except:
+                    raise RuntimeError('optimize_simple_network: missing kwarg(s) required to specify %s input population:'
+                                       ' %s' % (context.input_types[pop_name], pop_name))
+                if context.debug:
+                    print('input_mean_rates: %s' % context.input_mean_rates)
+                if pop_name not in input_pop_firing_rates:
+                    input_pop_firing_rates[pop_name] = dict()
+                    input_pop_t[pop_name] = [0., tstop]
+                for gid in xrange(pop_gid_ranges[pop_name][0], pop_gid_ranges[pop_name][1]):
+                    input_pop_firing_rates[pop_name][gid] = [this_mean_rate, this_mean_rate]
+            elif context.input_types[pop_name] == 'gaussian':
+                try:
+                    this_min_rate = context.input_min_rates[pop_name]
+                    this_max_rate = context.input_max_rates[pop_name]
+                    this_norm_tuning_width = context.input_norm_tuning_widths[pop_name]
+                except:
+                    raise RuntimeError('optimize_simple_network: missing kwarg(s) required to specify %s input '
+                                       'population: %s' % (context.input_types[pop_name], pop_name))
+                if context.debug:
+                    print('input_min_rates: %s; input_max_rates: %s; input_norm_tuning_widths: %s' %
+                          (context.input_min_rates, context.input_max_rates, context.input_norm_tuning_widths))
+    else:
+        input_pop_t = None
+        input_pop_firing_rates = None
+    input_pop_t = context.comm.bcast(input_pop_t, root=0)
+    input_pop_firing_rates = context.comm.bcast(input_pop_firing_rates, root=0)
+
     if context.connectivity_type == 'gaussian':
+        pop_axon_extents = {'FF': 0.3, 'E': 0.3, 'I': 0.3}
         if 'spatial_dim' not in context():
             raise RuntimeError('optimize_simple_network: spatial_dim parameter not found; required for gaussian '
                                'connectivity')
-        pop_cell_positions = defaultdict(dict)
-        for pop_name in pop_gid_ranges:
-            for gid in xrange(pop_gid_ranges[pop_name][0], pop_gid_ranges[pop_name][1]):
-                local_random.seed(context.location_seed + gid)
-                pop_cell_positions[pop_name][gid] = ([local_random.random() * 2 - 1 for _ in range(context.spatial_dim)])
+
+        if context.comm.rank == 0:
+            pop_cell_positions = dict()
+            for pop_name in pop_gid_ranges:
+                for gid in xrange(pop_gid_ranges[pop_name][0], pop_gid_ranges[pop_name][1]):
+                    local_random.seed(context.location_seed + gid)
+                    if pop_name not in pop_cell_positions:
+                        pop_cell_positions[pop_name] = dict()
+                    pop_cell_positions[pop_name][gid] = \
+                        tuple([local_random.random() * 2 - 1 for _ in range(context.spatial_dim)])
+        else:
+            pop_cell_positions = None
+        pop_cell_positions = context.comm.bcast(pop_cell_positions, root=0)
+
+    """
+    if context.debug:
+        raise RuntimeError('debug condition forced exit')
+    """
 
     context.update(locals())
 
@@ -175,10 +217,6 @@ def update_context(x, local_context=None):
     local_context.pop_syn_proportions['I']['E']['E'] = x_dict['I_E_syn_proportion'] * \
                                                        (1. - x_dict['I_E_FF_syn_proportion'])
     local_context.pop_syn_proportions['I']['I']['I'] = 1. - x_dict['I_E_syn_proportion']
-
-    local_context.input_pop_mean_rates['FF'] = local_context.FF_mean_rate
-    local_context.input_pop_peak_rates['FF'] = local_context.FF_peak_rate
-    local_context.floorwidth_percentage = x_dict['floorwidth_percentage']
 
 
 def analyze_network_output(network, export=False, plot=False):
@@ -272,31 +310,31 @@ def compute_features(x, export=False):
         pop_cell_types=context.pop_cell_types, pop_syn_counts=context.pop_syn_counts,
         pop_syn_proportions=context.pop_syn_proportions, connection_weights_mean=context.connection_weights_mean,
         connection_weight_sigma_factors=context.connection_weight_sigma_factors,
-        input_pop_mean_rates=context.input_pop_mean_rates, input_pop_peak_rates=context.input_pop_peak_rates,
-        structured=(context.distribution is 'structured'), syn_mech_params=context.syn_mech_params,
-        floorwidth_percentage=context.floorwidth_percentage, tstop=context.tstop, equilibrate=context.equilibrate,
+        syn_mech_params=context.syn_mech_params, input_pop_t=context.input_pop_t,
+        input_pop_firing_rates=context.input_pop_firing_rates, tstop=context.tstop, equilibrate=context.equilibrate,
         dt=context.dt, delay=context.delay, connection_seed=context.connection_seed,spikes_seed=context.spikes_seed,
         verbose=context.verbose, debug=context.debug)
 
-    if context.distribution is 'log_normal':
-        log_normal = True
-    else:
-        log_normal = False
     if context.connectivity_type == 'uniform':
-        context.network.connect_cells_uniform(log_normal)
+        context.network.connect_cells(connectivity_type=context.connectivity_type,
+                                      weight_distribution_type=context.weight_distribution_type)
     elif context.connectivity_type == 'gaussian':
-        context.network.connect_cells_gaussian(context.pop_axon_extents, context.pop_cell_positions, log_normal)
+        context.network.connect_cells(connectivity_type=context.connectivity_type,
+                                      weight_distribution_type=context.weight_distribution_type,
+                                      pop_axon_extents=context.pop_axon_extents,
+                                      pop_cell_positions=context.pop_cell_positions)
+
     if int(context.pc.id()) == 0 and context.verbose > 0:
         print('NETWORK BUILD RUNTIME: %.2f s' % (time.time() - start_time))
     if context.plot and context.connectivity_type == 'gaussian':
         context.network.visualize_connections(context.pop_cell_positions, n=1)
     current_time = time.time()
 
-
+    """
     if context.debug:
         context.update(locals())
         return dict()
-
+    """
 
     context.network.run()
     if int(context.pc.id()) == 0 and context.verbose > 0:
