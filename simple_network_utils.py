@@ -64,7 +64,7 @@ default_syn_type_mech_params = \
 class SimpleNetwork(object):
 
     def __init__(self, pc, pop_sizes, pop_gid_ranges, pop_cell_types, pop_syn_counts, pop_syn_proportions,
-                 connection_weights_mean, connection_weight_sigma_factors, syn_mech_params, syn_mech_names=None,
+                 connection_weights_mean, connection_weights_norm_sigma, syn_mech_params, syn_mech_names=None,
                  syn_mech_param_rules=None, syn_mech_param_defaults=None, input_pop_t=None,
                  input_pop_firing_rates=None, tstop=1000., equilibrate=250., dt=0.025, delay=1., connection_seed=0,
                  spikes_seed=100000, v_init=-65., verbose=1, debug=False):
@@ -79,7 +79,7 @@ class SimpleNetwork(object):
                     {target_pop_name (str): {syn_type (str): {source_pop_name (str): proportion of synapses from
                         source_pop_name population } } }
         :param connection_weights_mean: nested dict of float: mean strengths of each connection type
-        :param connection_weight_sigma_factors: nested dict of float: variances of connection strengths, normalized to
+        :param connection_weights_norm_sigma: nested dict of float: variances of connection strengths, normalized to
                                                 mean
         :param syn_mech_params: nested dict: {target_pop_name (str): {source_pop_name (str): {param_name (str): float}}}
         :param syn_mech_names: dict: {syn_name (str): name of hoc point process (str)}
@@ -116,7 +116,7 @@ class SimpleNetwork(object):
         self.pop_syn_counts = pop_syn_counts
         self.pop_syn_proportions = pop_syn_proportions
         self.connection_weights_mean = connection_weights_mean
-        self.connection_weight_sigma_factors = connection_weight_sigma_factors
+        self.connection_weights_norm_sigma = connection_weights_norm_sigma
         self.syn_mech_params = syn_mech_params
         if syn_mech_names is None:
             self.syn_mech_names = default_syn_mech_names
@@ -257,18 +257,19 @@ class SimpleNetwork(object):
         presyn_probs[:, 1] /= np.sum(presyn_probs[:, 1])
         """
 
-    def connect_cells(self, connectivity_type='uniform', weight_distribution_type='normal', **kwargs):
+    def connect_cells(self, connectivity_type='uniform', default_weight_distribution_type='normal',
+                      connection_weight_distribution_types=None,  **kwargs):
         """
 
         :param connectivity_type: str
-        :param weight_distribution_type: str
+        :param default_weight_distribution_type: str
+        :param connection_weight_distribution_types: nested dict: {target_pop_name: {source_pop_name: str}}
         """
         rank = int(self.pc.id())
         for target_pop_name in self.pop_syn_proportions:
             total_syn_count = self.pop_syn_counts[target_pop_name]
             for target_gid in self.cells[target_pop_name]:
                 self.local_np_random.seed(self.connection_seed + target_gid)
-                self.local_random.seed(self.connection_seed + target_gid)
                 target_cell = self.cells[target_pop_name][target_gid]
                 for syn_type in self.pop_syn_proportions[target_pop_name]:
                     for source_pop_name in self.pop_syn_proportions[target_pop_name][syn_type]:
@@ -286,21 +287,35 @@ class SimpleNetwork(object):
                                                                   target_pop_name, **kwargs)
                         if p_connection is None:
                             continue
+
+                        this_weight_distribution_type = default_weight_distribution_type
+                        if connection_weight_distribution_types is not None:
+                            if target_pop_name in connection_weight_distribution_types and \
+                                    source_pop_name in connection_weight_distribution_types[target_pop_name]:
+                                this_weight_distribution_type = \
+                                    connection_weight_distribution_types[target_pop_name][source_pop_name]
+                        mu = self.connection_weights_mean[target_pop_name][source_pop_name]
+                        norm_sigma = self.connection_weights_norm_sigma[target_pop_name][source_pop_name]
+                        if self.debug:
+                            print('target: %s, source: %s, dist_type: %s, mu: %.3f, norm_sigma: %.3f' %
+                                  (target_pop_name, source_pop_name, this_weight_distribution_type, mu, norm_sigma))
+
                         this_source_gids = self.local_np_random.choice(potential_source_gids, size=this_syn_count,
                                                                        p=p_connection)
                         for source_gid in this_source_gids:
-                            mu = self.connection_weights_mean[target_pop_name][source_pop_name]
-                            sigma_factor = self.connection_weight_sigma_factors[target_pop_name][source_pop_name]
-                            this_weight = 0.
-                            while this_weight <= 0.:
-                                if weight_distribution_type == 'normal':
-                                    this_weight = self.local_random.gauss(mu, mu * sigma_factor)
-                                elif weight_distribution_type == 'log-normal':
-                                    raise RuntimeError('connect_cells: log-normal weight distribution not yet '
-                                                       'implemented')
-                                else:
-                                    raise RuntimeError('connect_cells: invalid weight_distribution_type specified: '
-                                                       '%s' % weight_distribution_type)
+                            if this_weight_distribution_type == 'normal':
+                                # enforce weights to be greater than 0
+                                this_weight = -1.
+                                while this_weight <= 0.:
+                                    this_weight = mu * self.local_np_random.normal(1., norm_sigma)
+                            elif this_weight_distribution_type == 'lognormal':
+                                # enforce weights to be less than 10-fold greater than mean
+                                this_weight = 10. * mu + 1.
+                                while this_weight > 10. * mu:
+                                    this_weight = mu * self.local_np_random.lognormal(0., norm_sigma)
+                            else:
+                                raise RuntimeError('connect_cells: invalid connection weight distribution type: %s' %
+                                                   this_weight_distribution_type)
                             this_syn, this_nc = append_connection(
                                 target_cell, self.pc, source_pop_name, syn_type, source_gid, delay=self.delay,
                                 weight=this_weight, syn_mech_names=self.syn_mech_names,

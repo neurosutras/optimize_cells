@@ -96,6 +96,10 @@ kwargs:
   location_seed: 2000000
   connectivity_type: uniform
   default_weight_distribution_type: normal
+  connection_weight_distribution_types:
+    E:
+      FF: lognormal
+      E: lognormal
   input_types:
     FF: constant
   input_mean_rates:
