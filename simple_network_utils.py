@@ -230,15 +230,16 @@ class SimpleNetwork(object):
         p_connection /= p_sum
         return p_connection
 
-    def get_prob_connection_gaussian(self, potential_source_gids, target_gid, source_cell_positions,
-                                     target_cell_position, source_axon_extent):
+    def get_prob_connection_gaussian(self, potential_source_gids, target_gid, source_pop_name, target_pop_name,
+                                     pop_cell_positions, pop_axon_extents):
         """
 
         :param potential_source_gids: array of int
         :param target_gid: int
-        :param source_cell_positions: tuple of float
-        :param target_cell_position: tuple of float
-        :param source_axon_extent: float
+        :param source_pop_name: str
+        :param target_pop_name: str
+        :param pop_cell_positions: tuple of float
+        :param pop_axon_extents: float
         :return: array of float
         """
         raise RuntimeError('get_prob_connection_gaussian: not yet implemented')
@@ -280,7 +281,9 @@ class SimpleNetwork(object):
                         if connectivity_type == 'uniform':
                             p_connection = self.get_prob_connection_uniform(potential_source_gids)
                         elif connectivity_type == 'gaussian':
-                            p_connection = self.get_prob_connection_gaussian(potential_source_gids, **kwargs)
+                            p_connection = \
+                                self.get_prob_connection_gaussian(potential_source_gids, target_gid, source_pop_name,
+                                                                  target_pop_name, **kwargs)
                         if p_connection is None:
                             continue
                         this_source_gids = self.local_np_random.choice(potential_source_gids, size=this_syn_count,
