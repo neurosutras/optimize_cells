@@ -634,7 +634,7 @@ def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, mode
     sim.backup_state()
     sim.set_state(dt=dt, tstop=duration, cvode=False)  # cvode=True)
 
-    sim.modify_stim('holding', node=node, loc=loc, amp=context.i_holding['soma'][context.v_active])
+    sim.modify_stim('holding', node=node, loc=loc, amp=context.i_holding['soma'][context.v_active], dur=duration)
 
     syn_attrs = context.env.synapse_attributes
     context.sim.parameters['syn_secs'] = []
@@ -788,7 +788,7 @@ def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, mod
     sim.backup_state()
     sim.set_state(dt=dt, tstop=duration, cvode=False)  # cvode=True)
 
-    sim.modify_stim('holding', node=node, loc=loc, amp=context.i_holding['soma'][context.v_active])
+    sim.modify_stim('holding', node=node, loc=loc, amp=context.i_holding['soma'][context.v_active], dur=duration)
 
     syn_attrs = context.env.synapse_attributes
     context.sim.parameters['syn_secs'] = []
