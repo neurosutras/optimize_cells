@@ -582,7 +582,7 @@ def filter_features_fI(primitives, current_features, export=False):
                 f[description].attrs['enumerated'] = False
             group = f[description]
             group.attrs['rheobase'] = rheobase
-            group.attrs['exp_rheobase'] = context.exp_rheobase_f_I
+            group.attrs['exp_rheobase'] = context.exp_rheobase
             group.create_dataset('i_relative_amp', compression='gzip', data=i_relative_amp)
             group.create_dataset('adi', compression='gzip', data=adi)
             group.create_dataset('exp_adi', compression='gzip', data=context.exp_spike_adaptation_array)
