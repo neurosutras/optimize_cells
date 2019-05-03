@@ -1,7 +1,7 @@
 bounds:
   dend.g_pas slope: !!python/tuple
   - 1.0E-9
-  - 5.0E-4
+  - 1.0E-4
   dend.g_pas tau: !!python/tuple
   - 25.
   - 400.
@@ -160,7 +160,7 @@ kwargs:
   correct_for_spines: True
   verbose: 1
   daspk: False
-  config_file: Small_Scale_Control_LN_weights_Sat.yaml
+  config_file: Small_Scale_Control_tune_GC_synapses.yaml  # Small_Scale_Control_LN_weights_Sat.yaml
   template_paths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoc_lib_path: ../dentate
   config_prefix: ../dentate/config
@@ -221,6 +221,7 @@ target_range:
   vm_stability: 0.1
   dend_spike_amp: 0.1
 target_val:
+  term_dend R_inp: 1000.
   dend R_inp: 275.
   soma R_inp: 295.
   soma vm_rest: -77.0

@@ -23,8 +23,9 @@ context = Context()
 @click.option("--label", type=str, default=None)
 @click.option("--verbose", type=int, default=2)
 @click.option("--plot", is_flag=True)
-@click.option("--run-tests", is_flag=True)
-def main(config_file_path, output_dir, export, export_file_path, label, verbose, plot, run_tests):
+@click.option("--interactive", is_flag=True)
+@click.option("--debug", is_flag=True)
+def main(config_file_path, output_dir, export, export_file_path, label, verbose, plot, interactive, debug):
     """
 
     :param config_file_path: str (path)
@@ -34,34 +35,47 @@ def main(config_file_path, output_dir, export, export_file_path, label, verbose,
     :param label: str
     :param verbose: bool
     :param plot: bool
-    :param run_tests: bool
+    :param interactive: bool
+    :param debug: bool
     """
     # requires a global variable context: :class:'Context'
     context.update(locals())
-    disp = verbose > 0
-    config_optimize_interactive(__file__, config_file_path=config_file_path, output_dir=output_dir, export=export,
-                       export_file_path=export_file_path, label=label, disp=disp)
-    if run_tests:
-        unit_tests_leak()
+    comm = MPI.COMM_WORLD
 
+    from nested.parallel import ParallelContextInterface
+    context.interface = ParallelContextInterface()
+    context.interface.start(disp=True)
+    context.interface.ensure_controller()
+    context.interface.apply(config_optimize_interactive, __file__, config_file_path=config_file_path,
+                            output_dir=output_dir, export=export, export_file_path=export_file_path, label=label,
+                            disp=verbose > 0, verbose=verbose, plot=plot)
+    sys.stdout.flush()
+    time.sleep(1.)
 
-def unit_tests_leak():
-    """
+    if not context.debug:
+        args = context.interface.execute(get_args_static_leak)
+        group_size = len(args[0])
+        sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
+                    [[context.plot] * group_size]
+        primitives = context.interface.map(compute_features_leak, *sequences)
+        features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
+        features, objectives = context.interface.execute(get_objectives_leak, features, context.export)
+        sys.stdout.flush()
+        time.sleep(1.)
+        print 'params:'
+        pprint.pprint(context.x0_dict)
+        print 'features:'
+        pprint.pprint(features)
+        print 'objectives:'
+        pprint.pprint(objectives)
+        sys.stdout.flush()
+        time.sleep(1.)
+        if context.plot:
+            context.interface.apply(plt.show)
+    context.update(locals())
 
-    """
-    args = get_args_static_leak()
-    group_size = len(args[0])
-    sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
-                [[context.plot] * group_size]
-    primitives = map(compute_features_leak, *sequences)
-    features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
-    features, objectives = get_objectives_leak(features, context.export)
-    print 'params:'
-    pprint.pprint(context.x0_dict)
-    print 'features:'
-    pprint.pprint(features)
-    print 'objectives:'
-    pprint.pprint(objectives)
+    if not interactive:
+        context.interface.stop()
 
 
 def config_worker():
@@ -195,8 +209,9 @@ def compute_features_leak(x, section, export=False, plot=False):
     sim.parameters['duration'] = duration
     amp = -0.025
     context.sim.parameters['amp'] = amp
-    # vm_rest, vm_offset, context.i_holding[section][v_init] = offset_vm(section, context, v_init)
     vm_rest, vm_offset, context.i_holding[section][v_init] = offset_vm(section, context, v_init, dynamic=True)
+    sim.modify_stim('holding', dur=duration)
+
     rec_dict = sim.get_rec(section)
     loc = rec_dict['loc']
     node = rec_dict['node']
@@ -237,9 +252,14 @@ def get_objectives_leak(features, export=False):
         objective_name = feature_name
         objectives[objective_name] = ((context.target_val[objective_name] - features[feature_name]) /
                                                   context.target_range[objective_name]) ** 2.
-    delta_term_dend_R_inp = features['term_dend R_inp'] - features['dend R_inp']
+    delta_term_dend_R_inp = None
+    if features['term_dend R_inp'] < features['dend R_inp']:
+        delta_term_dend_R_inp = features['term_dend R_inp'] - features['dend R_inp']
+    elif features['term_dend R_inp'] > context.target_val['term_dend R_inp']:
+        delta_term_dend_R_inp = features['term_dend R_inp'] - context.target_val['term_dend R_inp']
+
     objective_name = 'term_dend R_inp'
-    if delta_term_dend_R_inp < 0.:
+    if delta_term_dend_R_inp is not None:
         objectives[objective_name] = (delta_term_dend_R_inp / context.target_range['dend R_inp']) ** 2.
     else:
         objectives[objective_name] = 0.

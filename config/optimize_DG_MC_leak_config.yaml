@@ -1,13 +1,13 @@
 bounds:
   dend.g_pas slope: !!python/tuple
-  - 1.0E-8
+  - 1.0E-9
   - 1.0E-2
   dend.g_pas tau: !!python/tuple
   - 25.
   - 400.
   soma.g_pas: !!python/tuple
   - 1.0E-12
-  - 1.0E+12
+  - 1.0E-4
   e_pas: !!python/tuple
   - -70.0
   - -60.0
@@ -23,15 +23,15 @@ update_context:
   - update_mechanisms_leak
 get_features_stages:
 - source: optimize_DG_MC_leak
-  compute_features: compute_features_leak
   get_args_static: get_args_static_leak
+  compute_features: compute_features_leak
 get_objectives:
   optimize_DG_MC_leak: get_objectives_leak
 kwargs:
-  mech_file_path: mechanisms/20180905_DG_MC_excitability_mech.yaml
+  mech_file_path: mechanisms/20181127_DG_MC_only_leak_mech.yaml  # 20180905_DG_MC_excitability_mech.yaml
   gid: 1000000
   cell_type: MC
-  correct_for_spines: True
+  correct_for_spines: False
   verbose: 2
   daspk: False
   config_file: Small_Scale_Control_MC_BC.yaml
@@ -48,16 +48,17 @@ objective_names:
 optimization_title: DG_MC_leak
 param_gen: PopulationAnnealing
 param_names:
+- soma.g_pas
 - dend.g_pas slope
 - dend.g_pas tau
-- soma.g_pas
 - e_pas
 target_range:
   dend R_inp: 1.
   soma R_inp: 0.5
   soma vm_rest: 0.1
 target_val:
-  dend R_inp: 160.
+  term_dend R_inp: 1000.
+  dend R_inp: 117.
   soma R_inp: 126.
   soma vm_rest: -66.0
 x0:

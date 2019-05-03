@@ -245,6 +245,7 @@ def compute_features_iEPSP_i_unit(x, i_holding, export=False, plot=False):
     offset_vm('soma', context, v_active, i_history=context.i_holding, dynamic=True)
 
     sim = context.sim
+    sim.modify_stim('holding', dur=duration)
     sim.backup_state()
     sim.set_state(dt=dt, tstop=duration, cvode=False)
 
@@ -323,6 +324,7 @@ def compute_features_iEPSP_attenuation(x, i_holding, ISI_key, i_EPSC, export=Fal
     offset_vm('soma', context, v_active, i_history=context.i_holding, dynamic=True)
 
     sim = context.sim
+    sim.modify_stim('holding', dur=duration)
     sim.backup_state()
     sim.set_state(dt=dt, tstop=duration, cvode=False)
 

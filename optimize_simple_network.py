@@ -32,7 +32,6 @@ def main(config_file_path, export, output_dir, export_file_path, label, interact
     :param debug: bool
     """
     # requires a global variable context: :class:'Context'
-
     context.update(locals())
     comm = MPI.COMM_WORLD
 
@@ -91,7 +90,9 @@ def init_context():
     # {'target_pop_name': {'syn_type: {'source_pop_name': float} } }
     pop_syn_proportions = defaultdict(lambda: defaultdict(dict))
     connection_weights_mean = defaultdict(dict)  # {'target_pop_name': {'source_pop_name': float} }
-    connection_weight_sigma_factors = defaultdict(dict)  # {'target_pop_name': {'source_pop_name': float} }
+    connection_weights_norm_sigma = defaultdict(dict)  # {'target_pop_name': {'source_pop_name': float} }
+    if 'connection_weight_distribution_types' not in context():
+        connection_weight_distribution_types = dict()
 
     syn_mech_params = defaultdict(lambda: defaultdict(dict))
     syn_mech_params['I']['FF']['g_unit'] = 0.0001925
@@ -127,8 +128,6 @@ def init_context():
                 except:
                     raise RuntimeError('optimize_simple_network: missing kwarg(s) required to specify %s input population:'
                                        ' %s' % (context.input_types[pop_name], pop_name))
-                if context.debug:
-                    print('input_mean_rates: %s' % context.input_mean_rates)
                 if pop_name not in input_pop_firing_rates:
                     input_pop_firing_rates[pop_name] = dict()
                     input_pop_t[pop_name] = [0., tstop]
@@ -142,9 +141,6 @@ def init_context():
                 except:
                     raise RuntimeError('optimize_simple_network: missing kwarg(s) required to specify %s input '
                                        'population: %s' % (context.input_types[pop_name], pop_name))
-                if context.debug:
-                    print('input_min_rates: %s; input_max_rates: %s; input_norm_tuning_widths: %s' %
-                          (context.input_min_rates, context.input_max_rates, context.input_norm_tuning_widths))
     else:
         input_pop_t = None
         input_pop_firing_rates = None
@@ -202,12 +198,12 @@ def update_context(x, local_context=None):
     local_context.connection_weights_mean['I']['E'] = x_dict['I_E_mean_weight']
     local_context.connection_weights_mean['I']['I'] = x_dict['I_I_mean_weight']
 
-    local_context.connection_weight_sigma_factors['E']['FF'] = x_dict['E_FF_weight_sigma_factor']
-    local_context.connection_weight_sigma_factors['E']['E'] = x_dict['E_E_weight_sigma_factor']
-    local_context.connection_weight_sigma_factors['E']['I'] = x_dict['E_I_weight_sigma_factor']
-    local_context.connection_weight_sigma_factors['I']['FF'] = x_dict['I_FF_weight_sigma_factor']
-    local_context.connection_weight_sigma_factors['I']['E'] = x_dict['I_E_weight_sigma_factor']
-    local_context.connection_weight_sigma_factors['I']['I'] = x_dict['I_I_weight_sigma_factor']
+    local_context.connection_weights_norm_sigma['E']['FF'] = x_dict['E_FF_weight_norm_sigma']
+    local_context.connection_weights_norm_sigma['E']['E'] = x_dict['E_E_weight_norm_sigma']
+    local_context.connection_weights_norm_sigma['E']['I'] = x_dict['E_I_weight_norm_sigma']
+    local_context.connection_weights_norm_sigma['I']['FF'] = x_dict['I_FF_weight_norm_sigma']
+    local_context.connection_weights_norm_sigma['I']['E'] = x_dict['I_E_weight_norm_sigma']
+    local_context.connection_weights_norm_sigma['I']['I'] = x_dict['I_I_weight_norm_sigma']
 
     local_context.pop_syn_proportions['E']['E']['FF'] = x_dict['E_E_syn_proportion'] * x_dict['E_E_FF_syn_proportion']
     local_context.pop_syn_proportions['E']['E']['E'] = x_dict['E_E_syn_proportion'] * \
@@ -273,6 +269,7 @@ def analyze_network_output(network, export=False, plot=False):
         result['I_mean_active_rate'] = np.mean(mean_rate_active_cells_dict['I'])
         result['E_peak_rate'] = np.mean(peak_rate_dict['E'].values())
         result['I_peak_rate'] = np.mean(peak_rate_dict['I'].values())
+        result['FF_frac_active'] = np.mean(pop_fraction_active_dict['FF'])
         result['E_frac_active'] = np.mean(pop_fraction_active_dict['E'])
         result['I_frac_active'] = np.mean(pop_fraction_active_dict['I'])
         result['FF_theta_envelope_ratio'] = filter_envelope_ratio_dict['Theta']['FF']
@@ -309,7 +306,7 @@ def compute_features(x, export=False):
         pc=context.pc, pop_sizes=context.pop_sizes, pop_gid_ranges=context.pop_gid_ranges,
         pop_cell_types=context.pop_cell_types, pop_syn_counts=context.pop_syn_counts,
         pop_syn_proportions=context.pop_syn_proportions, connection_weights_mean=context.connection_weights_mean,
-        connection_weight_sigma_factors=context.connection_weight_sigma_factors,
+        connection_weights_norm_sigma=context.connection_weights_norm_sigma,
         syn_mech_params=context.syn_mech_params, input_pop_t=context.input_pop_t,
         input_pop_firing_rates=context.input_pop_firing_rates, tstop=context.tstop, equilibrate=context.equilibrate,
         dt=context.dt, delay=context.delay, connection_seed=context.connection_seed,spikes_seed=context.spikes_seed,
@@ -317,10 +314,12 @@ def compute_features(x, export=False):
 
     if context.connectivity_type == 'uniform':
         context.network.connect_cells(connectivity_type=context.connectivity_type,
-                                      weight_distribution_type=context.weight_distribution_type)
+                                      default_weight_distribution_type=context.default_weight_distribution_type,
+                                      connection_weight_distribution_types=context.connection_weight_distribution_types)
     elif context.connectivity_type == 'gaussian':
         context.network.connect_cells(connectivity_type=context.connectivity_type,
-                                      weight_distribution_type=context.weight_distribution_type,
+                                      default_weight_distribution_type=context.default_weight_distribution_type,
+                                      connection_weight_distribution_types=context.connection_weight_distribution_types,
                                       pop_axon_extents=context.pop_axon_extents,
                                       pop_cell_positions=context.pop_cell_positions)
 

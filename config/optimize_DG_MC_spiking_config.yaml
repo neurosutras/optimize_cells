@@ -65,11 +65,10 @@ feature_names:
 - vm_stability
 - ais_delay
 - slow_depo
-- dend_bAP_ratio
 - rheobase
 - soma_spike_amp
-- f_I_slope
-- dend_spike_amp
+- f_I_log10_slope
+- spike_adi_slope
 - spike_detector_delay
 update_context:
 - - optimize_DG_MC_spiking
@@ -90,7 +89,7 @@ kwargs:
   mech_file_path: mechanisms/20180905_DG_MC_excitability_mech.yaml
   gid: 1000000
   cell_type: MC
-  correct_for_spines: True
+  correct_for_spines: False
   verbose: 2
   daspk: False
   config_file: Small_Scale_Control_MC_BC.yaml
@@ -143,10 +142,6 @@ target_val:
   slow_depo: 5.0
   vm_th: -48.0
   vm_stability: 5.0
-  f_I_slope: 31.92
-  f_I_intercept: 38.965
-  adi_slope: 262.39
-  adi_intercept: 94.529
 x0:
   soma.gbar_nas: 4.414296E-02
   axon.gbar_nax: 6.029868E-02

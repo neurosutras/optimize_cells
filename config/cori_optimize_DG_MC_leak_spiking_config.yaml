@@ -1,16 +1,13 @@
 bounds:
   dend.g_pas slope: !!python/tuple
   - 1.0E-9
-  - 1.0E-4
+  - 1.0E-2
   dend.g_pas tau: !!python/tuple
   - 25.
   - 400.
   soma.g_pas: !!python/tuple
   - 1.0E-12
-  - 1.0E-7
-  e_pas: !!python/tuple
-  - -77.0
-  - -70.0
+  - 1.0E-4
   ais.gbar_nax: !!python/tuple
   - 0.02
   - 0.5
@@ -26,15 +23,9 @@ bounds:
   axon.gkabar: !!python/tuple
   - 0.001
   - 0.05
-  dend.gbar_nas: !!python/tuple
-  - 0.01
-  - 0.05
-  dend.gbar_nas min: !!python/tuple
-  - 0.0
-  - 0.05
-  dend.gkabar: !!python/tuple
-  - 0.001
-  - 0.25
+  e_pas: !!python/tuple
+  - -70.0
+  - -60.0
   soma.gCa factor: !!python/tuple
   - 0.005
   - 2.0
@@ -53,9 +44,6 @@ bounds:
   axon.gkdrbar: !!python/tuple
   - 0.001
   - 0.075
-  dend.gkdrbar: !!python/tuple
-  - 0.0005
-  - 0.01
   soma.sh_nas/x: !!python/tuple
   - 1.0
   - 8.0
@@ -64,14 +52,6 @@ bounds:
   - 100.
 default_params:
 rel_bounds:
-- - dend.gbar_nas
-  - '<='
-  - 1.0
-  - soma.gbar_nas
-- - dend.gbar_nas min
-  - '<='
-  - 1.0
-  - dend.gbar_nas
 - - axon.gbar_nax
   - '>'
   - 1.0
@@ -80,10 +60,6 @@ rel_bounds:
   - '>'
   - 2.0
   - axon.gbar_nax
-- - dend.gkabar
-  - '>'
-  - 1.0
-  - soma.gkabar
 - - axon.gkabar
   - '<'
   - 1.0
@@ -92,15 +68,10 @@ rel_bounds:
   - '>='
   - 1.0
   - soma.gkdrbar
-- - dend.gkdrbar
-  - '<'
-  - 1.0
-  - soma.gkdrbar
 feature_names:
 - dend R_inp
 - term_dend R_inp
 - soma R_inp
-- soma vm_rest
 - vm_th
 - ADP
 - fAHP
@@ -109,53 +80,46 @@ feature_names:
 - vm_stability
 - ais_delay
 - slow_depo
-- dend_bAP_ratio
 - rheobase
 - soma_spike_amp
-- f_I_slope
-- dend_spike_amp
+- f_I_log10_slope
+- spike_adi_slope
 - spike_detector_delay
+- soma vm_rest
 update_context:
-- - optimize_DG_GC_leak
+- - optimize_DG_MC_leak
   - reset_biophysics
-- - optimize_DG_GC_leak
+- - optimize_DG_MC_leak
   - update_mechanisms_leak
-- - optimize_DG_GC_spiking
+- - optimize_DG_MC_spiking
   - update_mechanisms_spiking
 get_features_stages:
-- source: optimize_DG_GC_leak
+- source: optimize_DG_MC_leak
   get_args_static: get_args_static_leak
   compute_features: compute_features_leak
-- source: optimize_DG_GC_spiking
+- source: optimize_DG_MC_spiking
   get_args_dynamic: get_args_dynamic_i_holding
   compute_features: compute_features_spike_shape
-- source: optimize_DG_GC_spiking
+- source: optimize_DG_MC_spiking
   get_args_dynamic: get_args_dynamic_fI
   compute_features: compute_features_fI
   filter_features: filter_features_fI
-- source: optimize_DG_GC_spiking
-  get_args_dynamic: get_args_dynamic_spike_adaptation
-  compute_features: compute_features_spike_adaptation
-- source: optimize_DG_GC_spiking
-  get_args_dynamic: get_args_dynamic_dend_spike
-  compute_features: compute_features_dend_spike
-  filter_features: filter_features_dend_spike
 get_objectives:
-  optimize_DG_GC_leak: get_objectives_leak
-  optimize_DG_GC_spiking: get_objectives_spiking
+  optimize_DG_MC_leak: get_objectives_leak
+  optimize_DG_MC_spiking: get_objectives_spiking
 kwargs:
-  mech_file_path: mechanisms/20181205_DG_GC_excitability_mech.yaml
-  gid: 0
-  cell_type: GC
-  correct_for_spines: True
+  mech_file_path: mechanisms/20180905_DG_MC_excitability_mech.yaml
+  gid: 1000000
+  cell_type: MC
+  correct_for_spines: False
   verbose: 2
   daspk: False
-  config_file: Small_Scale_Control_tune_GC_synapses.yaml
+  config_file: Small_Scale_Control_MC_BC.yaml
   template_paths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoc_lib_path: ../dentate
   config_prefix: ../dentate/config
-  dataset_prefix: ../dentate/datasets
-  results_path: data
+  dataset_prefix: /global/cscratch1/sd/aaronmil/dentate
+  results_path: /global/cscratch1/sd/aaronmil/optimize_cells
 objective_names:
 - dend R_inp
 - term_dend R_inp
@@ -168,28 +132,22 @@ objective_names:
 - vm_stability
 - ais_delay
 - slow_depo
-- dend_bAP_ratio
 - spike_adaptation_residuals
 - f_I_residuals
-- dend_spike_score
-optimization_title: DG_GC_leak_spiking
+optimization_title: DG_MC_leak_spiking
 param_gen: PopulationAnnealing
 param_names:
+- soma.g_pas
 - dend.g_pas slope
 - dend.g_pas tau
-- soma.g_pas
 - e_pas
 - soma.gbar_nas
-- dend.gbar_nas
-- dend.gbar_nas min
 - axon.gbar_nax
 - ais.gbar_nax
 - soma.gkabar
-- dend.gkabar
 - soma.gkdrbar
 - axon.gkabar
 - axon.gkdrbar
-- dend.gkdrbar
 - soma.sh_nas/x
 - ais.sha_nax
 - soma.gCa factor
@@ -199,50 +157,43 @@ param_names:
 target_range:
   dend R_inp: 1.
   soma R_inp: 0.5
-  soma vm_rest: 0.1
   ADP: 0.05
   fAHP: 0.07
   ais_delay: 0.0005
-  dend_bAP_ratio: 0.0002
   rebound_firing: 0.002
   vm_th: 0.01
   vm_stability: 0.1
-  dend_spike_amp: 0.1
+  spike_rate: 0.1
+  soma vm_rest: 0.1
 target_val:
   term_dend R_inp: 1000.
-  dend R_inp: 275.
-  soma R_inp: 295.
-  soma vm_rest: -77.0
+  dend R_inp: 117.
+  soma R_inp: 126.
   min_ADP: 1.
   max_ADP: 10.
   min_fAHP: 3.0
   max_fAHP: 15.
   ais_delay: 0.0
-  dend_bAP_ratio: 0.5  # At ~100 uM from soma
   rebound_firing: 0
   slow_depo: 5.0
   vm_th: -48.0
   vm_stability: 5.0
-  dend_spike_amp: 15.
+  soma vm_rest: -66.0
 x0:
-  soma.gCa factor: 3.386286E-01
-  soma.tau_Cacum: 5.783834E+01
-  dend.gbar_nas min: 2.316494E-02
-  soma.gkdrbar: 4.012674E-02
-  soma.g_pas: 2.362825E-08
-  axon.gkabar: 1.229288E-02
-  soma.gkabar: 1.787941E-02
-  dend.gbar_nas: 3.650910E-02
-  ais.sha_nax: -3.882716E+00
-  axon.gkdrbar: 5.814910E-02
-  soma.sh_nas/x: 6.443239E+00
-  dend.gkabar: 1.555928E-01
-  ais.gbar_nax: 1.993188E-01
-  dend.gkdrbar: 7.635090E-03
-  dend.g_pas slope: 3.829971E-05
-  dend.g_pas tau: 3.053399E+02
-  axon.gbar_nax: 6.364521E-02
-  soma.gbar_nas: 3.925494E-02
-  soma.gCadepK factor: 8.701312E+00
-  ais.gkmbar: 1.305485E-02
-  e_pas: -7.444863E+01
+  soma.g_pas: 1.050E-10
+  dend.g_pas slope: 1.058E-08
+  dend.g_pas tau: 3.886E+01
+  e_pas: -66.0
+  soma.gbar_nas: 4.414296E-02
+  axon.gbar_nax: 6.029868E-02
+  ais.gbar_nax: 2.101566E-01
+  soma.gkabar: 2.547421E-02
+  soma.gkdrbar: 1.587365E-02
+  axon.gkabar: 2.447421E-02
+  axon.gkdrbar: 2.081830E-02
+  soma.sh_nas/x: 5.704921E+00
+  ais.sha_nax: -2.792502E+00
+  soma.gCa factor: 8.072385E-02
+  soma.gCadepK factor: 1.133785E+00
+  ais.gkmbar: 8.910924E-03
+  soma.tau_Cacum: 3.582782E+01

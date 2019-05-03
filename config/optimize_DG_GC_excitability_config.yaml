@@ -1,7 +1,7 @@
 bounds:
   dend.g_pas slope: !!python/tuple
   - 1.0E-9
-  - 5.0E-4
+  - 1.0E-4
   dend.g_pas tau: !!python/tuple
   - 25.
   - 400.
@@ -104,7 +104,7 @@ feature_names:
 - vm_th
 - ADP
 - fAHP
-# - mAHP
+- mAHP
 - rebound_firing
 - vm_stability
 - ais_delay
@@ -117,7 +117,7 @@ feature_names:
 - iEPSP_i_unit
 - iEPSP_attenuation_short
 - iEPSP_attenuation_long
-# - spike_detector_delay
+- spike_detector_delay
 update_context:
 - - optimize_DG_GC_leak
   - reset_biophysics
@@ -221,6 +221,7 @@ target_range:
   vm_stability: 0.1
   dend_spike_amp: 0.1
 target_val:
+  term_dend R_inp: 1000.
   dend R_inp: 275.
   soma R_inp: 295.
   soma vm_rest: -77.0

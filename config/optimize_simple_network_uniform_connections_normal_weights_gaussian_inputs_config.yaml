@@ -17,22 +17,22 @@ bounds:
   I_I_mean_weight: !!python/tuple
     - 0.1
     - 5.
-  E_FF_weight_sigma_factor: !!python/tuple
+  E_FF_weight_norm_sigma: !!python/tuple
     - 0.1
     - 1.
-  E_E_weight_sigma_factor: !!python/tuple
+  E_E_weight_norm_sigma: !!python/tuple
     - 0.1
     - 1.
-  E_I_weight_sigma_factor: !!python/tuple
+  E_I_weight_norm_sigma: !!python/tuple
     - 0.1
     - 1.
-  I_FF_weight_sigma_factor: !!python/tuple
+  I_FF_weight_norm_sigma: !!python/tuple
     - 0.1
     - 1.
-  I_E_weight_sigma_factor: !!python/tuple
+  I_E_weight_norm_sigma: !!python/tuple
     - 0.1
     - 1.
-  I_I_weight_sigma_factor: !!python/tuple
+  I_I_weight_norm_sigma: !!python/tuple
     - 0.1
     - 1.
   E_E_tau_offset: !!python/tuple
@@ -64,6 +64,7 @@ feature_names:
 - I_peak_rate
 - E_mean_active_rate
 - I_mean_active_rate
+- FF_frac_active
 - E_frac_active
 - I_frac_active
 - FF_theta_envelope_ratio
@@ -94,7 +95,7 @@ kwargs:
   spikes_seed: 1000000
   location_seed: 2000000
   connectivity_type: uniform
-  weight_distribution_type: normal
+  default_weight_distribution_type: normal
   input_types:
     FF: gaussian
   input_max_rates:
@@ -131,12 +132,12 @@ param_names:
 - I_FF_mean_weight
 - I_E_mean_weight
 - I_I_mean_weight
-- E_FF_weight_sigma_factor
-- E_E_weight_sigma_factor
-- E_I_weight_sigma_factor
-- I_FF_weight_sigma_factor
-- I_E_weight_sigma_factor
-- I_I_weight_sigma_factor
+- E_FF_weight_norm_sigma
+- E_E_weight_norm_sigma
+- E_I_weight_norm_sigma
+- I_FF_weight_norm_sigma
+- I_E_weight_norm_sigma
+- I_I_weight_norm_sigma
 - E_E_tau_offset
 - E_I_tau_offset
 - I_E_tau_offset
@@ -190,12 +191,12 @@ x0:
   I_FF_mean_weight: 1.
   I_E_mean_weight: 1.
   I_I_mean_weight: 1.
-  E_FF_weight_sigma_factor: .1
-  E_E_weight_sigma_factor: .1
-  E_I_weight_sigma_factor: .1
-  I_FF_weight_sigma_factor: .1
-  I_E_weight_sigma_factor: .1
-  I_I_weight_sigma_factor: .1
+  E_FF_weight_norm_sigma: .1
+  E_E_weight_norm_sigma: .1
+  E_I_weight_norm_sigma: .1
+  I_FF_weight_norm_sigma: .1
+  I_E_weight_norm_sigma: .1
+  I_I_weight_norm_sigma: .1
   E_E_tau_offset: 2.
   E_I_tau_offset: 10.
   I_E_tau_offset: 2.
