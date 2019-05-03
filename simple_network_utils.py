@@ -242,20 +242,14 @@ class SimpleNetwork(object):
         :param pop_axon_extents: float
         :return: array of float
         """
-        raise RuntimeError('get_prob_connection_gaussian: not yet implemented')
-        """
-        source_position = pop_cell_positions[source_pop_name][source_gid]
-        dist = np.sqrt(np.sum([(target_position[i] - source_position[i]) ** 2.
-                               for i in xrange(spatial_dim)]))
-        sigma = pop_axon_extents[source_pop_name]
-        # if dist > sigma: # or some factor of sigma
-        #     continue
-        presyn_probs.append(
-            (source_gid, 1. / (np.sqrt(2 * np.pi * sigma ** 2)) * (np.e ** (-(dist ** 2) / (2 * sigma ** 2)))))
-
-        presyn_probs = np.array(presyn_probs)
-        presyn_probs[:, 1] /= np.sum(presyn_probs[:, 1])
-        """
+        tpos = np.array([pop_cell_positions[target_pop_name][target_gid]])
+        sourcepos = np.array(pop_cell_positions[source_pop_name].values())
+        p_connection = np.sqrt(np.dot(tpos, tpos.T) - 2 * np.dot(tpos, sourcepos.T) + np.dot(sourcepos, sourcepos.T)).diagonal().copy()
+        if target_gid in pop_cell_positions[source_pop_name].keys():
+            p_connection[pop_cell_positions[source_pop_name].keys().index(target_gid)] = 0
+        #sigma = pop_axon_extents[source_pop_name] / (3 * np.sqrt(2))  # setting dist > sigma probabilities to 0?
+        p_connection /= np.sum(p_connection)
+        return p_connection
 
     def connect_cells(self, connectivity_type='uniform', default_weight_distribution_type='normal',
                       connection_weight_distribution_types=None,  **kwargs):
