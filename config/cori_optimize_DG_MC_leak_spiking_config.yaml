@@ -111,15 +111,15 @@ kwargs:
   mech_file_path: mechanisms/20180905_DG_MC_excitability_mech.yaml
   gid: 1000000
   cell_type: MC
-  correct_for_spines: True
+  correct_for_spines: False
   verbose: 2
   daspk: False
   config_file: Small_Scale_Control_MC_BC.yaml
   template_paths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoc_lib_path: ../dentate
   config_prefix: ../dentate/config
-  dataset_prefix: ../dentate/datasets
-  results_path: data
+  dataset_prefix: /global/cscratch1/sd/aaronmil/dentate
+  results_path: /global/cscratch1/sd/aaronmil/optimize_cells
 objective_names:
 - dend R_inp
 - term_dend R_inp

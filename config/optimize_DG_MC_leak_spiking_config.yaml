@@ -111,7 +111,7 @@ kwargs:
   mech_file_path: mechanisms/20180905_DG_MC_excitability_mech.yaml
   gid: 1000000
   cell_type: MC
-  correct_for_spines: True
+  correct_for_spines: False
   verbose: 2
   daspk: False
   config_file: Small_Scale_Control_MC_BC.yaml
