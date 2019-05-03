@@ -32,7 +32,6 @@ def main(config_file_path, export, output_dir, export_file_path, label, interact
     :param debug: bool
     """
     # requires a global variable context: :class:'Context'
-
     context.update(locals())
     comm = MPI.COMM_WORLD
 

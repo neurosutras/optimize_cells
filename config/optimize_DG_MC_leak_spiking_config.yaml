@@ -1,59 +1,73 @@
 bounds:
   dend.g_pas slope: !!python/tuple
   - 1.0E-9
-  - 5.0E-5
+  - 1.0E-2
   dend.g_pas tau: !!python/tuple
   - 25.
   - 400.
   soma.g_pas: !!python/tuple
   - 1.0E-12
-  - 1.0E-7
+  - 1.0E-4
   ais.gbar_nax: !!python/tuple
   - 0.02
   - 0.5
   ais.gkmbar: !!python/tuple
-  - 0.0005
-  - 0.015
+  - 0.00005
+  - 0.05
   ais.sha_nax: !!python/tuple
-  - -5.0
+  - -6.0
   - -1.0
   axon.gbar_nax: !!python/tuple
   - 0.02
   - 0.1
   axon.gkabar: !!python/tuple
-  - 0.01
-  - 0.18
+  - 0.001
+  - 0.05
   e_pas: !!python/tuple
-  - -65.0
-  - -58.0
+  - -70.0
+  - -60.0
   soma.gCa factor: !!python/tuple
-  - 0.01
+  - 0.005
   - 2.0
   soma.gCadepK factor: !!python/tuple
   - 0.0005
-  - 2.0
+  - 10.
   soma.gbar_nas: !!python/tuple
   - 0.01
   - 0.05
   soma.gkabar: !!python/tuple
-  - 0.01
-  - 0.05
-  soma.gkdrbar: !!python/tuple
-  - 0.0005
-  - 0.06
-  axon.gkdrbar: !!python/tuple
-  - 0.0005
-  - 0.06
-  soma.gkmbar: !!python/tuple
-  - 0.0005
   - 0.005
+  - 0.075
+  soma.gkdrbar: !!python/tuple
+  - 0.001
+  - 0.075
+  axon.gkdrbar: !!python/tuple
+  - 0.001
+  - 0.075
   soma.sh_nas/x: !!python/tuple
-  - 0.1
-  - 6.0
+  - 1.0
+  - 8.0
   soma.tau_Cacum: !!python/tuple
   - 9.
-  - 50.
+  - 100.
 default_params:
+rel_bounds:
+- - axon.gbar_nax
+  - '>'
+  - 1.0
+  - soma.gbar_nas
+- - ais.gbar_nax
+  - '>'
+  - 2.0
+  - axon.gbar_nax
+- - axon.gkabar
+  - '<'
+  - 1.0
+  - soma.gkabar
+- - axon.gkdrbar
+  - '>='
+  - 1.0
+  - soma.gkdrbar
 feature_names:
 - dend R_inp
 - term_dend R_inp
@@ -66,17 +80,14 @@ feature_names:
 - vm_stability
 - ais_delay
 - slow_depo
-- dend_bAP_ratio
 - rheobase
 - soma_spike_amp
-- f_I_slope
-- f_I_intercept
-- adi_intercept
-- adi_slope
-- dend_spike_amp
-- soma_vm_rest
+- f_I_log10_slope
+- spike_adi_slope
+- spike_detector_delay
+- soma vm_rest
 update_context:
-- - optimize_DG_MC_spiking
+- - optimize_DG_MC_leak
   - reset_biophysics
 - - optimize_DG_MC_leak
   - update_mechanisms_leak
@@ -84,9 +95,10 @@ update_context:
   - update_mechanisms_spiking
 get_features_stages:
 - source: optimize_DG_MC_leak
-  compute_features: compute_features_leak
   get_args_static: get_args_static_leak
+  compute_features: compute_features_leak
 - source: optimize_DG_MC_spiking
+  get_args_dynamic: get_args_dynamic_i_holding
   compute_features: compute_features_spike_shape
 - source: optimize_DG_MC_spiking
   get_args_dynamic: get_args_dynamic_fI
@@ -112,25 +124,23 @@ objective_names:
 - dend R_inp
 - term_dend R_inp
 - soma R_inp
-- soma_vm_rest
+- soma vm_rest
 - vm_th
 - ADP
 - fAHP
-- mAHP
 - rebound_firing
 - vm_stability
 - ais_delay
 - slow_depo
-##- dend_bAP_ratio
-- soma_spike_amp
-- th_count
-- adi_residuals #difference between spike intervals
+- spike_adaptation_residuals
 - f_I_residuals
-##- dend_spike_score
 optimization_title: DG_MC_leak_spiking
 param_gen: PopulationAnnealing
 param_names:
 - soma.g_pas
+- dend.g_pas slope
+- dend.g_pas tau
+- e_pas
 - soma.gbar_nas
 - axon.gbar_nax
 - ais.gbar_nax
@@ -142,79 +152,48 @@ param_names:
 - ais.sha_nax
 - soma.gCa factor
 - soma.gCadepK factor
-- soma.gkmbar
 - ais.gkmbar
 - soma.tau_Cacum
-- e_pas
-rel_bounds:
-- - axon.gbar_nax
-  - '>'
-  - 1.0
-  - soma.gbar_nas
-- - ais.gbar_nax
-  - '>'
-  - 2.0
-  - axon.gbar_nax
-- - axon.gkabar
-  - <
-  - 3.0
-  - soma.gkabar
-- - axon.gkdrbar
-  - <
-  - 3.0
-  - soma.gkdrbar
 target_range:
   dend R_inp: 1.
   soma R_inp: 0.5
   ADP: 0.05
   fAHP: 0.07
-  mAHP: 0.05
   ais_delay: 0.0005
-  ##dend_bAP_ratio: 0.0002
   rebound_firing: 0.002
-  soma_spike_amp: 2.0
-  th_count: 0.002
   vm_th: 0.01
   vm_stability: 0.1
-  ##dend_spike_amp: 0.1
   spike_rate: 0.1
   soma vm_rest: 0.1
 target_val:
-  dend R_inp: 160.
+  term_dend R_inp: 1000.
+  dend R_inp: 117.
   soma R_inp: 126.
-  ADP: 5.0 #after depolarization
-  fAHP: 7.5 #fast after hyperpolarization (when it passes threshold on
-  mAHP: 5. # medium hyperpolarization
+  min_ADP: 1.
+  max_ADP: 10.
+  min_fAHP: 3.0
+  max_fAHP: 15.
   ais_delay: 0.0
-  ##dend_bAP_ratio: 0.3
   rebound_firing: 0
   slow_depo: 5.0
-  soma_spike_amp: 90.0
-  th_count: 1
   vm_th: -48.0
   vm_stability: 5.0
-  f_I_slope: 31.92
-  f_I_intercept: 38.965
-  adi_slope: 262.39
-  adi_intercept: 94.529
-  ##dend_spike_amp: 15.
   soma vm_rest: -66.0
 x0:
-  ais.gbar_nax: 2.101566E-01
-  ais.gkmbar: 8.910924E-03
-  ais.sha_nax: -2.792502E+00
-  axon.gbar_nax: 6.029868E-02
-  axon.gkabar: 5.253822E-02
-  axon.gkdrbar: 2.081830E-02
+  soma.g_pas: 1.050E-10
   dend.g_pas slope: 1.058E-08
   dend.g_pas tau: 3.886E+01
-  e_pas: -60.0
-  soma.gCa factor: 8.072385E-0
-  soma.gCadepK factor: 1.133785E+002
+  e_pas: -66.0
   soma.gbar_nas: 4.414296E-02
+  axon.gbar_nax: 6.029868E-02
+  ais.gbar_nax: 2.101566E-01
   soma.gkabar: 2.547421E-02
   soma.gkdrbar: 1.587365E-02
-  soma.gkmbar: 4.555918E-03 #contributes to medium HP
-  soma.g_pas: 1.050E-10
-  soma.tau_Cacum: 3.582782E+01
+  axon.gkabar: 2.447421E-02
+  axon.gkdrbar: 2.081830E-02
   soma.sh_nas/x: 5.704921E+00
+  ais.sha_nax: -2.792502E+00
+  soma.gCa factor: 8.072385E-02
+  soma.gCadepK factor: 1.133785E+00
+  ais.gkmbar: 8.910924E-03
+  soma.tau_Cacum: 3.582782E+01
