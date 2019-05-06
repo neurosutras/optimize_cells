@@ -11,11 +11,16 @@ bounds:
   e_pas: !!python/tuple
   - -70.0
   - -60.0
+  soma.ghbar: !!python/tuple
+  - 1.0E-9
+  - 1.0E-2
 feature_names:
 - dend R_inp
 - term_dend R_inp
 - soma R_inp
+- soma R_inp (no h)
 - soma vm_rest
+- soma vm_rest (no h)
 update_context:
 - - optimize_DG_MC_leak
   - reset_biophysics
@@ -44,7 +49,9 @@ objective_names:
 - dend R_inp
 - term_dend R_inp
 - soma R_inp
+- soma R_inp (no h)
 - soma vm_rest
+- soma vm_rest (no h)
 optimization_title: DG_MC_leak
 param_gen: PopulationAnnealing
 param_names:
@@ -52,6 +59,7 @@ param_names:
 - dend.g_pas slope
 - dend.g_pas tau
 - e_pas
+- soma.ghbar
 target_range:
   dend R_inp: 1.
   soma R_inp: 0.5
@@ -60,9 +68,12 @@ target_val:
   term_dend R_inp: 1000.
   dend R_inp: 117.
   soma R_inp: 126.
+  soma R_inp (no h): 144.
   soma vm_rest: -66.0
+  soma vm_rest (no h): -70.0
 x0:
   dend.g_pas slope: 1.058E-5
   dend.g_pas tau: 3.886E+2
   soma.g_pas: 1.050E-5
   e_pas: -66.0
+  soma.ghbar: 1.e-5

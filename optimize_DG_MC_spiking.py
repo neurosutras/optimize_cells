@@ -150,14 +150,14 @@ def init_context():
     exp_fit_params_f_I, pcov = scipy.optimize.curve_fit(log10_fit, exp_i_inj_amp_f_I_0, exp_rate_f_I_0,
                                                         fit_params_f_I_0)
     exp_rheobase = inverse_log10_fit(rate_at_rheobase, *exp_fit_params_f_I)
-    i_inj_relative_amp_array = np.array([i_inj_increment_f_I * i for i in xrange(num_increments_f_I)])
+    i_inj_relative_amp_array = np.array([i_inj_increment_f_I * i for i in xrange(1, num_increments_f_I + 1)])
     exp_i_inj_amp_array = np.add(exp_rheobase, i_inj_relative_amp_array)
     exp_rate_f_I_array = log10_fit(exp_i_inj_amp_array, *exp_fit_params_f_I)
 
     exp_i_inj_amp_spike_adaptation_0 = [0.0786927, 0.11918506, 0.15969864, 0.20034486, 0.23995649, 0.2803958,
                                         0.32106324, 0.35967742, 0.40113009]  # nA
     # last ISI / first ISI (%)
-    exp_spike_adaptation_array_0 = [120.4301075, 123.655914 , 129.0322581, 147.8494624, 161.827957, 159.6774194,
+    exp_spike_adaptation_array_0 = [120.4301075, 123.655914, 129.0322581, 147.8494624, 161.827957, 159.6774194,
                                     180.6451613, 193.5483871, 194.0860215]
 
     exp_fit_spike_adaptation_results = stats.linregress(exp_i_inj_amp_spike_adaptation_0, exp_spike_adaptation_array_0)
@@ -534,10 +534,27 @@ def compute_features_fI(x, i_holding, spike_detector_delay, rheobase, relative_a
     return result
 
 
+def check_for_pause_in_spiking(spike_times, duration):
+    """
+
+    :param spike_times: array of float
+    :param duration: float
+    :return: bool
+    """
+    if len(spike_times) >= 3.:
+        ISI_array = np.diff(spike_times)
+        ISI_array.sort()
+        max_pause_dur = max(ISI_array[-1], duration - spike_times[-1])
+        if max_pause_dur > 2. * ISI_array[-2]:
+            return True
+    return False
+
+
 def filter_features_fI(primitives, current_features, export=False):
     """
 
-    :param primitives: list of dict (each dict contains results from a single simulation, in this case spike times and current amplitude)
+    :param primitives: list of dict (each dict contains results from a single simulation, in this case spike times and
+            current amplitude)
     :param current_features: dict
     :param export: bool
     :return: dict
@@ -559,10 +576,15 @@ def filter_features_fI(primitives, current_features, export=False):
         if 'rebound_firing' in this_dict:
             new_features['rebound_firing'] = this_dict['rebound_firing']
         if 'vm_th_late' in this_dict:
-            new_features['slow_depo'] = abs(this_dict['vm_th_late'] - current_features['vm_th'])
+            new_features['slow_depo'] = this_dict['vm_th_late'] - current_features['vm_th']
         rate.append(this_dict['spike_rate'])
         spike_times = this_dict['spike_times']
         this_adi = get_spike_adaptation_indexes(spike_times)
+        if check_for_pause_in_spiking(spike_times, context.stim_dur_f_I):
+            if context.verbose > 0:
+                print 'filter_features_fI: pid: %i; aborting - model failed due to long pause in spiking' % \
+                      os.getpid()
+            return dict()
         adi.append(this_adi)
     new_features['f_I_rate'] = rate
     new_features['spike_adi'] = adi
@@ -602,23 +624,20 @@ def get_objectives_spiking(features, export=False):
     for target in ['vm_th', 'rebound_firing', 'ais_delay']:
         objectives[target] = ((context.target_val[target] - features[target]) / context.target_range[target]) ** 2.
 
-    # only penalize slow_depo and vm_stability outside target range:
-    for target in ['slow_depo', 'vm_stability']:
+    # only penalize certain features outside target range:
+    for target in ['vm_stability']:
         if features[target] > context.target_val[target]:
             objectives[target] = ((features[target] - context.target_val[target]) /
                                   (0.01 * context.target_val[target])) ** 2.
         else:
             objectives[target] = 0.
 
-    # only penalize AHP and ADP amplitudes outside target range:
-    for target in ['fAHP', 'ADP']:
+    # only penalize certain features outside target range:
+    for target in ['fAHP', 'ADP', 'slow_depo']:
         min_val_key = 'min_' + target
         max_val_key = 'max_' + target
-        if features[target] < context.target_val[min_val_key]:
+        if features[target] < context.target_val[min_val_key] or features[target] > context.target_val[max_val_key]:
             objectives[target] = ((features[target] - context.target_val[min_val_key]) /
-                                  context.target_range[target]) ** 2.
-        elif features[target] > context.target_val[max_val_key]:
-            objectives[target] = ((features[target] - context.target_val[max_val_key]) /
                                   context.target_range[target]) ** 2.
         else:
             objectives[target] = 0.
@@ -664,6 +683,7 @@ def update_mechanisms_spiking(x, context=None):
     modify_mech_param(cell, 'soma', 'nas', 'gbar', x_dict['soma.gbar_nas'])
     modify_mech_param(cell, 'soma', 'kdr', 'gkdrbar', x_dict['soma.gkdrbar'])
     modify_mech_param(cell, 'soma', 'kap', 'gkabar', x_dict['soma.gkabar'])
+    modify_mech_param(cell, 'soma', 'ions', 'ek', -80.)
     modify_mech_param(cell, 'soma', 'nas', 'sh', x_dict['soma.sh_nas/x'])
     for sec_type in ['apical']:
         modify_mech_param(cell, sec_type, 'kap', 'gkabar', origin='soma')
@@ -687,6 +707,8 @@ def update_mechanisms_spiking(x, context=None):
     modify_mech_param(cell, 'axon', 'DGC_KM', 'gbar', origin='ais')
     modify_mech_param(cell, 'ais', 'nax', 'sha', x_dict['ais.sha_nax'])
     modify_mech_param(cell, 'ais', 'nax', 'gbar', x_dict['ais.gbar_nax'])
+    for sec_type in ['apical', 'hillock', 'ais', 'axon']:
+        modify_mech_param(cell, sec_type, 'ions', 'ek', origin='soma')
 
 
 def add_diagnostic_recordings():

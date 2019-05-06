@@ -280,7 +280,7 @@ def update_mechanisms_leak(x, context):
     modify_mech_param(cell, 'soma', 'pas', 'e', x_dict['e_pas'])
     modify_mech_param(cell, 'apical', 'pas', 'g', origin='soma', slope=x_dict['dend.g_pas slope'],
                       tau=x_dict['dend.g_pas tau'])
-    for sec_type in ['axon_hill', 'ais', 'axon', 'apical', 'spine_neck', 'spine_head']:
+    for sec_type in ['hillock', 'ais', 'axon', 'apical']:
         update_mechanism_by_sec_type(cell, sec_type, 'pas')
     if context.correct_for_spines:
         correct_cell_for_spines_g_pas(cell, context.env, context.verbose > 1)

@@ -46,7 +46,7 @@ def plot_Rinp(rec_file_list, sec_types_list=None, features_list=None, features_l
         file_labels = [file_labels]
     if sec_types_list is None:
         sec_types_list = ['axon', 'apical', 'soma']
-    axon_types_list = ['axon', 'ais', 'axon_hill']
+    axon_types_list = ['axon', 'ais', 'hillock']
     dend_types_list = ['basal', 'apical', 'trunk', 'tuft']
     if features_list is None:
         features_list = ['Rinp_peak', 'Rinp_baseline', 'Rinp_steady', 'decay_90']
@@ -80,7 +80,7 @@ def plot_Rinp(rec_file_list, sec_types_list=None, features_list=None, features_l
                     for feature in features_list:
                         if sec_type not in distances_dict[feature].keys():
                             distances_dict[feature][sec_type] = []
-                        if item.attrs['type'] in ['basal', 'axon', 'ais', 'axon_hill']:
+                        if item.attrs['type'] in ['basal', 'axon', 'ais', 'hillock']:
                             distances_dict[feature][sec_type].append(item.attrs['soma_distance'] * -1.)
                         else:
                             distances_dict[feature][sec_type].append(item.attrs['soma_distance'])
@@ -565,6 +565,56 @@ def plot_exported_DG_GC_spiking_features(file_path):
         axes2.legend(loc='best', frameon=False, framealpha=0.5)
         axes2.set_xlabel('ISI number')
         axes2.set_ylabel('Inter-spike interval (ms)')
+        axes2.set_ylim(0., axes2.get_ylim()[1])
+        axes2.set_title('Spike rate adaptation', fontsize=mpl.rcParams['font.size'])
+        clean_axes(axes2)
+        fig2.tight_layout()
+        fig2.show()
+    mpl.rcParams['font.size'] = orig_fontsize
+
+
+def plot_exported_DG_MC_spiking_features(file_path):
+    """
+
+    :param file_path: str (path)
+    """
+    orig_fontsize = mpl.rcParams['font.size']
+    if not os.path.isfile(file_path):
+        raise IOError('plot_exported_DG_MC_spiking_features: invalid file path: %s' % file_path)
+    with h5py.File(file_path, 'r') as f:
+        group_name = 'f_I'
+        if group_name not in f:
+            raise AttributeError('plot_exported_DG_MC_spiking_features: provided file path: %s does not contain a '
+                                 'required group: %s' % (file_path, group_name))
+        group = f[group_name]
+        fig1, axes1 = plt.subplots()
+        i_relative_amp = group['i_relative_amp'][:]
+        rate = group['rate'][:]
+        exp_rate = group['exp_rate'][:]
+        axes1.scatter(i_relative_amp, rate, label='Model', c='r', linewidth=0, alpha=0.5)
+        axes1.plot(i_relative_amp, rate, c='r', alpha=0.5)
+        axes1.scatter(i_relative_amp, exp_rate, label='Experiment', c='grey', linewidth=0, alpha=0.5)
+        axes1.plot(i_relative_amp, exp_rate, c='grey', alpha=0.5)
+        axes1.legend(loc='best', frameon=False, framealpha=0.5)
+        axes1.set_xlabel('Amplitude of current injection\nrelative to rheobase (nA)')
+        axes1.set_ylabel('Firing rate (Hz)')
+        axes1.set_ylim(0., axes1.get_ylim()[1])
+        axes1.set_xlim(0., axes1.get_xlim()[1])
+        axes1.set_title('f-I', fontsize=mpl.rcParams['font.size'])
+        clean_axes(axes1)
+        fig1.tight_layout()
+        fig1.show()
+
+        fig2, axes2 = plt.subplots()
+        model_adi_array = group['adi'][:]
+        exp_adi_array = group['exp_adi'][:]
+        axes2.scatter(i_relative_amp, model_adi_array, label='Model', c='r', linewidth=0, alpha=0.5)
+        axes2.plot(i_relative_amp, model_adi_array, c='r', alpha=0.5)
+        axes2.scatter(i_relative_amp, exp_adi_array, label='Experiment', c='k', linewidth=0, alpha=0.5)
+        axes2.plot(i_relative_amp, exp_adi_array, c='k', alpha=0.5)
+        axes2.legend(loc='best', frameon=False, framealpha=0.5)
+        axes1.set_xlabel('Amplitude of current injection\nrelative to rheobase (nA)')
+        axes2.set_ylabel('Spike adaptation (%)\n(Last ISI/First ISI)')
         axes2.set_ylim(0., axes2.get_ylim()[1])
         axes2.set_title('Spike rate adaptation', fontsize=mpl.rcParams['font.size'])
         clean_axes(axes2)

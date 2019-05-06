@@ -171,7 +171,7 @@ def init_context():
     # nA (1 s current injections)
     exp_i_inj_amp_f_I_0 = [0.04992987, 0.10042076, 0.14978962, 0.19915848, 0.25021038, 0.29957924, 0.34950912]
     # Hz
-    exp_rate_f_I_0 = [0.1512182 ,  1.42530421,  3.47741269,  6.8254175 ,  8.79040588, 10.5833351 , 13.58552522]
+    exp_rate_f_I_0 = [0.1512182 ,  1.42530421,  3.47741269,  6.8254175,  8.79040588, 10.5833351, 13.58552522]
 
     exp_fit_f_I_results = stats.linregress(exp_i_inj_amp_f_I_0, exp_rate_f_I_0)
     exp_fit_f_I_slope, exp_fit_f_I_intercept = exp_fit_f_I_results[0], exp_fit_f_I_results[1]

@@ -139,7 +139,8 @@ target_val:
   max_fAHP: 15.
   ais_delay: 0.0
   rebound_firing: 0
-  slow_depo: 5.0
+  max_slow_depo: 5.0
+  min_slow_depo: 1.
   vm_th: -48.0
   vm_stability: 5.0
 x0:

@@ -177,14 +177,19 @@ def get_args_static_leak():
     each set of parameters.
     :return: list of list
     """
-    return [['soma', 'dend', 'term_dend']]
+    sections = ['soma', 'dend', 'term_dend']
+    block_h = [False] * len(sections)
+    sections.append('soma')
+    block_h.append(True)
+    return [sections, block_h]
 
 
-def compute_features_leak(x, section, export=False, plot=False):
+def compute_features_leak(x, section, block_h, export=False, plot=False):
     """
     Inject a hyperpolarizing step current into the specified section, and return the steady-state input resistance.
     :param x: array
     :param section: str
+    :param block_h: bool; whether or not to zero the h conductance
     :param export: bool
     :param plot: bool
     :return: dict: {str: float}
@@ -193,6 +198,8 @@ def compute_features_leak(x, section, export=False, plot=False):
     config_sim_env(context)
     update_source_contexts(x, context)
     zero_na(context.cell)
+    if block_h:
+        zero_h(context.cell)
 
     duration = context.duration
     stim_dur = context.stim_dur
@@ -202,7 +209,10 @@ def compute_features_leak(x, section, export=False, plot=False):
     sim = context.sim
 
     title = 'R_inp'
-    description = 'step current injection to %s' % section
+    if block_h:
+        description = 'step current injection to %s (no h)' % section
+    else:
+        description = 'step current injection to %s' % section
     sim.parameters['section'] = section
     sim.parameters['title'] = title
     sim.parameters['description'] = description
@@ -224,10 +234,16 @@ def compute_features_leak(x, section, export=False, plot=False):
 
     R_inp = get_R_inp(np.array(sim.tvec), np.array(rec), equilibrate, duration, amp, dt)[2]
     result = dict()
-    result['%s R_inp' % section] = R_inp
     if section == 'soma':
-        result['soma vm_rest'] = vm_rest
-        result['i_holding'] = context.i_holding
+        if block_h:
+            result['%s R_inp (no h)' % section] = R_inp
+            result['soma vm_rest (no h)'] = vm_rest
+        else:
+            result['%s R_inp' % section] = R_inp
+            result['soma vm_rest'] = vm_rest
+            result['i_holding'] = context.i_holding
+    else:
+        result['%s R_inp' % section] = R_inp
     if context.verbose > 0:
         print 'compute_features_leak: pid: %i; %s: %s took %.1f s; R_inp: %.1f' % \
               (os.getpid(), title, description, time.time() - start_time, R_inp)
@@ -252,6 +268,13 @@ def get_objectives_leak(features, export=False):
         objective_name = feature_name
         objectives[objective_name] = ((context.target_val[objective_name] - features[feature_name]) /
                                                   context.target_range[objective_name]) ** 2.
+
+    for base_feature_name in ['soma R_inp', 'soma vm_rest']:
+        feature_name = base_feature_name + ' (no h)'
+        objective_name = feature_name
+        objectives[objective_name] = ((context.target_val[objective_name] - features[feature_name]) /
+                                      context.target_range[base_feature_name]) ** 2.
+
     delta_term_dend_R_inp = None
     if features['term_dend R_inp'] < features['dend R_inp']:
         delta_term_dend_R_inp = features['term_dend R_inp'] - features['dend R_inp']
@@ -277,10 +300,12 @@ def update_mechanisms_leak(x, context):
     cell = context.cell
     x_dict = param_array_to_dict(x, context.param_names)
     modify_mech_param(cell, 'soma', 'pas', 'g', x_dict['soma.g_pas'])
+    modify_mech_param(cell, 'soma', 'h', 'ghbar', x_dict['soma.ghbar'])
     modify_mech_param(cell, 'soma', 'pas', 'e', x_dict['e_pas'])
     modify_mech_param(cell, 'apical', 'pas', 'g', origin='soma', slope=x_dict['dend.g_pas slope'],
                       tau=x_dict['dend.g_pas tau'])
-    for sec_type in ['axon_hill', 'ais', 'axon', 'apical', 'spine_neck', 'spine_head']:
+    modify_mech_param(cell, 'apical', 'h', 'ghbar', origin='soma')
+    for sec_type in ['hillock', 'ais', 'axon', 'apical']:
         update_mechanism_by_sec_type(cell, sec_type, 'pas')
     if context.correct_for_spines:
         correct_cell_for_spines_g_pas(cell, context.env, context.verbose > 1)
