@@ -44,10 +44,10 @@ def main(config_file_path, export, output_dir, export_file_path, label, interact
                             disp=verbose > 0, verbose=verbose, plot=plot)
     sys.stdout.flush()
     time.sleep(1.)
-    features = context.interface.execute(compute_features, context.x0_array, context.export)
-    sys.stdout.flush()
-    time.sleep(1.)
     if not context.debug:
+        features = context.interface.execute(compute_features, context.x0_array, context.export)
+        sys.stdout.flush()
+        time.sleep(1.)
         features, objectives = context.interface.execute(get_objectives, features)
         sys.stdout.flush()
         time.sleep(1.)
@@ -114,8 +114,6 @@ def init_context():
     baks_pad_dur = 1000.  # ms
     filter_bands = {'Theta': [4., 10.], 'Gamma': [30., 100.]}
 
-    local_random = random.Random()
-
     if context.comm.rank == 0:
         input_pop_t = dict()
         input_pop_firing_rates = dict()
@@ -164,20 +162,20 @@ def init_context():
     input_pop_firing_rates = context.comm.bcast(input_pop_firing_rates, root=0)
 
     if context.connectivity_type == 'gaussian':
-        pop_axon_extents = {'FF': 0.3, 'E': 0.3, 'I': 0.3}
+        pop_axon_extents = {'FF': 1., 'E': 1., 'I': 1.}
         if 'spatial_dim' not in context():
             raise RuntimeError('optimize_simple_network: spatial_dim parameter not found; required for gaussian '
                                'connectivity')
 
         if context.comm.rank == 0:
+            local_np_random = np.random.RandomState()
             pop_cell_positions = dict()
             for pop_name in pop_gid_ranges:
                 for gid in xrange(pop_gid_ranges[pop_name][0], pop_gid_ranges[pop_name][1]):
-                    local_random.seed(context.location_seed + gid)
+                    local_np_random.seed(context.location_seed + gid)
                     if pop_name not in pop_cell_positions:
                         pop_cell_positions[pop_name] = dict()
-                    pop_cell_positions[pop_name][gid] = \
-                        tuple([local_random.random() * 2 - 1 for _ in range(context.spatial_dim)])
+                    pop_cell_positions[pop_name][gid] = local_np_random.uniform(-1., 1., size=context.spatial_dim)
         else:
             pop_cell_positions = None
         pop_cell_positions = context.comm.bcast(pop_cell_positions, root=0)

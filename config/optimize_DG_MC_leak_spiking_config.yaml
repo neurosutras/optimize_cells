@@ -108,7 +108,7 @@ get_objectives:
   optimize_DG_MC_leak: get_objectives_leak
   optimize_DG_MC_spiking: get_objectives_spiking
 kwargs:
-  mech_file_path: mechanisms/20180905_DG_MC_excitability_mech.yaml
+  mech_file_path: mechanisms/20181127_DG_MC_only_leak_mech.yaml  # 20180905_DG_MC_excitability_mech.yaml
   gid: 1000000
   cell_type: MC
   correct_for_spines: False

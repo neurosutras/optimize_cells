@@ -248,14 +248,16 @@ class SimpleNetwork(object):
         :param pop_axon_extents: float
         :return: array of float
         """
-        tpos = np.array([pop_cell_positions[target_pop_name][target_gid]])
-        sourcepos = np.array(pop_cell_positions[source_pop_name].values())
-        p_connection = np.sqrt(np.dot(tpos, tpos.T) - 2 * np.dot(tpos, sourcepos.T) + np.dot(sourcepos, sourcepos.T)).diagonal().copy()
-        if target_gid in pop_cell_positions[source_pop_name].keys():
-            p_connection[pop_cell_positions[source_pop_name].keys().index(target_gid)] = 0
-        #sigma = pop_axon_extents[source_pop_name] / (3 * np.sqrt(2))  # setting dist > sigma probabilities to 0?
-        p_connection /= np.sum(p_connection)
-        return p_connection
+        from scipy.spatial.distance import cdist
+        target_cell_position = pop_cell_positions[target_pop_name][target_gid]
+        source_cell_positions = \
+            [pop_cell_positions[source_pop_name][source_gid] for source_gid in potential_source_gids]
+        distances = cdist([target_cell_position], source_cell_positions)[0]
+        sigma = pop_axon_extents[source_pop_name] / 3. / np.sqrt(2.)
+        prob_connection = np.exp(-(distances / sigma) ** 2.)
+        prob_connection /= np.sum(prob_connection)
+
+        return prob_connection
 
     def connect_cells(self, connectivity_type='uniform', default_weight_distribution_type='normal',
                       connection_weight_distribution_types=None,  **kwargs):
@@ -344,7 +346,7 @@ class SimpleNetwork(object):
                         for source_gid in source_gids:
                             xs.append(pop_cell_positions[source_pop_name][source_gid][0])
                             ys.append(pop_cell_positions[source_pop_name][source_gid][1])
-                        vals, xedge, yedge = np.histogram2d(x=xs, y=ys, bins=np.linspace(-1.0, 1.0, 21))
+                        vals, xedge, yedge = np.histogram2d(x=xs, y=ys, bins=np.linspace(-1.0, 1.0, 51))
                         plt.pcolor(xedge, yedge, vals)
                         plt.title("Cell {} at {}, {} to {} via {} syn".format(target_gid, target_loc, source_pop_name,
                                                                               target_pop_name, syn_type))
