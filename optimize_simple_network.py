@@ -141,6 +141,22 @@ def init_context():
                 except:
                     raise RuntimeError('optimize_simple_network: missing kwarg(s) required to specify %s input '
                                        'population: %s' % (context.input_types[pop_name], pop_name))
+
+                floor_width = (tstop - equilibrate) * this_norm_tuning_width
+                padded_duration = tstop + 2. * floor_width
+                gaussian_std = floor_width / 3. / np.sqrt(2.)
+                gauss_function = gaussian_activity(floor_width, dt, this_max_rate, gaussian_std, floor_width / 2.)
+                if pop_name not in input_pop_firing_rates:
+                    input_pop_firing_rates[pop_name] = dict()
+                    input_pop_t[pop_name] = dict()
+
+                for gid in xrange(pop_gid_ranges[pop_name][0], pop_gid_ranges[pop_name][1]):
+                    start_time = padded_duration / (pop_sizes[pop_name] + 1) * (gid - pop_gid_ranges[pop_name][0]) \
+                                 - floor_width
+                    input_pop_firing_rates[pop_name][gid] = gauss_function
+                    input_pop_t[pop_name][gid] = \
+                        np.linspace(start_time, start_time + floor_width, int(floor_width / dt))
+
     else:
         input_pop_t = None
         input_pop_firing_rates = None
@@ -308,6 +324,7 @@ def compute_features(x, export=False):
         pop_syn_proportions=context.pop_syn_proportions, connection_weights_mean=context.connection_weights_mean,
         connection_weights_norm_sigma=context.connection_weights_norm_sigma,
         syn_mech_params=context.syn_mech_params, input_pop_t=context.input_pop_t,
+        input_norm_tuning_widths=context.input_norm_tuning_widths, input_types=context.input_types,
         input_pop_firing_rates=context.input_pop_firing_rates, tstop=context.tstop, equilibrate=context.equilibrate,
         dt=context.dt, delay=context.delay, connection_seed=context.connection_seed,spikes_seed=context.spikes_seed,
         verbose=context.verbose, debug=context.debug)
