@@ -77,11 +77,12 @@ def config_worker():
         context.verbose = int(context.verbose)
     if 'debug' not in context():
         context.debug = False
-    init_context()
     context.pc = h.ParallelContext()
+    init_context()
 
 
 def init_context():
+    start_time = time.time()
     pop_sizes = {'FF': 1000, 'E': 200, 'I': 200}
     pop_syn_counts = {'E': 1000, 'I': 1000}  # {'target_pop_name': int}
     pop_gid_ranges = get_pop_gid_ranges(pop_sizes)
@@ -198,6 +199,8 @@ def init_context():
     """
 
     context.update(locals())
+    if int(context.pc.id()) == 0 and context.verbose > 0:
+        print('INITIALIZATION TIME: %.2f s' % (time.time() - start_time))
 
 
 def update_context(x, local_context=None):

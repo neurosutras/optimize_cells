@@ -755,16 +755,17 @@ def get_pop_activity_stats(spikes_dict, firing_rates_dict, t, threshold=1., plot
             np.divide(np.mean(binned_spike_count_dict[pop_name].values(), axis=0), dt / 1000.)
 
     if plot:
+        fig, axes = plt.subplots(1, 2)
         for pop_name in pop_fraction_active_dict:
-            fig, axes = plt.subplots(1, 2)
-            axes[0].plot(t, pop_fraction_active_dict[pop_name], c='k')
-            axes[0].set_title('Active fraction of cell population')
-            axes[1].plot(t, mean_rate_active_cells_dict[pop_name], c='k')
+            axes[0].plot(t, pop_fraction_active_dict[pop_name], label=pop_name)
+            axes[0].set_title('Active fraction of population')
+            axes[1].plot(t, mean_rate_active_cells_dict[pop_name])
             axes[1].set_title('Mean firing rate of active cells')
+            axes[0].set_ylim(0., axes[0].get_ylim()[1])
+            axes[1].set_ylim(0., axes[1].get_ylim()[1])
+            axes[0].legend(loc='best', frameon=False, framealpha=0.5)
             clean_axes(axes)
-            fig.suptitle('Population: %s' % pop_name)
             fig.tight_layout()
-            fig.subplots_adjust(top=0.9)
             fig.show()
 
     return mean_rate_dict, peak_rate_dict, mean_rate_active_cells_dict, pop_fraction_active_dict, \

@@ -59,6 +59,23 @@ bounds:
   I_E_FF_syn_proportion: !!python/tuple
     - 0.01
     - 0.99
+rel_bounds:
+- - E_FF_mean_weight
+  - '<'
+  - 2.0
+  - E_E_mean_weight
+- - E_FF_mean_weight
+  - '>'
+  - 0.5
+  - E_E_mean_weight
+- - I_FF_mean_weight
+  - '<'
+  - 2.0
+  - I_E_mean_weight
+- - I_FF_mean_weight
+  - '>'
+  - 0.5
+  - I_E_mean_weight
 feature_names:
 - E_peak_rate
 - I_peak_rate
@@ -180,10 +197,10 @@ target_val:
   I_centroid_theta_freq: 7.
   E_centroid_gamma_freq: 70.
   I_centroid_gamma_freq: 70.
-  E_theta_tuning_index: 3.
-  I_theta_tuning_index: 3.
-  E_gamma_tuning_index: 3.
-  I_gamma_tuning_index: 3.
+  E_theta_tuning_index: 5.
+  I_theta_tuning_index: 5.
+  E_gamma_tuning_index: 5.
+  I_gamma_tuning_index: 5.
 x0:
   E_FF_mean_weight: 1.
   E_E_mean_weight: 1.
