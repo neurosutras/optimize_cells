@@ -171,8 +171,9 @@ target_range:
   ais_delay: 0.0005
   rebound_firing: 0.002
   vm_th: 0.01
-  vm_stability: 0.1
+  vm_stability: 0.5
   spike_rate: 0.1
+  slow_depo: 0.1
 target_val:
   term_dend R_inp: 1000.
   dend R_inp: 117.
@@ -207,5 +208,5 @@ x0:
   axon.gbar_nax: 4.272765E-02
   soma.gbar_nas: 1.794131E-02
   soma.gCadepK factor: 3.692130E-01
-  ais.gkmbar: 2.584361E-02
+  ais.gkmbar: 2.584361E-04
   soma.gkabar: 3.166313E-02

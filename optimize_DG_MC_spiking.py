@@ -627,8 +627,7 @@ def get_objectives_spiking(features, export=False):
     # only penalize certain features outside target range:
     for target in ['vm_stability']:
         if features[target] > context.target_val[target]:
-            objectives[target] = ((features[target] - context.target_val[target]) /
-                                  (0.01 * context.target_val[target])) ** 2.
+            objectives[target] = ((features[target] - context.target_val[target]) / context.target_range[target]) ** 2.
         else:
             objectives[target] = 0.
 
@@ -636,8 +635,11 @@ def get_objectives_spiking(features, export=False):
     for target in ['fAHP', 'ADP', 'slow_depo']:
         min_val_key = 'min_' + target
         max_val_key = 'max_' + target
-        if features[target] < context.target_val[min_val_key] or features[target] > context.target_val[max_val_key]:
+        if features[target] < context.target_val[min_val_key]:
             objectives[target] = ((features[target] - context.target_val[min_val_key]) /
+                                  context.target_range[target]) ** 2.
+        elif features[target] > context.target_val[max_val_key]:
+            objectives[target] = ((features[target] - context.target_val[max_val_key]) /
                                   context.target_range[target]) ** 2.
         else:
             objectives[target] = 0.

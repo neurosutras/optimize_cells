@@ -130,8 +130,9 @@ target_range:
   ais_delay: 0.0005
   rebound_firing: 0.002
   vm_th: 0.01
-  vm_stability: 0.1
+  vm_stability: 0.5
   spike_rate: 0.1
+  slow_depo: 0.1
 target_val:
   min_ADP: 1.
   max_ADP: 10.
@@ -140,7 +141,7 @@ target_val:
   ais_delay: 0.0
   rebound_firing: 0
   max_slow_depo: 5.0
-  min_slow_depo: 1.
+  min_slow_depo: 1.0
   vm_th: -48.0
   vm_stability: 5.0
 x0:
@@ -154,6 +155,6 @@ x0:
   soma.sh_nas/x: 5.704921E+00
   ais.sha_nax: -2.792502E+00
   soma.gCa factor: 8.072385E-02
-  soma.gCadepK factor: 1.133785E+00
-  ais.gkmbar: 8.910924E-03
+  soma.gCadepK factor: 1.133785E-01
+  ais.gkmbar: 8.910924E-04
   soma.tau_Cacum: 3.582782E+01
