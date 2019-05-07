@@ -83,7 +83,7 @@ def config_worker():
 
 def init_context():
     start_time = time.time()
-    pop_sizes = {'FF': 1000, 'E': 200, 'I': 200}
+    pop_sizes = {'FF': 1000, 'E': 1000, 'I': 200}
     pop_syn_counts = {'E': 1000, 'I': 1000}  # {'target_pop_name': int}
     pop_gid_ranges = get_pop_gid_ranges(pop_sizes)
     pop_cell_types = {'FF': 'input', 'E': 'IB', 'I': 'FS'}
