@@ -103,7 +103,7 @@ kwargs:
   input_min_rates:
     FF: 0.
   input_norm_tuning_widths:
-    FF: 0.2
+    FF: 0.5
 objective_names:
 - E_peak_rate
 - I_peak_rate

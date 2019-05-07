@@ -104,7 +104,8 @@ def init_context():
 
     delay = 1.  # ms
     equilibrate = 250.  # ms
-    tstop = 3000. + equilibrate  # ms
+    duration = 3000. # ms
+    tstop = duration + equilibrate  # ms
     dt = 0.025
     binned_dt = 1.  # ms
     filter_dt = 1.  # ms
@@ -120,14 +121,15 @@ def init_context():
         for pop_name in context.input_types:
             if pop_name not in pop_cell_types or pop_cell_types[pop_name] != 'input':
                 raise RuntimeError('optimize_simple_network: %s not specified as an input population' % pop_name)
+            if pop_name not in input_pop_firing_rates:
+                input_pop_firing_rates[pop_name] = dict()
             if context.input_types[pop_name] == 'constant':
                 try:
                     this_mean_rate = context.input_mean_rates[pop_name]
-                except:
-                    raise RuntimeError('optimize_simple_network: missing kwarg(s) required to specify %s input population:'
-                                       ' %s' % (context.input_types[pop_name], pop_name))
-                if pop_name not in input_pop_firing_rates:
-                    input_pop_firing_rates[pop_name] = dict()
+                except Exception:
+                    raise RuntimeError('optimize_simple_network: missing kwarg(s) required to specify %s input '
+                                       'population: %s' % (context.input_types[pop_name], pop_name))
+                if pop_name not in input_pop_t:
                     input_pop_t[pop_name] = [0., tstop]
                 for gid in xrange(pop_gid_ranges[pop_name][0], pop_gid_ranges[pop_name][1]):
                     input_pop_firing_rates[pop_name][gid] = [this_mean_rate, this_mean_rate]
@@ -136,25 +138,35 @@ def init_context():
                     this_min_rate = context.input_min_rates[pop_name]
                     this_max_rate = context.input_max_rates[pop_name]
                     this_norm_tuning_width = context.input_norm_tuning_widths[pop_name]
-                except:
+                except Exception:
                     raise RuntimeError('optimize_simple_network: missing kwarg(s) required to specify %s input '
                                        'population: %s' % (context.input_types[pop_name], pop_name))
 
-                floor_width = (tstop - equilibrate) * this_norm_tuning_width
-                padded_duration = tstop + 2. * floor_width
-                gaussian_std = floor_width / 3. / np.sqrt(2.)
-                gauss_function = gaussian_activity(floor_width, dt, this_max_rate, gaussian_std, floor_width / 2.)
-                if pop_name not in input_pop_firing_rates:
-                    input_pop_firing_rates[pop_name] = dict()
-                    input_pop_t[pop_name] = dict()
+                this_stim_t = np.arange(0., tstop + dt / 2., dt)
+                if pop_name not in input_pop_t:
+                    input_pop_t[pop_name] = this_stim_t
 
-                for gid in xrange(pop_gid_ranges[pop_name][0], pop_gid_ranges[pop_name][1]):
-                    start_time = padded_duration / (pop_sizes[pop_name] + 1) * (gid - pop_gid_ranges[pop_name][0]) \
-                                 - floor_width
-                    input_pop_firing_rates[pop_name][gid] = gauss_function
-                    input_pop_t[pop_name][gid] = \
-                        np.linspace(start_time, start_time + floor_width, int(floor_width / dt))
+                this_tuning_width = duration * this_norm_tuning_width
+                this_sigma = this_tuning_width / 3. / np.sqrt(2.)
 
+                peak_locs = np.linspace(-2. * this_tuning_width / 3.,
+                                        tstop + 2. * this_tuning_width / 3., pop_sizes[pop_name])
+
+                for peak_loc, gid in zip(peak_locs, xrange(pop_gid_ranges[pop_name][0], pop_gid_ranges[pop_name][1])):
+                    input_pop_firing_rates[pop_name][gid] = \
+                        get_gaussian_rate(t=this_stim_t, peak_loc=peak_loc, sigma=this_sigma, min_rate=this_min_rate,
+                                          max_rate=this_max_rate)
+                if context.debug and context.plot:
+                    fig, axes = plt.subplots()
+                    for gid in range(pop_gid_ranges[pop_name][0],
+                                     pop_gid_ranges[pop_name][1])[::int(pop_sizes[pop_name] / 25)]:
+                        axes.plot(this_stim_t - equilibrate, input_pop_firing_rates[pop_name][gid])
+                    mean_input = np.mean(input_pop_firing_rates[pop_name].values(), axis=0)
+                    axes.plot(this_stim_t - equilibrate, mean_input, c='k', linewidth=2.)
+                    axes.set_ylabel('Firing rate (Hz)')
+                    axes.set_xlabel('Time (ms)')
+                    clean_axes(axes)
+                    fig.show()
     else:
         input_pop_t = None
         input_pop_firing_rates = None
@@ -261,7 +273,7 @@ def analyze_network_output(network, export=False, plot=False):
         filtered_mean_rate_dict, filter_envelope_dict, filter_envelope_ratio_dict, centroid_freq_dict, \
         freq_tuning_index_dict = \
             get_pop_bandpass_filtered_signal_stats(mean_rate_from_spike_count_dict, binned_t, context.filter_bands,
-                                                   plot=plot, verbose=context.verbose>0)
+                                                   plot=plot, verbose=context.verbose > 1)
 
         if plot:
             plot_inferred_spike_rates(binned_spike_count_dict, firing_rates_dict, binned_t,
@@ -322,7 +334,6 @@ def compute_features(x, export=False):
         pop_syn_proportions=context.pop_syn_proportions, connection_weights_mean=context.connection_weights_mean,
         connection_weights_norm_sigma=context.connection_weights_norm_sigma,
         syn_mech_params=context.syn_mech_params, input_pop_t=context.input_pop_t,
-        input_norm_tuning_widths=context.input_norm_tuning_widths, input_types=context.input_types,
         input_pop_firing_rates=context.input_pop_firing_rates, tstop=context.tstop, equilibrate=context.equilibrate,
         dt=context.dt, delay=context.delay, connection_seed=context.connection_seed,spikes_seed=context.spikes_seed,
         verbose=context.verbose, debug=context.debug)

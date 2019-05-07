@@ -64,10 +64,10 @@ default_syn_type_mech_params = \
 class SimpleNetwork(object):
 
     def __init__(self, pc, pop_sizes, pop_gid_ranges, pop_cell_types, pop_syn_counts, pop_syn_proportions,
-                 connection_weights_mean, connection_weights_norm_sigma, syn_mech_params, input_norm_tuning_widths,
-                 input_types=None, syn_mech_names=None, syn_mech_param_rules=None, syn_mech_param_defaults=None,
-                 input_pop_t=None, input_pop_firing_rates=None, tstop=1000., equilibrate=250., dt=0.025, delay=1.,
-                 connection_seed=0, spikes_seed=100000, v_init=-65., verbose=1, debug=False):
+                 connection_weights_mean, connection_weights_norm_sigma, syn_mech_params, syn_mech_names=None,
+                 syn_mech_param_rules=None, syn_mech_param_defaults=None, input_pop_t=None,
+                 input_pop_firing_rates=None, tstop=1000., equilibrate=250., dt=0.025, delay=1., connection_seed=0,
+                 spikes_seed=100000, v_init=-65., verbose=1, debug=False):
         """
 
         :param pc: ParallelContext object
@@ -136,8 +136,6 @@ class SimpleNetwork(object):
         self.spikes_dict = defaultdict(dict)
         self.input_pop_t = input_pop_t
         self.input_pop_firing_rates = input_pop_firing_rates
-        self.input_types = input_types
-        self.input_norm_tuning_widths = input_norm_tuning_widths
 
         self.local_random = random.Random()
         self.local_np_random = np.random.RandomState()
@@ -173,16 +171,10 @@ class SimpleNetwork(object):
                                 raise RuntimeError('mkcells: time base not specified; cannot generate spikes for input '
                                                    'population: %s' % pop_name)
                             self.local_random.seed(self.spikes_seed + gid)
-                            if self.input_types[pop_name] == 'gaussian':
-                                this_spike_train = np.array(get_inhom_poisson_spike_times_by_thinning(
-                                    self.input_pop_firing_rates[pop_name][gid], self.input_pop_t[pop_name][gid],
-                                    dt=self.dt, generator=self.local_random))
-                                this_spike_train = this_spike_train[np.where(this_spike_train >= 0.)[0]]
-                            else:
-                                this_spike_train = \
-                                    get_inhom_poisson_spike_times_by_thinning(self.input_pop_firing_rates[pop_name][gid],
-                                                                              self.input_pop_t[pop_name], dt=self.dt,
-                                                                              generator=self.local_random)
+                            this_spike_train = \
+                                get_inhom_poisson_spike_times_by_thinning(self.input_pop_firing_rates[pop_name][gid],
+                                                                          self.input_pop_t[pop_name], dt=self.dt,
+                                                                          generator=self.local_random)
                             cell.load_vecstim(this_spike_train)
                     elif cell_type == 'minimal':
                         cell = MinimalCell(pop_name, gid)
@@ -593,33 +585,19 @@ class FFCell(object):
     def is_art(self):
         return 1
 
-def create_gaussian_pop_spikes(tstop, equilibrate, this_norm_tuning_width, this_max_rate, pop_size, local_random=None,
-                               dt=.025):
-    padded_duration = tstop + 2. * (tstop - equilibrate) * this_norm_tuning_width
-    floor_width = (tstop - equilibrate) * this_norm_tuning_width
-    gaussian_std = floor_width / 3. / np.sqrt(2.)
-    gauss_function = gaussian_activity(floor_width, dt, this_max_rate, gaussian_std, floor_width / 2.)
-    input_pop_spike_trains = []
-    for i in range(pop_size):
-        input_pop_spike_trains.append(structured_input_activity(dt, padded_duration, local_random,
-                                                                pop_size, floor_width, i, gauss_function))
 
-def structured_input_activity(dt, padded_duration, local_random, input_ncell, floor_width, input_id, gauss_function):
-    start_time = padded_duration / (input_ncell + 1) * input_id
+def get_gaussian_rate(t, peak_loc, sigma, min_rate, max_rate):
+    """
 
-    active_spike_train = get_inhom_poisson_spike_times_by_thinning(gauss_function,
-        np.linspace(start_time, start_time + floor_width, int(floor_width / dt)), dt=dt, generator=local_random)
-
-    return active_spike_train
-
-
-def gaussian_activity(dur, dt, peak_rate, std, mu):
-    x = np.linspace(0, dur, int(dur/dt))
-    term1 = -.5 * ((x - mu)/std) ** 2
-    term2 = std * ((2. * np.pi) ** .5)
-    g = np.divide(np.exp(term1), term2)
-    g *= peak_rate / g.max()
-    return g
+    :param t: array
+    :param peak_loc: float
+    :param sigma: float
+    :param min_rate: float
+    :param max_rate: float
+    :return: array
+    """
+    rate = (max_rate - min_rate) * np.exp(-((t - peak_loc) / sigma) ** 2.) + min_rate
+    return rate
 
 
 def get_pop_gid_ranges(pop_sizes):
@@ -849,40 +827,33 @@ def PSTI(f, power, band=None, verbose=False):
     if np.max(power[band_indexes]) - min_power == 0.:
         return 0.
 
-    left_width_index, right_width_index = get_mass_index(power[band_indexes], 0.25), \
-                                          get_mass_index(power[band_indexes], 0.75)
-
-    signal_indexes = np.arange(left_width_index, right_width_index, 1)
-    if left_width_index == right_width_index:
+    half_width_indexes = get_mass_index(power[band_indexes], 0.25), get_mass_index(power[band_indexes], 0.75)
+    if half_width_indexes[0] == half_width_indexes[1]:
         norm_f_signal_width = (f[band_indexes][1] - f[band_indexes][0]) / bandwidth
-        signal_mean = power[band_indexes][left_width_index]
-        noise_indexes = np.delete(range(len(band_indexes)), left_width_index)
     else:
-        norm_f_signal_width = (f[band_indexes][right_width_index] - f[band_indexes][left_width_index]) / bandwidth
-        signal_mean = np.mean(power[band_indexes][signal_indexes])
-        noise_indexes = np.delete(range(len(band_indexes)), signal_indexes)
+        norm_f_signal_width = (f[band_indexes][half_width_indexes[1]] - f[band_indexes][half_width_indexes[0]]) / \
+                              bandwidth
 
+    top_quartile_indexes = get_mass_index(power[band_indexes], 0.375), get_mass_index(power[band_indexes], 0.625)
+    if top_quartile_indexes[0] == top_quartile_indexes[1]:
+        signal_mean = power[band_indexes][top_quartile_indexes[0]]
+    else:
+        signal_indexes = np.arange(top_quartile_indexes[0], top_quartile_indexes[1], 1)
+        signal_mean = np.mean(power[band_indexes][signal_indexes])
     if signal_mean == 0.:
         return 0.
 
-    if len(signal_indexes) <= 1:
-        signal_std = 0.
-    else:
-        signal_std = np.std(power[band_indexes][signal_indexes])
-
+    bottom_quartile_indexes = get_mass_index(power[band_indexes], 0.125), get_mass_index(power[band_indexes], 0.875)
+    noise_indexes = np.concatenate([np.arange(0, bottom_quartile_indexes[0], 1),
+                                    np.arange(bottom_quartile_indexes[1], len(band_indexes), 1)])
     noise_mean = np.mean(power[band_indexes][noise_indexes])
 
-    if noise_mean == 0. or len(noise_indexes) <= 1:
-        noise_std = 0.
-    else:
-        noise_std = np.std(power[band_indexes][noise_indexes])
-
     if verbose:
-        print 'delta_power: %.5f; norm_f_signal_width: %.5f, signal_std: %.5f, noise_std: %.5f' % \
-              (signal_mean - noise_mean, norm_f_signal_width, signal_std, noise_std)
-    if (signal_std + noise_std == 0.) or (norm_f_signal_width == 0.):
-        return np.inf
-    this_PSTI = (signal_mean - noise_mean) / (signal_mean + noise_mean) / (signal_std + noise_std) / norm_f_signal_width
+        print('PSTI: delta_power: %.5f; power_std: %.5f, norm_f_signal_width: %.5f, half_width_edges: [%.5f, %.5f]' %
+              (signal_mean - noise_mean, power_std, norm_f_signal_width, f[band_indexes][half_width_indexes[0]],
+               f[band_indexes][half_width_indexes[1]]))
+
+    this_PSTI = (signal_mean - noise_mean) / power_std / norm_f_signal_width / 2.
     return this_PSTI
 
 
@@ -904,7 +875,7 @@ def get_bandpass_filtered_signal_stats(signal, t, sos, filter_band, bins=100, si
     :return: tuple of array
     """
     if np.all(signal == 0.):
-        if verbose:
+        if verbose > 0:
             print('%s\n%s bandpass filter (%.1f:%.1f Hz); Failed - no signal' %
                   (signal_label, filter_label, min(filter_band), max(filter_band)))
         return signal, np.zeros_like(signal), 0., 0., 0.
