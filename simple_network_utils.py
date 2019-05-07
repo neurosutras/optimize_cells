@@ -64,10 +64,10 @@ default_syn_type_mech_params = \
 class SimpleNetwork(object):
 
     def __init__(self, pc, pop_sizes, pop_gid_ranges, pop_cell_types, pop_syn_counts, pop_syn_proportions,
-                 connection_weights_mean, connection_weights_norm_sigma, syn_mech_params, syn_mech_names=None,
-                 syn_mech_param_rules=None, syn_mech_param_defaults=None, input_pop_t=None,
-                 input_pop_firing_rates=None, tstop=1000., equilibrate=250., dt=0.025, delay=1., connection_seed=0,
-                 spikes_seed=100000, v_init=-65., verbose=1, debug=False):
+                 connection_weights_mean, connection_weights_norm_sigma, syn_mech_params, input_norm_tuning_widths,
+                 input_types=None, syn_mech_names=None, syn_mech_param_rules=None, syn_mech_param_defaults=None,
+                 input_pop_t=None, input_pop_firing_rates=None, tstop=1000., equilibrate=250., dt=0.025, delay=1.,
+                 connection_seed=0, spikes_seed=100000, v_init=-65., verbose=1, debug=False):
         """
 
         :param pc: ParallelContext object
@@ -136,6 +136,8 @@ class SimpleNetwork(object):
         self.spikes_dict = defaultdict(dict)
         self.input_pop_t = input_pop_t
         self.input_pop_firing_rates = input_pop_firing_rates
+        self.input_types = input_types
+        self.input_norm_tuning_widths = input_norm_tuning_widths
 
         self.local_random = random.Random()
         self.local_np_random = np.random.RandomState()
@@ -155,8 +157,6 @@ class SimpleNetwork(object):
     def mkcells(self):
         rank = int(self.pc.id())
         nhost = int(self.pc.nhost())
-        # gauss_function = gaussian_activity(
-        #    self.FF_floorwidth, self.dt, self.input_pop_peak_rates['FF'], self.FF_gaussian_sigma, self.FF_floorwidth / 2.)
 
         for pop_name, (gid_start, gid_stop) in self.pop_gid_ranges.iteritems():
             cell_type = self.pop_cell_types[pop_name]
@@ -173,10 +173,16 @@ class SimpleNetwork(object):
                                 raise RuntimeError('mkcells: time base not specified; cannot generate spikes for input '
                                                    'population: %s' % pop_name)
                             self.local_random.seed(self.spikes_seed + gid)
-                            this_spike_train = \
-                                get_inhom_poisson_spike_times_by_thinning(self.input_pop_firing_rates[pop_name][gid],
-                                                                          self.input_pop_t[pop_name], dt=self.dt,
-                                                                          generator=self.local_random)
+                            if self.input_types[pop_name] == 'gaussian':
+                                this_spike_train = np.array(get_inhom_poisson_spike_times_by_thinning(
+                                    self.input_pop_firing_rates[pop_name][gid], self.input_pop_t[pop_name][gid],
+                                    dt=self.dt, generator=self.local_random))
+                                this_spike_train = this_spike_train[np.where(this_spike_train >= 0.)[0]]
+                            else:
+                                this_spike_train = \
+                                    get_inhom_poisson_spike_times_by_thinning(self.input_pop_firing_rates[pop_name][gid],
+                                                                              self.input_pop_t[pop_name], dt=self.dt,
+                                                                              generator=self.local_random)
                             cell.load_vecstim(this_spike_train)
                     elif cell_type == 'minimal':
                         cell = MinimalCell(pop_name, gid)
@@ -587,14 +593,24 @@ class FFCell(object):
     def is_art(self):
         return 1
 
-    def structured_activity(self, dt, tstop, local_random, FF_ncell, floor_width, rng, gauss_function):
-        FF_id = self.gid - rng[0]
-        start_time = tstop / (FF_ncell + 1) * FF_id
-        active_spike_train = get_inhom_poisson_spike_times_by_thinning(gauss_function,
-            np.linspace(start_time, start_time + floor_width, int(floor_width / dt)), dt=dt, generator=local_random)
-        self.spike_train = active_spike_train
-        return active_spike_train
+def create_gaussian_pop_spikes(tstop, equilibrate, this_norm_tuning_width, this_max_rate, pop_size, local_random=None,
+                               dt=.025):
+    padded_duration = tstop + 2. * (tstop - equilibrate) * this_norm_tuning_width
+    floor_width = (tstop - equilibrate) * this_norm_tuning_width
+    gaussian_std = floor_width / 3. / np.sqrt(2.)
+    gauss_function = gaussian_activity(floor_width, dt, this_max_rate, gaussian_std, floor_width / 2.)
+    input_pop_spike_trains = []
+    for i in range(pop_size):
+        input_pop_spike_trains.append(structured_input_activity(dt, padded_duration, local_random,
+                                                                pop_size, floor_width, i, gauss_function))
 
+def structured_input_activity(dt, padded_duration, local_random, input_ncell, floor_width, input_id, gauss_function):
+    start_time = padded_duration / (input_ncell + 1) * input_id
+
+    active_spike_train = get_inhom_poisson_spike_times_by_thinning(gauss_function,
+        np.linspace(start_time, start_time + floor_width, int(floor_width / dt)), dt=dt, generator=local_random)
+
+    return active_spike_train
 
 
 def gaussian_activity(dur, dt, peak_rate, std, mu):
