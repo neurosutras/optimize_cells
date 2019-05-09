@@ -66,8 +66,8 @@ class SimpleNetwork(object):
     def __init__(self, pc, pop_sizes, pop_gid_ranges, pop_cell_types, pop_syn_counts, pop_syn_proportions,
                  connection_weights_mean, connection_weights_norm_sigma, syn_mech_params, syn_mech_names=None,
                  syn_mech_param_rules=None, syn_mech_param_defaults=None, input_pop_t=None,
-                 input_pop_firing_rates=None, tstop=1000., equilibrate=250., dt=0.025, delay=1., connection_seed=0,
-                 spikes_seed=100000, v_init=-65., verbose=1, debug=False):
+                 input_pop_firing_rates=None, tstop=1000., equilibrate=250., dt=0.025, delay=1., spikes_seed=100000000,
+                 v_init=-65., verbose=1, debug=False):
         """
 
         :param pc: ParallelContext object
@@ -91,7 +91,6 @@ class SimpleNetwork(object):
         :param equilibrate: float: simulation equilibration duration (ms)
         :param dt: float: simulation timestep (ms)
         :param delay: float: netcon synaptic delay (ms)
-        :param connection_seed: int: random seed for reproducible connections
         :param spikes_seed: int: random seed for reproducible input spike trains
         :param v_init: float
         :param verbose: int: level for verbose print statements
@@ -139,10 +138,7 @@ class SimpleNetwork(object):
 
         self.local_random = random.Random()
         self.local_np_random = np.random.RandomState()
-        self.connection_seed = connection_seed
         self.spikes_seed = spikes_seed
-
-        # self.FF_gaussian_sigma = floorwidth_percentage * tstop / 3. / np.sqrt(2)
 
         self.cells = defaultdict(dict)
         self.mkcells()
@@ -221,12 +217,12 @@ class SimpleNetwork(object):
         :param potential_source_gids: array of int
         :return: array of float
         """
-        p_connection = np.ones(len(potential_source_gids), dtype='float32')
-        p_sum = np.sum(p_connection)
-        if p_sum == 0.:
+        prob_connection = np.ones(len(potential_source_gids), dtype='float32')
+        prob_sum = np.sum(prob_connection)
+        if prob_sum == 0.:
             return None
-        p_connection /= p_sum
-        return p_connection
+        prob_connection /= prob_sum
+        return prob_connection
 
     def get_prob_connection_gaussian(self, potential_source_gids, target_gid, source_pop_name, target_pop_name,
                                      pop_cell_positions, pop_axon_extents):
@@ -247,23 +243,23 @@ class SimpleNetwork(object):
         distances = cdist([target_cell_position], source_cell_positions)[0]
         sigma = pop_axon_extents[source_pop_name] / 3. / np.sqrt(2.)
         prob_connection = np.exp(-(distances / sigma) ** 2.)
-        prob_connection /= np.sum(prob_connection)
-
+        prob_sum = np.sum(prob_connection)
+        if prob_sum == 0.:
+            return None
+        prob_connection /= prob_sum
         return prob_connection
 
-    def connect_cells(self, connectivity_type='uniform', default_weight_distribution_type='normal',
-                      connection_weight_distribution_types=None,  **kwargs):
+    def connect_cells(self, connectivity_type='uniform', connection_seed=0, **kwargs):
         """
 
         :param connectivity_type: str
-        :param default_weight_distribution_type: str
-        :param connection_weight_distribution_types: nested dict: {target_pop_name: {source_pop_name: str}}
+        :param connection_seed: int: random seed for reproducible connections
         """
         rank = int(self.pc.id())
         for target_pop_name in self.pop_syn_proportions:
             total_syn_count = self.pop_syn_counts[target_pop_name]
             for target_gid in self.cells[target_pop_name]:
-                self.local_np_random.seed(self.connection_seed + target_gid)
+                self.local_np_random.seed(connection_seed + target_gid)
                 target_cell = self.cells[target_pop_name][target_gid]
                 for syn_type in self.pop_syn_proportions[target_pop_name]:
                     for source_pop_name in self.pop_syn_proportions[target_pop_name][syn_type]:
@@ -282,6 +278,38 @@ class SimpleNetwork(object):
                         if p_connection is None:
                             continue
 
+                        this_source_gids = self.local_np_random.choice(potential_source_gids, size=this_syn_count,
+                                                                       p=p_connection)
+                        for source_gid in this_source_gids:
+                            this_syn, this_nc = append_connection(
+                                target_cell, self.pc, source_pop_name, syn_type, source_gid, delay=self.delay,
+                                syn_mech_names=self.syn_mech_names, syn_mech_param_rules=self.syn_mech_param_rules,
+                                syn_mech_param_defaults=self.syn_mech_param_defaults[target_pop_name][source_pop_name],
+                                **self.syn_mech_params[target_pop_name][source_pop_name])
+                            self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid].append(this_nc)
+                        if self.verbose > 1:
+                            print('SimpleNetwork.connect_cells_%s: rank: %i; target: %s gid: %i; syn_type: %s; '
+                                  'source: %s; syn_count: %i' %
+                                  (connectivity_type, rank, target_pop_name, target_gid, syn_type, source_pop_name,
+                                   this_syn_count))
+
+    def assign_connection_weights(self, default_weight_distribution_type='normal',
+                                  connection_weight_distribution_types=None, weights_seed=200000000):
+        """
+
+        :param default_weight_distribution_type: str
+        :param connection_weight_distribution_types: nested dict: {target_pop_name: {source_pop_name: str}}
+        :param weights_seed: int: random seed for reproducible connection weights
+        """
+        rank = int(self.pc.id())
+        for target_pop_name in self.cells:
+            for target_gid in self.cells[target_pop_name]:
+                self.local_np_random.seed(weights_seed + target_gid)
+                target_cell = self.cells[target_pop_name][target_gid]
+                for syn_type in self.pop_syn_proportions[target_pop_name]:
+                    for source_pop_name in self.pop_syn_proportions[target_pop_name][syn_type]:
+                        if source_pop_name not in self.ncdict[target_pop_name][target_gid]:
+                            continue
                         this_weight_distribution_type = default_weight_distribution_type
                         if connection_weight_distribution_types is not None:
                             if target_pop_name in connection_weight_distribution_types and \
@@ -291,12 +319,11 @@ class SimpleNetwork(object):
                         mu = self.connection_weights_mean[target_pop_name][source_pop_name]
                         norm_sigma = self.connection_weights_norm_sigma[target_pop_name][source_pop_name]
                         if self.debug:
-                            print('target: %s, source: %s, dist_type: %s, mu: %.3f, norm_sigma: %.3f' %
+                            print('SimpleNetwork.assign_connection_weights: target: %s, source: %s, dist_type: %s, '
+                                  'mu: %.3f, norm_sigma: %.3f' %
                                   (target_pop_name, source_pop_name, this_weight_distribution_type, mu, norm_sigma))
 
-                        this_source_gids = self.local_np_random.choice(potential_source_gids, size=this_syn_count,
-                                                                       p=p_connection)
-                        for source_gid in this_source_gids:
+                        for source_gid in self.ncdict[target_pop_name][target_gid][source_pop_name]:
                             if this_weight_distribution_type == 'normal':
                                 # enforce weights to be greater than 0
                                 this_weight = -1.
@@ -308,24 +335,21 @@ class SimpleNetwork(object):
                                 while this_weight > 10. * mu:
                                     this_weight = mu * self.local_np_random.lognormal(0., norm_sigma)
                             else:
-                                raise RuntimeError('connect_cells: invalid connection weight distribution type: %s' %
-                                                   this_weight_distribution_type)
-                            this_syn, this_nc = append_connection(
-                                target_cell, self.pc, source_pop_name, syn_type, source_gid, delay=self.delay,
-                                weight=this_weight, syn_mech_names=self.syn_mech_names,
-                                syn_mech_param_rules=self.syn_mech_param_rules,
-                                syn_mech_param_defaults=self.syn_mech_param_defaults[target_pop_name][source_pop_name],
-                                **self.syn_mech_params[target_pop_name][source_pop_name])
-                            self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid].append(this_nc)
-                        if self.verbose > 1:
-                            print('SimpleNetwork.connect_cells_uniform: rank: %i; target: %s gid: %i; syn_type: %s; '
-                                  'source: %s; syn_count: %i' %
-                                  (rank, target_pop_name, target_gid, syn_type, source_pop_name, this_syn_count))
+                                raise RuntimeError('SimpleNetwork.assign_connection_weights: invalid connection '
+                                                   'weight distribution type: %s' % this_weight_distribution_type)
+                            this_syn = target_cell.syns[syn_type][source_pop_name]
+                            # Assign the same weight to all connections from the same source_gid
+                            for this_nc in self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid]:
+                                config_connection(syn_type, syn=this_syn, nc=this_nc,
+                                                  syn_mech_names=self.syn_mech_names,
+                                                  syn_mech_param_rules=self.syn_mech_param_rules,
+                                                  weight=this_weight)
 
     def visualize_connections(self, pop_cell_positions, n=1):
         for target_pop_name in self.pop_syn_proportions:
-            target_gids = random.sample(range(self.pop_gid_ranges[target_pop_name][0],
-                                              self.pop_gid_ranges[target_pop_name][1]), n)
+            if target_pop_name not in self.cells:
+                continue
+            target_gids = random.sample(list(self.cells[target_pop_name].keys()), n)
             for target_gid in target_gids:
                 target_loc = pop_cell_positions[target_pop_name][target_gid]
                 for syn_type in self.pop_syn_proportions[target_pop_name]:
@@ -339,10 +363,10 @@ class SimpleNetwork(object):
                             xs.append(pop_cell_positions[source_pop_name][source_gid][0])
                             ys.append(pop_cell_positions[source_pop_name][source_gid][1])
                         vals, xedge, yedge = np.histogram2d(x=xs, y=ys, bins=np.linspace(-1.0, 1.0, 51))
+                        fig = plt.figure()
                         plt.pcolor(xedge, yedge, vals)
                         plt.title("Cell {} at {}, {} to {} via {} syn".format(target_gid, target_loc, source_pop_name,
                                                                               target_pop_name, syn_type))
-                        plt.show()
 
     # Instrumentation - stimulation and recording
     def spike_record(self):
@@ -419,7 +443,7 @@ class SimpleNetwork(object):
                             this_weight_list = [this_nc.weight[0] for this_nc in
                                                 self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid]]
                             weights[target_pop_name][target_gid][source_pop_name][source_gid] = \
-                                np.sum(this_weight_list)
+                                np.mean(this_weight_list)
                         else:
                             weights[target_pop_name][target_gid][source_pop_name][source_gid] = 0.
 
@@ -584,6 +608,24 @@ class FFCell(object):
 
     def is_art(self):
         return 1
+
+
+def check_voltages_exceed_threshold(voltage_rec_dict, pop_cell_types):
+    """
+
+    :param voltage_rec_dict: nested dict
+    :param pop_cell_types: dict of str
+    :return: bool
+    """
+    for pop_name in voltage_rec_dict:
+        cell_type = pop_cell_types[pop_name]
+        if cell_type not in izhi_cell_types:
+            continue
+        vt = izhi_cell_type_param_dict[cell_type].vt
+        for gid in voltage_rec_dict[pop_name]:
+            if np.mean(voltage_rec_dict[pop_name][gid]) > vt:
+                return True
+    return False
 
 
 def get_gaussian_rate(t, peak_loc, sigma, min_rate, max_rate):
@@ -761,12 +803,12 @@ def get_pop_activity_stats(spikes_dict, firing_rates_dict, t, threshold=1., plot
             axes[0].set_title('Active fraction of population')
             axes[1].plot(t, mean_rate_active_cells_dict[pop_name])
             axes[1].set_title('Mean firing rate of active cells')
-            axes[0].set_ylim(0., axes[0].get_ylim()[1])
-            axes[1].set_ylim(0., axes[1].get_ylim()[1])
-            axes[0].legend(loc='best', frameon=False, framealpha=0.5)
-            clean_axes(axes)
-            fig.tight_layout()
-            fig.show()
+        axes[0].set_ylim(0., axes[0].get_ylim()[1])
+        axes[1].set_ylim(0., axes[1].get_ylim()[1])
+        axes[0].legend(loc='best', frameon=False, framealpha=0.5)
+        clean_axes(axes)
+        fig.tight_layout()
+        fig.show()
 
     return mean_rate_dict, peak_rate_dict, mean_rate_active_cells_dict, pop_fraction_active_dict, \
            binned_spike_count_dict, mean_rate_from_spike_count_dict

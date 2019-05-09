@@ -118,7 +118,7 @@ kwargs:
   cell_type: MC
   correct_for_spines: False
   verbose: 2
-  daspk: False
+  daspk: True  # False
   config_file: Small_Scale_Control_MC_BC.yaml
   template_paths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoc_lib_path: ../dentate
@@ -192,21 +192,21 @@ target_val:
   vm_th: -48.0
   vm_stability: 5.0
 x0:
-  dend.g_pas slope: 2.301342E-05
-  dend.g_pas tau: 1.153835E+02
-  soma.g_pas: 3.453683E-06
-  e_pas: -6.452659E+01
-  soma.ghbar: 1.e-3
-  soma.gCa factor: 1.094437E-01
-  soma.tau_Cacum: 4.411152E+01
-  soma.gkdrbar: 4.193310E-02
-  axon.gkabar: 1.914911E-02
-  ais.sha_nax: -3.931174E+00
-  axon.gkdrbar: 6.831896E-02
-  soma.sh_nas/x: 7.197155E+00
-  ais.gbar_nax: 4.097186E-01
-  axon.gbar_nax: 4.272765E-02
-  soma.gbar_nas: 1.794131E-02
-  soma.gCadepK factor: 3.692130E-01
-  ais.gkmbar: 2.584361E-04
-  soma.gkabar: 3.166313E-02
+  soma.g_pas: 2.971156E-06
+  dend.g_pas slope: 5.737205E-08
+  dend.g_pas tau: 7.868233E+01
+  e_pas: -6.492674E+01
+  soma.ghbar: 1.044403E-03
+  soma.gbar_nas: 1.392202E-02
+  axon.gbar_nax: 3.840977E-02
+  ais.gbar_nax: 1.256931E-01
+  soma.gkabar: 4.558122E-02
+  soma.gkdrbar: 1.815155E-02
+  axon.gkabar: 2.373423E-02
+  axon.gkdrbar: 2.585181E-02
+  soma.sh_nas/x: 5.896357E+00
+  ais.sha_nax: -3.943593E+00
+  soma.gCa factor: 1.383869E-01
+  soma.gCadepK factor: 3.575067E-03
+  ais.gkmbar: 1.873839E-04
+  soma.tau_Cacum: 3.802922E+01

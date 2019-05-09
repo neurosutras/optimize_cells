@@ -109,8 +109,8 @@ get_objectives:
 kwargs:
   verbose: 1
   connection_seed: 0
-  spikes_seed: 1000000
-  location_seed: 2000000
+  spikes_seed: 100000000
+  weights_seed: 200000000
   connectivity_type: uniform
   default_weight_distribution_type: normal
   input_types:
@@ -198,23 +198,23 @@ target_val:
   E_gamma_tuning_index: 5.
   I_gamma_tuning_index: 5.
 x0:
-  E_FF_mean_weight: 1.
-  E_E_mean_weight: 1.
-  E_I_mean_weight: 1.
-  I_FF_mean_weight: 1.
-  I_E_mean_weight: 1.
-  I_I_mean_weight: 1.
-  E_FF_weight_norm_sigma: .1
-  E_E_weight_norm_sigma: .1
-  E_I_weight_norm_sigma: .1
-  I_FF_weight_norm_sigma: .1
-  I_E_weight_norm_sigma: .1
-  I_I_weight_norm_sigma: .1
-  E_E_tau_offset: 2.
-  E_I_tau_offset: 10.
-  I_E_tau_offset: 2.
-  I_I_tau_offset: 10.
-  E_E_syn_proportion: .8
-  E_E_FF_syn_proportion: .7
-  I_E_syn_proportion: .8
-  I_E_FF_syn_proportion: .7
+  E_I_weight_norm_sigma: 7.536725E-01
+  E_E_FF_syn_proportion: 8.130785E-01
+  E_I_tau_offset: 3.904352E+00
+  E_E_weight_norm_sigma: 2.392462E-01
+  I_E_FF_syn_proportion: 6.496068E-01
+  E_E_tau_offset: 7.198046E+00
+  I_FF_mean_weight: 1.746738E+00
+  E_E_mean_weight: 1.535914E-01
+  E_FF_weight_norm_sigma: 1.727204E-01
+  E_I_mean_weight: 8.778353E-01
+  I_E_weight_norm_sigma: 4.729232E-01
+  I_E_tau_offset: 6.201983E+00
+  I_I_weight_norm_sigma: 3.574340E-01
+  I_E_syn_proportion: 3.710289E-01
+  I_FF_weight_norm_sigma: 2.520923E-01
+  E_E_syn_proportion: 9.409761E-01
+  I_I_mean_weight: 1.109997E+00
+  E_FF_mean_weight: 1.920767E-01
+  I_E_mean_weight: 1.222973E+00
+  I_I_tau_offset: 3.791687E+00

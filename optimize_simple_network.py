@@ -176,9 +176,10 @@ def init_context():
 
     if context.connectivity_type == 'gaussian':
         pop_axon_extents = {'FF': 1., 'E': 1., 'I': 1.}
-        if 'spatial_dim' not in context():
-            raise RuntimeError('optimize_simple_network: spatial_dim parameter not found; required for gaussian '
-                               'connectivity')
+        for param_name in ['spatial_dim', 'location_seed']:
+            if param_name not in context():
+                raise RuntimeError('optimize_simple_network: parameter required for gaussian connectivity not found: '
+                                   '%s' % param_name)
 
         if context.comm.rank == 0:
             local_np_random = np.random.RandomState()
@@ -255,6 +256,7 @@ def analyze_network_output(network, export=False, plot=False):
     binned_t = np.arange(0., context.tstop + context.binned_dt - context.equilibrate, context.binned_dt)
     spikes_dict = network.get_spikes_dict()
     voltage_rec_dict, rec_t = network.get_voltage_rec_dict()
+    voltages_exceed_threshold = check_voltages_exceed_threshold(voltage_rec_dict, context.pop_cell_types)
     firing_rates_dict = infer_firing_rates(spikes_dict, binned_t, alpha=context.baks_alpha, beta=context.baks_beta,
                                            pad_dur=context.baks_pad_dur)
     connection_weights_dict = network.get_connection_weights()
@@ -263,6 +265,8 @@ def analyze_network_output(network, export=False, plot=False):
     voltage_rec_dict = context.comm.gather(voltage_rec_dict, root=0)
     firing_rates_dict = context.comm.gather(firing_rates_dict, root=0)
     connection_weights_dict = context.comm.gather(connection_weights_dict, root=0)
+    voltages_exceed_threshold_list = context.comm.gather(voltages_exceed_threshold, root=0)
+
     if context.comm.rank == 0:
         spikes_dict = merge_list_of_dict(spikes_dict)
         voltage_rec_dict = merge_list_of_dict(voltage_rec_dict)
@@ -284,7 +288,8 @@ def analyze_network_output(network, export=False, plot=False):
             plot_voltage_traces(voltage_rec_dict, rec_t, spikes_dict)
             plot_weight_matrix(connection_weights_dict)
             plot_firing_rate_heatmaps(firing_rates_dict, binned_t)
-            plt.show()
+            if context.connectivity_type == 'gaussian':
+                context.network.visualize_connections(context.pop_cell_positions, n=1)
 
         """
         if context.debug:
@@ -318,6 +323,12 @@ def analyze_network_output(network, export=False, plot=False):
 
         context.update(locals())
 
+        if any(voltages_exceed_threshold_list):
+            if context.verbose > 0:
+                print ('optimize_simple_network: pid: %i; model failed - mean membrane voltage in some Izhi cells '
+                       'exceeds spike threshold' % os.getpid())
+                result['failed'] = True
+
         return result
 
 
@@ -338,24 +349,25 @@ def compute_features(x, export=False):
         connection_weights_norm_sigma=context.connection_weights_norm_sigma,
         syn_mech_params=context.syn_mech_params, input_pop_t=context.input_pop_t,
         input_pop_firing_rates=context.input_pop_firing_rates, tstop=context.tstop, equilibrate=context.equilibrate,
-        dt=context.dt, delay=context.delay, connection_seed=context.connection_seed,spikes_seed=context.spikes_seed,
-        verbose=context.verbose, debug=context.debug)
+        dt=context.dt, delay=context.delay, spikes_seed=context.spikes_seed, verbose=context.verbose,
+        debug=context.debug)
 
     if context.connectivity_type == 'uniform':
         context.network.connect_cells(connectivity_type=context.connectivity_type,
-                                      default_weight_distribution_type=context.default_weight_distribution_type,
-                                      connection_weight_distribution_types=context.connection_weight_distribution_types)
+                                      connection_seed=context.connection_seed)
     elif context.connectivity_type == 'gaussian':
         context.network.connect_cells(connectivity_type=context.connectivity_type,
-                                      default_weight_distribution_type=context.default_weight_distribution_type,
-                                      connection_weight_distribution_types=context.connection_weight_distribution_types,
+                                      connection_seed=context.connection_seed,
                                       pop_axon_extents=context.pop_axon_extents,
                                       pop_cell_positions=context.pop_cell_positions)
 
+    context.network.assign_connection_weights(
+        default_weight_distribution_type=context.default_weight_distribution_type,
+        connection_weight_distribution_types=context.connection_weight_distribution_types,
+        weights_seed=context.weights_seed)
+
     if int(context.pc.id()) == 0 and context.verbose > 0:
         print('NETWORK BUILD RUNTIME: %.2f s' % (time.time() - start_time))
-    if context.plot and context.connectivity_type == 'gaussian':
-        context.network.visualize_connections(context.pop_cell_positions, n=1)
     current_time = time.time()
 
     """
@@ -372,6 +384,8 @@ def compute_features(x, export=False):
     if int(context.pc.id()) == 0:
         if context.verbose > 0:
             print('NETWORK ANALYSIS RUNTIME: %.2f s' % (time.time() - current_time))
+        if context.plot:
+            plt.show()
         if results is None:
             return dict()
         return results

@@ -108,9 +108,10 @@ get_objectives:
   optimize_simple_network: get_objectives
 kwargs:
   verbose: 1
-  connection_seed: 0
-  spikes_seed: 1000000
-  location_seed: 2000000
+  connection_seed: 50000000
+  spikes_seed: 150000000
+  weights_seed: 250000000
+  location_seed: 350000000
   connectivity_type: gaussian
   spatial_dim: 2
   default_weight_distribution_type: normal
