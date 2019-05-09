@@ -687,6 +687,12 @@ def update_mechanisms_spiking(x, context=None):
     modify_mech_param(cell, 'soma', 'kap', 'gkabar', x_dict['soma.gkabar'])
     modify_mech_param(cell, 'soma', 'ions', 'ek', -80.)
     modify_mech_param(cell, 'soma', 'nas', 'sh', x_dict['soma.sh_nas/x'])
+    modify_mech_param(cell, 'soma', 'Ca', 'gtcabar', x_dict['soma.gtcabar'])
+    modify_mech_param(cell, 'soma', 'Ca', 'gncabar', x_dict['soma.gncabar'])
+    modify_mech_param(cell, 'soma', 'Ca', 'glcabar', x_dict['soma.glcabar'])
+    modify_mech_param(cell, 'soma', 'CadepK', 'gskbar', x_dict['soma.gskbar'])
+    modify_mech_param(cell, 'soma', 'CadepK', 'gbkbar', x_dict['soma.gbkbar'])
+    modify_mech_param(cell, 'soma', 'Cacum', 'tau', x_dict['soma.tau_Cacum'])
     for sec_type in ['apical']:
         modify_mech_param(cell, sec_type, 'kap', 'gkabar', origin='soma')
         modify_mech_param(cell, sec_type, 'kdr', 'gkdrbar', origin='soma')
@@ -701,9 +707,6 @@ def update_mechanisms_spiking(x, context=None):
     modify_mech_param(cell, 'axon', 'nax', 'gbar', x_dict['axon.gbar_nax'])
     for sec_type in ['ais', 'axon']:
         modify_mech_param(cell, sec_type, 'nax', 'sh', origin='hillock')
-    modify_mech_param(cell, 'soma', 'Ca', 'gcamult', x_dict['soma.gCa factor'])
-    modify_mech_param(cell, 'soma', 'CadepK', 'gcakmult', x_dict['soma.gCadepK factor'])
-    modify_mech_param(cell, 'soma', 'Cacum', 'tau', x_dict['soma.tau_Cacum'])
     modify_mech_param(cell, 'ais', 'DGC_KM', 'gbar', x_dict['ais.gkmbar'])
     modify_mech_param(cell, 'hillock', 'DGC_KM', 'gbar', x_dict['ais.gkmbar'])
     modify_mech_param(cell, 'axon', 'DGC_KM', 'gbar', origin='ais')

@@ -29,12 +29,21 @@ bounds:
   axon.gkabar: !!python/tuple
   - 0.001
   - 0.05
-  soma.gCa factor: !!python/tuple
-  - 0.005
-  - 2.0
-  soma.gCadepK factor: !!python/tuple
-  - 0.0005
-  - 10.
+  soma.gtcabar: !!python/tuple
+  - 5.0E-7
+  - 2.0E-02
+  soma.gncabar: !!python/tuple
+  - 5.0E-7
+  - 2.0E-02
+  soma.glcabar: !!python/tuple
+  - 5.0E-7
+  - 2.0E-02
+  soma.gbkbar: !!python/tuple
+  - 5.0E-08
+  - 1.0E-03
+  soma.gskbar: !!python/tuple
+  - 5.0E-08
+  - 1.0E-03
   soma.gbar_nas: !!python/tuple
   - 0.01
   - 0.05
@@ -158,8 +167,11 @@ param_names:
 - axon.gkdrbar
 - soma.sh_nas/x
 - ais.sha_nax
-- soma.gCa factor
-- soma.gCadepK factor
+- soma.gtcabar
+- soma.gncabar
+- soma.glcabar
+- soma.gbkbar
+- soma.gskbar
 - ais.gkmbar
 - soma.tau_Cacum
 target_range:
@@ -206,7 +218,10 @@ x0:
   axon.gkdrbar: 2.585181E-02
   soma.sh_nas/x: 5.896357E+00
   ais.sha_nax: -3.943593E+00
-  soma.gCa factor: 1.383869E-01
-  soma.gCadepK factor: 3.575067E-03
+  soma.gtcabar: 0.0002625
+  soma.gncabar: 0.002
+  soma.glcabar: 0.01
+  soma.gbkbar: 0.00009
+  soma.gskbar: 0.0001
   ais.gkmbar: 1.873839E-04
   soma.tau_Cacum: 3.802922E+01

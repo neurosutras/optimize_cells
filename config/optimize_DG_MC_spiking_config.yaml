@@ -14,12 +14,21 @@ bounds:
   axon.gkabar: !!python/tuple
   - 0.001
   - 0.05
-  soma.gCa factor: !!python/tuple
-  - 0.005
-  - 2.0
-  soma.gCadepK factor: !!python/tuple
-  - 0.0005
-  - 10.
+  soma.gtcabar: !!python/tuple
+  - 5.0E-7
+  - 2.0E-02
+  soma.gncabar: !!python/tuple
+  - 5.0E-7
+  - 2.0E-02
+  soma.glcabar: !!python/tuple
+  - 5.0E-7
+  - 2.0E-02
+  soma.gbkbar: !!python/tuple
+  - 5.0E-08
+  - 1.0E-03
+  soma.gskbar: !!python/tuple
+  - 5.0E-08
+  - 1.0E-03
   soma.gbar_nas: !!python/tuple
   - 0.01
   - 0.05
@@ -91,7 +100,7 @@ kwargs:
   cell_type: MC
   correct_for_spines: False
   verbose: 2
-  daspk: False
+  daspk: True
   config_file: Small_Scale_Control_MC_BC.yaml
   template_paths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoc_lib_path: ../dentate
@@ -120,8 +129,11 @@ param_names:
 - axon.gkdrbar
 - soma.sh_nas/x
 - ais.sha_nax
-- soma.gCa factor
-- soma.gCadepK factor
+- soma.gtcabar
+- soma.gncabar
+- soma.glcabar
+- soma.gbkbar
+- soma.gskbar
 - ais.gkmbar
 - soma.tau_Cacum
 target_range:
@@ -154,7 +166,10 @@ x0:
   axon.gkdrbar: 2.081830E-02
   soma.sh_nas/x: 5.704921E+00
   ais.sha_nax: -2.792502E+00
-  soma.gCa factor: 8.072385E-02
-  soma.gCadepK factor: 1.133785E-01
+  soma.gtcabar: 0.0002625
+  soma.gncabar: 0.002
+  soma.glcabar: 0.01
+  soma.gbkbar: 0.00009
+  soma.gskbar: 0.0001
   ais.gkmbar: 8.910924E-04
   soma.tau_Cacum: 3.582782E+01
