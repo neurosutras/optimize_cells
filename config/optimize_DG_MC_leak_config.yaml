@@ -39,6 +39,7 @@ kwargs:
   correct_for_spines: False
   verbose: 2
   daspk: True
+  cvode: False
   config_file: Small_Scale_Control_MC_BC.yaml
   template_paths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoc_lib_path: ../dentate

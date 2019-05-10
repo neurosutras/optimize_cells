@@ -364,7 +364,8 @@ def flush_engine_buffer(result):
     sys.stdout.flush()
 
 
-def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.005, vm_tol=0.5, i_history=None, dynamic=False):
+def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.005, vm_tol=0.5, i_history=None, dynamic=False,
+              cvode=None):
     """
 
     :param rec_name: str
@@ -374,6 +375,7 @@ def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.005, vm_tol=0.5, i
     :param vm_tol: float (mV)
     :param i_history: defaultdict of dict
     :param dynamic: bool; whether to use a gradient-based approach to determine i_inc
+    :param cvode: bool; whether to use adaptive time step
     """
     if context is None:
         raise RuntimeError('offset_vm: pid: %i; missing required Context object' % os.getpid())
@@ -407,7 +409,9 @@ def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.005, vm_tol=0.5, i
 
     sim.modify_stim('holding', node=node, loc=loc, amp=i_amp)
     sim.backup_state()
-    sim.set_state(dt=dt, tstop=duration, cvode=True)
+    if cvode is None:
+        cvode = True
+    sim.set_state(dt=dt, tstop=duration, cvode=cvode)
     sim.run(vm_target)
     t = np.arange(0., duration, dt)
     vm = np.interp(t, sim.tvec, rec)

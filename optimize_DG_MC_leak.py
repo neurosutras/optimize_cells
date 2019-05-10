@@ -219,7 +219,8 @@ def compute_features_leak(x, section, block_h, export=False, plot=False):
     sim.parameters['duration'] = duration
     amp = -0.025
     context.sim.parameters['amp'] = amp
-    vm_rest, vm_offset, context.i_holding[section][v_init] = offset_vm(section, context, v_init, dynamic=True)
+    vm_rest, vm_offset, context.i_holding[section][v_init] = offset_vm(section, context, v_init, dynamic=True,
+                                                                       cvode=context.cvode)
     sim.modify_stim('holding', dur=duration)
     rec_dict = sim.get_rec(section)
 
@@ -229,7 +230,7 @@ def compute_features_leak(x, section, block_h, export=False, plot=False):
 
     sim.modify_stim('step', node=node, loc=loc, amp=amp, dur=stim_dur)
     sim.backup_state()
-    sim.set_state(dt=dt, tstop=duration, cvode=True)
+    sim.set_state(dt=dt, tstop=duration, cvode=context.cvode)
     sim.run(v_init)
 
     R_inp = get_R_inp(np.array(sim.tvec), np.array(rec), equilibrate, duration, amp, dt)[2]

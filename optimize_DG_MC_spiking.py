@@ -282,7 +282,7 @@ def compute_features_spike_shape(x, i_holding, export=False, plot=False):
     v_active = context.v_active
     sim = context.sim
     context.i_holding = i_holding
-    offset_vm('soma', context, v_active, i_history=context.i_holding, dynamic=True)
+    offset_vm('soma', context, v_active, i_history=context.i_holding, dynamic=True, cvode=context.cvode)
     sim.modify_stim('holding', dur=duration)
 
     spike_times = np.array(context.cell.spike_detector.get_recordvec())
@@ -456,7 +456,7 @@ def compute_features_fI(x, i_holding, spike_detector_delay, rheobase, relative_a
 
     v_active = context.v_active
     context.i_holding = i_holding
-    offset_vm('soma', context, v_active, i_history=context.i_holding, dynamic=True)
+    offset_vm('soma', context, v_active, i_history=context.i_holding, dynamic=True, cvode=context.cvode)
     sim = context.sim
     dt = context.dt
     stim_dur = context.stim_dur_f_I
