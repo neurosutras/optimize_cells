@@ -302,8 +302,8 @@ class SimpleNetwork(object):
         :param weights_seed: int: random seed for reproducible connection weights
         """
         rank = int(self.pc.id())
-        for target_pop_name in self.cells:
-            for target_gid in self.cells[target_pop_name]:
+        for target_pop_name in self.ncdict:
+            for target_gid in self.ncdict[target_pop_name]:
                 self.local_np_random.seed(weights_seed + target_gid)
                 target_cell = self.cells[target_pop_name][target_gid]
                 for syn_type in self.pop_syn_proportions[target_pop_name]:
