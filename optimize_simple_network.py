@@ -212,8 +212,8 @@ def update_context(x, local_context=None):
     """
     if local_context is None:
         local_context = context
-    x_dict = param_array_to_dict(x, context.param_names)
-
+    x_dict = param_array_to_dict(x, local_context.param_names)
+    
     local_context.syn_mech_params['E']['FF']['tau_offset'] = x_dict['E_E_tau_offset']
     local_context.syn_mech_params['E']['E']['tau_offset'] = x_dict['E_E_tau_offset']
     local_context.syn_mech_params['E']['I']['tau_offset'] = x_dict['E_I_tau_offset']
@@ -253,12 +253,11 @@ def analyze_network_output(network, export=False, plot=False):
     :param plot: bool
     :return: dict
     """
+    rec_t = np.arange(0., context.tstop + context.dt - context.equilibrate, context.dt)
     binned_t = np.arange(0., context.tstop + context.binned_dt - context.equilibrate, context.binned_dt)
     spikes_dict = network.get_spikes_dict()
-    voltage_rec_dict, rec_t = network.get_voltage_rec_dict()
+    voltage_rec_dict = network.get_voltage_rec_dict()
     voltages_exceed_threshold = check_voltages_exceed_threshold(voltage_rec_dict, context.pop_cell_types)
-    if voltages_exceed_threshold:
-        print('Voltages exceed threshold on rank %i' % context.comm.rank)
     firing_rates_dict = infer_firing_rates(spikes_dict, binned_t, alpha=context.baks_alpha, beta=context.baks_beta,
                                            pad_dur=context.baks_pad_dur)
     connection_weights_dict = network.get_connection_weights()
@@ -323,14 +322,14 @@ def analyze_network_output(network, export=False, plot=False):
         result['E_gamma_tuning_index'] = freq_tuning_index_dict['Gamma']['E']
         result['I_gamma_tuning_index'] = freq_tuning_index_dict['Gamma']['I']
 
-        if context.debug:
-            context.update(locals())
-
         if any(voltages_exceed_threshold_list):
             if context.verbose > 0:
                 print ('optimize_simple_network: pid: %i; model failed - mean membrane voltage in some Izhi cells '
                        'exceeds spike threshold' % os.getpid())
-                result['failed'] = True
+            result['failed'] = True
+
+        if context.interactive:
+            context.update(locals())
 
         return result
 

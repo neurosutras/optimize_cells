@@ -378,15 +378,10 @@ class SimpleNetwork(object):
                 self.spikes_dict[pop_name][gid] = tvec
 
     def voltage_record(self):
-        has_cells = False
-        self.voltage_tvec = h.Vector()
         self.voltage_recvec = defaultdict(dict)
         for pop_name in self.cells:
             for gid, cell in self.cells[pop_name].iteritems():
                 if cell.is_art(): continue
-                if not has_cells:
-                    self.voltage_tvec.record(h._ref_t)
-                    has_cells = True
                 rec = h.Vector()
                 rec.record(getattr(cell.sec(.5), '_ref_v'))
                 self.voltage_recvec[pop_name][gid] = rec
@@ -414,19 +409,13 @@ class SimpleNetwork(object):
         return spikes_dict
 
     def get_voltage_rec_dict(self):
-        tvec_array = np.array(self.voltage_tvec)
-        start_index = np.where(tvec_array >= self.equilibrate)[0]
-        if len(start_index) > 0:
-            start_index = start_index[0]
-        else:
-            return dict(), tvec_array
+        start_index = int(self.equilibrate / self.dt)
         voltage_rec_dict = dict()
         for pop_name in self.voltage_recvec:
             voltage_rec_dict[pop_name] = dict()
             for gid, recvec in self.voltage_recvec[pop_name].iteritems():
                 voltage_rec_dict[pop_name][gid] = np.array(recvec)[start_index:]
-        tvec_array = np.subtract(tvec_array[start_index:], self.equilibrate)
-        return voltage_rec_dict, tvec_array
+        return voltage_rec_dict
 
     def get_connection_weights(self):
         weights = dict()
@@ -624,7 +613,6 @@ def check_voltages_exceed_threshold(voltage_rec_dict, pop_cell_types):
         vt = izhi_cell_type_param_dict[cell_type].vt
         for gid in voltage_rec_dict[pop_name]:
             if np.mean(voltage_rec_dict[pop_name][gid]) > vt:
-                print('%s gid: %i failed vm test' % (pop_name, gid))
                 return True
     return False
 
