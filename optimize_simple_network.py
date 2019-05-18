@@ -257,6 +257,8 @@ def analyze_network_output(network, export=False, plot=False):
     spikes_dict = network.get_spikes_dict()
     voltage_rec_dict, rec_t = network.get_voltage_rec_dict()
     voltages_exceed_threshold = check_voltages_exceed_threshold(voltage_rec_dict, context.pop_cell_types)
+    if voltages_exceed_threshold:
+        print('Voltages exceed threshold on rank %i' % context.comm.rank)
     firing_rates_dict = infer_firing_rates(spikes_dict, binned_t, alpha=context.baks_alpha, beta=context.baks_beta,
                                            pad_dur=context.baks_pad_dur)
     connection_weights_dict = network.get_connection_weights()
@@ -321,7 +323,8 @@ def analyze_network_output(network, export=False, plot=False):
         result['E_gamma_tuning_index'] = freq_tuning_index_dict['Gamma']['E']
         result['I_gamma_tuning_index'] = freq_tuning_index_dict['Gamma']['I']
 
-        context.update(locals())
+        if context.debug:
+            context.update(locals())
 
         if any(voltages_exceed_threshold_list):
             if context.verbose > 0:
@@ -380,6 +383,7 @@ def compute_features(x, export=False):
     if int(context.pc.id()) == 0 and context.verbose > 0:
         print('NETWORK SIMULATION RUNTIME: %.2f s' % (time.time() - current_time))
     current_time = time.time()
+
     results = analyze_network_output(context.network, export=export, plot=context.plot)
     if int(context.pc.id()) == 0:
         if context.verbose > 0:

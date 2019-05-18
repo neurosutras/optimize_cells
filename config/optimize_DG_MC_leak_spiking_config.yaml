@@ -205,24 +205,24 @@ target_val:
   vm_th: -48.0
   vm_stability: 5.0
 x0:
-  soma.g_pas: 2.971156E-06
-  dend.g_pas slope: 5.737205E-08
-  dend.g_pas tau: 7.868233E+01
-  e_pas: -6.492674E+01
-  soma.ghbar: 1.044403E-03
-  soma.gbar_nas: 1.392202E-02
-  axon.gbar_nax: 3.840977E-02
-  ais.gbar_nax: 1.256931E-01
-  soma.gkabar: 4.558122E-02
-  soma.gkdrbar: 1.815155E-02
-  axon.gkabar: 2.373423E-02
-  axon.gkdrbar: 2.585181E-02
-  soma.sh_nas/x: 5.896357E+00
-  ais.sha_nax: -3.943593E+00
-  soma.gtcabar: 0.0002625
-  soma.gncabar: 0.002
-  soma.glcabar: 0.01
-  soma.gbkbar: 0.00009
-  soma.gskbar: 0.0001
-  ais.gkmbar: 1.873839E-04
-  soma.tau_Cacum: 3.802922E+01
+  soma.tau_Cacum: 1.533382E+01
+  soma.gskbar: 5.421718E-04
+  soma.gkdrbar: 3.626798E-02
+  soma.g_pas: 3.479940E-06
+  axon.gkabar: 6.561031E-03
+  soma.gtcabar: 1.026587E-03
+  soma.gncabar: 4.288941E-03
+  ais.sha_nax: -3.912232E+00
+  axon.gkdrbar: 6.402015E-02
+  soma.sh_nas/x: 7.789334E+00
+  ais.gbar_nax: 4.218212E-01
+  e_pas: -6.572780E+01
+  dend.g_pas slope: 6.016211E-05
+  dend.g_pas tau: 1.608052E+02
+  soma.ghbar: 1.216480E-04
+  axon.gbar_nax: 5.774578E-02
+  soma.gbar_nas: 3.177068E-02
+  soma.gbkbar: 2.552520E-04
+  ais.gkmbar: 4.230714E-03
+  soma.glcabar: 1.174645E-03
+  soma.gkabar: 8.902299E-03

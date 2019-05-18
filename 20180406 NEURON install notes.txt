@@ -244,3 +244,9 @@ file_list = Tk.clipboard_get(root).split('\r')
 
 3) get full name of slurm job:
 scontrol show jobid -dd <jobid>
+
+IV) For dentate:
+Somewhere in PYTHONPATH:
+git clone https://github.com/iraikov/RBF.git
+cd rbf
+python setup.py install

@@ -624,6 +624,7 @@ def check_voltages_exceed_threshold(voltage_rec_dict, pop_cell_types):
         vt = izhi_cell_type_param_dict[cell_type].vt
         for gid in voltage_rec_dict[pop_name]:
             if np.mean(voltage_rec_dict[pop_name][gid]) > vt:
+                print('%s gid: %i failed vm test' % (pop_name, gid))
                 return True
     return False
 
