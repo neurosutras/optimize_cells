@@ -3,6 +3,7 @@ from neuron import h
 from baks import baks
 from scipy.signal import butter, sosfiltfilt, sosfreqz, hilbert, periodogram
 from collections import namedtuple, defaultdict
+from dentate.stgen import get_inhom_poisson_spike_times_by_thinning
 
 
 # Based on http://modeldb.yale.edu/39948
@@ -646,32 +647,6 @@ def get_pop_gid_ranges(pop_sizes):
     return pop_gid_ranges
 
 
-def get_inhom_poisson_spike_times_by_thinning(rate, t, dt=0.02, refractory=3., generator=None):
-    if generator is None:
-        generator = random.Random()
-    interp_t = np.arange(t[0], t[-1] + dt, dt)
-    interp_rate = np.interp(interp_t, t, rate)
-    interp_rate /= 1000.
-    non_zero = np.where(interp_rate > 0.)[0]
-    interp_rate[non_zero] = 1. / (1. / interp_rate[non_zero] - refractory)
-    spike_times = []
-    max_rate = np.max(interp_rate)
-    if not max_rate > 0.:
-        return spike_times
-    i = 0
-    ISI_memory = 0.
-    while i < len(interp_t):
-        x = generator.random()
-        if x > 0.:
-            ISI = -np.log(x) / max_rate
-            i += int(ISI / dt)
-            ISI_memory += ISI
-            if (i < len(interp_t)) and (generator.random() <= interp_rate[i] / max_rate) and ISI_memory >= 0.:
-                spike_times.append(interp_t[i])
-                ISI_memory = -refractory
-    return spike_times
-
-
 def infer_firing_rates(spike_trains_dict, t, alpha, beta, pad_dur):
     """
 
@@ -890,7 +865,8 @@ def PSTI(f, power, band=None, verbose=False):
 
 
 def get_bandpass_filtered_signal_stats(signal, t, sos, filter_band, bins=100, signal_label='', filter_label='',
-                                       pad=True, pad_len=None, plot=False, verbose=False):
+                                       axis_label = 'Amplitude', units='a.u.', pad=True, pad_len=None, plot=False,
+                                       verbose=False):
     """
 
     :param signal: array
@@ -900,6 +876,8 @@ def get_bandpass_filtered_signal_stats(signal, t, sos, filter_band, bins=100, si
     :param bins: number of frequency bins to compute in band
     :param signal_label: str
     :param filter_label: str
+    :param axis_label: str
+    :param units: str
     :param pad: bool
     :param pad_len: int
     :param plot: bool
@@ -950,6 +928,8 @@ def get_bandpass_filtered_signal_stats(signal, t, sos, filter_band, bins=100, si
         axes[0][1].plot(t, np.ones_like(t) * mean_signal, c='k', zorder=1)
         axes[0][1].plot(t, envelope, label='Envelope amplitude', c='r', alpha=0.5, zorder=2)
         axes[0][1].plot(t, np.ones_like(t) * mean_envelope, c='darkred', zorder=0)
+        axes[0][0].set_ylabel('%s (mean subtracted) (%s)' % (axis_label, units))
+        axes[0][1].set_ylabel('%s (%s)' % (axis_label, units))
         box = axes[0][0].get_position()
         axes[0][0].set_position([box.x0, box.y0, box.width, box.height * 0.8])
         axes[0][0].legend(loc='lower center', bbox_to_anchor=(0.5, 1.0), frameon=False, framealpha=0.5)
@@ -1007,7 +987,7 @@ def get_pop_bandpass_filtered_signal_stats(signal_dict, t, filter_band_dict, ord
             freq_tuning_index_dict[filter_label][pop_name] = \
                 get_bandpass_filtered_signal_stats(signal, t, sos, filter_band,
                                                    signal_label='Population: %s' % pop_name, filter_label=filter_label,
-                                                   plot=plot, verbose=verbose)
+                                                   axis_label='Firing rate', units='Hz', plot=plot, verbose=verbose)
 
     return filtered_signal_dict, envelope_dict, envelope_ratio_dict, centroid_freq_dict, freq_tuning_index_dict
 

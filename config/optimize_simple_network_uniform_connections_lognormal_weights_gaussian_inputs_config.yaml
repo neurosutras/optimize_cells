@@ -206,23 +206,23 @@ target_val:
   E_gamma_tuning_index: 5.
   I_gamma_tuning_index: 5.
 x0:
-  E_I_weight_norm_sigma: 5.060031E-01
-  E_E_FF_syn_proportion: 3.509090E-01
-  E_I_tau_offset: 2.576885E+01
-  E_E_weight_norm_sigma: 9.910293E-01
-  I_E_FF_syn_proportion: 5.084352E-01
-  E_E_tau_offset: 1.412191E+01
-  I_FF_mean_weight: 1.354830E+00
-  E_E_mean_weight: 4.869403E+00
-  E_FF_weight_norm_sigma: 4.050911E-01
-  E_I_mean_weight: 3.051663E+00
-  I_E_weight_norm_sigma: 7.900824E-01
-  I_E_tau_offset: 1.121952E+01
-  I_I_weight_norm_sigma: 6.574891E-01
-  I_E_syn_proportion: 8.698571E-02
-  I_FF_weight_norm_sigma: 8.252267E-01
-  E_E_syn_proportion: 9.269190E-01
-  I_I_mean_weight: 3.097580E-01
-  E_FF_mean_weight: 3.939175E+00
-  I_E_mean_weight: 2.686227E+00
-  I_I_tau_offset: 3.986745E+00
+  E_I_weight_norm_sigma: 3.133021E-01
+  E_E_FF_syn_proportion: 8.959412E-01
+  E_I_tau_offset: 4.076602E+00
+  E_E_weight_norm_sigma: 3.283792E-01
+  I_E_FF_syn_proportion: 7.391833E-01
+  E_E_tau_offset: 5.549544E+00
+  I_FF_mean_weight: 2.393251E+00
+  E_E_mean_weight: 2.881852E+00
+  E_FF_weight_norm_sigma: 9.257900E-01
+  E_I_mean_weight: 1.131226E-01
+  I_E_weight_norm_sigma: 5.487550E-01
+  I_E_tau_offset: 1.750748E+01
+  I_I_weight_norm_sigma: 5.282017E-01
+  I_E_syn_proportion: 9.759795E-02
+  I_FF_weight_norm_sigma: 7.706212E-01
+  E_E_syn_proportion: 3.916749E-01
+  I_I_mean_weight: 2.311584E+00
+  E_FF_mean_weight: 1.697106E+00
+  I_E_mean_weight: 4.106105E+00
+  I_I_tau_offset: 3.438833E+00
