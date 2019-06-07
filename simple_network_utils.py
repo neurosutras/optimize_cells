@@ -449,7 +449,7 @@ class SimpleNetwork(object):
                         else:
                             weights[target_pop_name][target_gid][source_pop_name][source_gid] = 0.
 
-        return weight
+        return weights
 
 def config_connection(syn_type, syn=None, nc=None, delay=None, syn_mech_names=None, syn_mech_param_rules=None,
                       **syn_mech_params):
