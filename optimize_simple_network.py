@@ -9,7 +9,7 @@ context = Context()
 
 @click.command()
 @click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='config/optimize_simple_network_uniform_connections_normal_weights_constant_inputs_config.yaml')
+              default='config/optimize_simple_network_gaussian_connections_lognormal_weights_gaussian_inputs_config.yaml')
 @click.option("--export", is_flag=True)
 @click.option("--output-dir", type=str, default='data')
 @click.option("--export-file-path", type=str, default=None)
@@ -119,11 +119,14 @@ def init_context():
     if context.comm.rank == 0:
         input_pop_t = dict()
         input_pop_firing_rates = dict()
+        peak_locs = dict()
         for pop_name in context.input_types:
             if pop_name not in pop_cell_types or pop_cell_types[pop_name] != 'input':
                 raise RuntimeError('optimize_simple_network: %s not specified as an input population' % pop_name)
             if pop_name not in input_pop_firing_rates:
                 input_pop_firing_rates[pop_name] = dict()
+            if pop_name not in peak_locs:
+                peak_locs[pop_name] = dict()
             if context.input_types[pop_name] == 'constant':
                 try:
                     this_mean_rate = context.input_mean_rates[pop_name]
@@ -150,10 +153,11 @@ def init_context():
                 this_tuning_width = duration * this_norm_tuning_width
                 this_sigma = this_tuning_width / 3. / np.sqrt(2.)
 
-                peak_locs = np.linspace(-2. * this_tuning_width / 3.,
+                peak_locs_array = np.linspace(-2. * this_tuning_width / 3.,
                                         tstop + 2. * this_tuning_width / 3., pop_sizes[pop_name])
 
-                for peak_loc, gid in zip(peak_locs, xrange(pop_gid_ranges[pop_name][0], pop_gid_ranges[pop_name][1])):
+                for peak_loc, gid in zip(peak_locs_array, xrange(pop_gid_ranges[pop_name][0], pop_gid_ranges[pop_name][1])):
+                    peak_locs[pop_name][gid] = peak_loc
                     input_pop_firing_rates[pop_name][gid] = \
                         get_gaussian_rate(t=this_stim_t, peak_loc=peak_loc, sigma=this_sigma, min_rate=this_min_rate,
                                           max_rate=this_max_rate)
@@ -173,6 +177,7 @@ def init_context():
         input_pop_firing_rates = None
     input_pop_t = context.comm.bcast(input_pop_t, root=0)
     input_pop_firing_rates = context.comm.bcast(input_pop_firing_rates, root=0)
+    peak_locs = context.comm.bcast(peak_locs, root=0)
 
     if context.connectivity_type == 'gaussian':
         pop_axon_extents = {'FF': 1., 'E': 1., 'I': 1.}
@@ -367,6 +372,10 @@ def compute_features(x, export=False):
         default_weight_distribution_type=context.default_weight_distribution_type,
         connection_weight_distribution_types=context.connection_weight_distribution_types,
         weights_seed=context.weights_seed)
+
+    # UNCOMMENT THIS WHEN ADDED AS FLAG!
+    # context.network.scale_connection_weights(
+    #     peak_locs=context.peak_locs)
 
     if int(context.pc.id()) == 0 and context.verbose > 0:
         print('NETWORK BUILD RUNTIME: %.2f s' % (time.time() - start_time))
