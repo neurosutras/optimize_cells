@@ -83,8 +83,8 @@ def config_worker():
 
 def init_context():
     start_time = time.time()
-    pop_sizes = {'FF': 1000, 'E': 1000, 'I': 200}
-    pop_syn_counts = {'E': 1000, 'I': 1000}  # {'target_pop_name': int}
+    pop_sizes = {'FF': 100, 'E': 100, 'I': 20}
+    pop_syn_counts = {'E': 100, 'I': 100}  # {'target_pop_name': int}
     pop_gid_ranges = get_pop_gid_ranges(pop_sizes)
     pop_cell_types = {'FF': 'input', 'E': 'IB', 'I': 'FS'}
 
@@ -120,6 +120,7 @@ def init_context():
         input_pop_t = dict()
         input_pop_firing_rates = dict()
         peak_locs = dict()
+        print(context.input_types)
         for pop_name in context.input_types:
             if pop_name not in pop_cell_types or pop_cell_types[pop_name] != 'input':
                 raise RuntimeError('optimize_simple_network: %s not specified as an input population' % pop_name)
@@ -178,6 +179,8 @@ def init_context():
     input_pop_t = context.comm.bcast(input_pop_t, root=0)
     input_pop_firing_rates = context.comm.bcast(input_pop_firing_rates, root=0)
     peak_locs = context.comm.bcast(peak_locs, root=0)
+
+    print(peak_locs)
 
     if context.connectivity_type == 'gaussian':
         pop_axon_extents = {'FF': 1., 'E': 1., 'I': 1.}
@@ -374,8 +377,11 @@ def compute_features(x, export=False):
         weights_seed=context.weights_seed)
 
     # UNCOMMENT THIS WHEN ADDED AS FLAG!
-    # context.network.scale_connection_weights(
-    #     peak_locs=context.peak_locs)
+    context.network.scale_connection_weights(
+        peak_locs=context.peak_locs)
+
+    context.network.visualize_weights(
+        peak_locs=context.peak_locs)
 
     if int(context.pc.id()) == 0 and context.verbose > 0:
         print('NETWORK BUILD RUNTIME: %.2f s' % (time.time() - start_time))

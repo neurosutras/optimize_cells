@@ -352,11 +352,27 @@ class SimpleNetwork(object):
         for target_pop_name in self.ncdict:
             for target_gid in self.ncdict[target_pop_name]:
                 tpeak = peak_locs[target_pop_name][target_gid]
+                tpeak_y = norm.pdf(tpeak, loc=tpeak, scale=sigma)
                 for source_pop_name in self.ncdict[target_pop_name][target_gid]:
                     for source_gid in self.ncdict[target_pop_name][target_gid][source_pop_name]:
                         speak = peak_locs[source_pop_name][source_gid]
                         self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid].weight[0] += \
-                        norm.pdf(speak, loc=tpeak, scale=sigma) * (direct_scale/norm.pdf(tpeak, loc=tpeak, scale=sigma))
+                        norm.pdf(speak, loc=tpeak, scale=sigma) * (direct_scale/tpeak_y)
+
+    def visualize_weights(self, peak_locs=None, n=1):
+        for target_pop_name in self.ncdict:
+            if target_pop_name not in self.cells:
+                continue
+            target_gids = random.sample(list(self.cells[target_pop_name].keys()), n)
+            for target_gid in target_gids:
+                tpeak = peak_locs[target_pop_name][target_gid]
+                tpeak_y = norm.pdf(tpeak, loc=tpeak, scale=sigma)
+                plt.scatter(tpeak, tpeak_y, c='r')
+                for source_pop_name in self.ncdict[target_pop_name][target_gid]:
+                    for source_gid in self.ncdict[target_pop_name][target_gid][source_pop_name]:
+                        speak = peak_locs[source_pop_name][source_gid]
+                        plt.scatter(speak, self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid].weight[0], c='b')
+                plt.title("Cell {} at peak loc {}".format(target_gid, tpeak))
 
     def visualize_connections(self, pop_cell_positions, n=1):
         for target_pop_name in self.pop_syn_proportions:
