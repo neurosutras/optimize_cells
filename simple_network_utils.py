@@ -1,6 +1,6 @@
 from nested.utils import *
 from neuron import h
-from baks import baks
+from dentate.utils import baks
 from scipy.signal import butter, sosfiltfilt, sosfreqz, hilbert, periodogram
 from collections import namedtuple, defaultdict
 from dentate.stgen import get_inhom_poisson_spike_times_by_thinning
