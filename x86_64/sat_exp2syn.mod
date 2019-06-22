@@ -1,1 +1,0 @@
-../sat_exp2syn.mod

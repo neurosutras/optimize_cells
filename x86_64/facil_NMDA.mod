@@ -1,1 +1,0 @@
-../facil_NMDA.mod
