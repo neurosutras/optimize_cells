@@ -36,11 +36,10 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     env = Env(comm, config_file, template_paths, hoc_lib_path, dataset_prefix, verbose=verbose)
     configure_hoc_env(env)
 
-    cell = get_biophys_cell(env, gid, pop_name)
+    cell = get_biophys_cell(env, pop_name, gid, mech_file_path=mech_file_path)
     context.update(locals())
 
-    init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=mech_file_path, correct_cm=True,
-                    correct_g_pas=True, env=env)
+    init_biophysics(cell, reset_cable=True, correct_cm=True, correct_g_pas=True, env=env)
 
     equilibrate = 250.
     stim_dur = 100.

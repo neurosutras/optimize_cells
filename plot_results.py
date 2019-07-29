@@ -67,7 +67,7 @@ def plot_Rinp(rec_file_list, sec_types_list=None, features_list=None, features_l
         feature_dict = {feature: {} for feature in features_list}
         distances_dict = {feature: {} for feature in features_list}
         with h5py.File(data_dir + rec_file + '.hdf5', 'r') as f:
-            for item in f['Rinp_data'].itervalues():
+            for item in viewvalues(f['Rinp_data']):
                 if ((item.attrs['type'] in sec_types_list) or
                         ('axon' in sec_types_list and item.attrs['type'] in axon_types_list) or
                         ('dendrite' in sec_types_list and item.attrs['type'] in dend_types_list)):
@@ -78,13 +78,13 @@ def plot_Rinp(rec_file_list, sec_types_list=None, features_list=None, features_l
                     else:
                         sec_type = item.attrs['type']
                     for feature in features_list:
-                        if sec_type not in distances_dict[feature].keys():
+                        if sec_type not in distances_dict[feature]:
                             distances_dict[feature][sec_type] = []
                         if item.attrs['type'] in ['basal', 'axon', 'ais', 'hillock']:
                             distances_dict[feature][sec_type].append(item.attrs['soma_distance'] * -1.)
                         else:
                             distances_dict[feature][sec_type].append(item.attrs['soma_distance'])
-                        if sec_type not in feature_dict[feature].keys():
+                        if sec_type not in feature_dict[feature]:
                             feature_dict[feature][sec_type] = []
                         feature_dict[feature][sec_type].append(item.attrs[feature])
         num_colors = 10
@@ -190,10 +190,10 @@ def plot_superimpose_conditions(rec_filename, legend=False):
     f = h5py.File(data_dir+rec_filename+'.hdf5', 'r')
     rec_ids = []
     sim_ids = []
-    for sim in f.itervalues():
+    for sim in viewvalues(f):
         if 'description' in sim.attrs and not sim.attrs['description'] in sim_ids:
             sim_ids.append(sim.attrs['description'])
-        for rec in sim['rec'].itervalues():
+        for rec in viewvalues(sim['rec']):
             if 'description' in rec.attrs:
                 rec_id = rec.attrs['description']
             else:
@@ -205,13 +205,13 @@ def plot_superimpose_conditions(rec_filename, legend=False):
         axes[i].set_xlabel('Time (ms)')
         axes[i].set_ylabel(rec_ids[i]['ylabel'])
         axes[i].set_title(rec_ids[i]['id'])
-    for sim in f.itervalues():
+    for sim in viewvalues(f):
         if 'description' in sim.attrs:
             sim_id = sim.attrs['description']
         else:
             sim_id = ''
         tvec = sim['time']
-        for rec in sim['rec'].itervalues():
+        for rec in viewvalues(sim['rec']):
             if ('description' in rec.attrs):
                 rec_id = rec.attrs['description']
             else:
@@ -241,7 +241,7 @@ def plot_synaptic_parameter(rec_file_list, description_list=None):
     if description_list is None:
         description_list = [" " for rec in rec_file_list]
     with h5py.File(data_dir+rec_file_list[0]+'.hdf5', 'r') as f:
-        param_list = [dataset for dataset in f.itervalues().next() if not dataset == 'distances']
+        param_list = [dataset for dataset in next(iter(viewvalues(f))) if not dataset == 'distances']
         fig, axes = plt.subplots(max(2,len(param_list)), max(2, len(f)))
     colors = ['k', 'r', 'c', 'y', 'm', 'g', 'b']
     for index, rec_filename in enumerate(rec_file_list):
@@ -274,11 +274,10 @@ def plot_synaptic_parameter_GC(rec_file_list, param_names=None, description_list
     # default_rec_locs = ['soma']
     with h5py.File(data_dir+rec_file_list[0]+'.hdf5', 'r') as f:
         if param_names is None:
-            param_names = [param_name for param_name in f.values()[0].attrs.keys() if not (param_name == 'input_loc' or param_name == 'equilibrate'
-                           or param_name == 'duration')]
+            param_names = [param_name for param_name in next(iter(viewvalues(f))).attrs if param_name not in ['input_loc', 'equilibrate', 'duration']]
         temp_input_locs = []
         temp_rec_locs = []
-        for sim in f.itervalues():
+        for sim in viewvalues(f):
             input_loc = sim.attrs['input_loc']
             if not input_loc in temp_input_locs:
                 temp_input_locs.append(input_loc)
@@ -298,7 +297,7 @@ def plot_synaptic_parameter_GC(rec_file_list, param_names=None, description_list
             for param_name in param_names:
                 param_vals[param_name][input_loc] = {}
         with h5py.File(data_dir+rec_filename+'.hdf5', 'r') as f:
-            for sim in f.itervalues():
+            for sim in viewvalues(f):
                 input_loc = sim.attrs['input_loc']
                 is_terminal = str(sim['rec']['2'].attrs['is_terminal'])
                 if is_terminal not in distances_soma[input_loc].keys():
@@ -308,7 +307,7 @@ def plot_synaptic_parameter_GC(rec_file_list, param_names=None, description_list
                 #distances_dend[input_loc][is_terminal].append(sim['rec']['2'].attrs['soma_distance'] -
                                                                         #sim['rec']['1'].attrs['soma_distance'])
                 for param_name in param_names:
-                    if is_terminal not in param_vals[param_name][input_loc].keys():
+                    if is_terminal not in param_vals[param_name][input_loc]:
                         param_vals[param_name][input_loc][is_terminal] = []
                     param_vals[param_name][input_loc][is_terminal].append(sim.attrs[param_name])
             fig, axes = plt.subplots(max(2, len(input_locs)), max(2, len(param_names)))
@@ -316,7 +315,7 @@ def plot_synaptic_parameter_GC(rec_file_list, param_names=None, description_list
             colors = ['k', 'r', 'c', 'y', 'm', 'g', 'b']
             for i, input_loc in enumerate(input_locs):
                 for j, param_name in enumerate(param_names):
-                    string_keys = distances_soma[input_loc].keys()
+                    string_keys = list(distances_soma[input_loc].keys())
                     terminal_keys = [int(key) for key in string_keys]
                     terminal_keys.sort()
                     terminal_labels = []
@@ -437,7 +436,7 @@ def plot_best_norm_features_boxplot(storage, target_val, target_range):
     """
     #Ensure that f_I_slope is in target_val with a value of 53.
     fig, axes = plt.subplots(1)
-    labels = target_val.keys()
+    labels = list(target_val.keys())
     # y_values = range(len(y_labels))
     final_survivors = storage.survivors[-1]
     norm_feature_vals = {}
@@ -486,8 +485,8 @@ def plot_best_norm_features_scatter(storage, target_val, target_range):
     orig_fontsize = mpl.rcParams['font.size']
     mpl.rcParams['font.size'] = 16.
     fig, axes = plt.subplots(1)
-    y_labels = target_val.keys()
-    y_values = range(len(y_labels))
+    y_labels = list(target_val.keys())
+    y_values = list(range(len(y_labels)))
     final_survivors = storage.survivors[-1]
     norm_feature_vals = {}
     colors = list(cm.rainbow(np.linspace(0, 1, len(y_labels))))
@@ -557,7 +556,7 @@ def plot_exported_DG_GC_spiking_features(file_path):
         fig2, axes2 = plt.subplots()
         model_ISI_array = group['model_ISI_array'][:]
         exp_ISI_array = group['exp_ISI_array'][:]
-        ISI_num = range(1, len(exp_ISI_array) + 1)
+        ISI_num = list(range(1, len(exp_ISI_array) + 1))
         axes2.scatter(ISI_num, model_ISI_array, label='Model', c='r', linewidth=0, alpha=0.5)
         axes2.plot(ISI_num, model_ISI_array, c='r', alpha=0.5)
         axes2.scatter(ISI_num, exp_ISI_array, label='Experiment', c='k', linewidth=0, alpha=0.5)
@@ -641,10 +640,10 @@ def plot_exported_DG_GC_synaptic_integration_features(file_path):
         data_group = f[group_name]['data']
 
         for syn_group in data_group:
-            syn_conditions = data_group[syn_group].keys()
+            syn_conditions = list(data_group[syn_group].keys())
             ordered_syn_conditions = ['control'] + [syn_condition for syn_condition in syn_conditions
                                                     if syn_condition not in ['control']]
-            rec_names = data_group[syn_group]['control'].keys()
+            rec_names = list(data_group[syn_group]['control'].keys())
             if 'soma' in rec_names:
                 ordered_rec_names = ['soma'] + [rec_name for rec_name in rec_names if rec_name not in ['soma']]
             else:
@@ -674,7 +673,7 @@ def plot_exported_DG_GC_synaptic_integration_features(file_path):
                                  'contain a required group: %s' % (file_path, group_name))
         group = f[group_name]
         t = group['time'][:]
-        syn_conditions = group['traces'].itervalues().next().keys()
+        syn_conditions = list(next(iter(viewvalues(group['traces']))).keys())
         ordered_syn_conditions = ['expected_control', 'control']
         for syn_condition in [syn_condition for syn_condition in syn_conditions
                               if syn_condition != 'control' and 'expected' not in syn_condition]:
@@ -697,11 +696,11 @@ def plot_exported_DG_GC_synaptic_integration_features(file_path):
                 fig.show()
 
         data_group = group['soma_compound_EPSP_amp']
-        branch_names = data_group.keys()
+        branch_names = list(data_group.keys())
         fig, axes = plt.subplots(1, len(branch_names), sharey=True, sharex=True)
         if len(branch_names) == 1:
             axes = [axes]
-        syn_conditions = data_group.itervalues().next().keys()
+        syn_conditions = list(next(iter(viewvalues(data_group))).keys())
         ordered_syn_conditions = ['control'] + [syn_condition for syn_condition in syn_conditions
                                                 if syn_condition != 'control' and 'expected' not in syn_condition]
         colors = list(cm.Paired(np.linspace(0, 1, len(syn_conditions))))
@@ -739,9 +738,9 @@ def plot_sim_from_file(file_path, group_name='sim_output'):
         if group_name not in f:
             raise AttributeError('plot_sim_from_file: provided file path: %s does not contain required top-level group '
                                  'with name: %s' % (file_path, group_name))
-        for trial in f[group_name].itervalues():
+        for trial in viewvalues(f[group_name]):
             fig, axes = plt.subplots()
-            for name, rec in trial['recs'].iteritems():
+            for name, rec in viewitems(trial['recs']):
                 description = str(rec.attrs['description'])
                 node_name = '%s%i' % (rec.attrs['type'], rec.attrs['index'])
                 label = '%s: %s(%.2f) %s' % (name, node_name, rec.attrs['loc'], description)
@@ -775,7 +774,7 @@ def plot_na_gradient_params(x_dict):
     mpl.rcParams['font.size'] = 20.
     fig, axes = plt.subplots(1)
     x_labels = ['axon', 'AIS', 'soma', 'dend']
-    x_values = range(len(x_labels))
+    x_values = list(range(len(x_labels)))
     colors = ['b', 'c', 'g', 'r']
     y_values = [x_dict['axon.gbar_nax'], x_dict['ais.gbar_nax'], x_dict['soma.gbar_nas'], x_dict['dend.gbar_nas']]
     for i in x_values:

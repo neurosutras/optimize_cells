@@ -121,7 +121,7 @@ def get_expected_spine_index_map(sim_file):
     :return: dict
     """
     index_map = {}
-    for key, sim in sim_file.iteritems():
+    for key, sim in viewitems(sim_file):
         path_index = sim.attrs['path_index']
         spine_index = sim.attrs['spine_index']
         if path_index not in index_map:
@@ -158,17 +158,17 @@ def get_spine_group_info(sim_filename, verbose=1):
                 spine_group_info[path_type][path_category]['distances'].append(distance)
     for path_type in spine_group_info:
         for path_category in spine_group_info[path_type]:
-            indexes = range(len(spine_group_info[path_type][path_category]['distances']))
+            indexes = list(range(len(spine_group_info[path_type][path_category]['distances'])))
             indexes.sort(key=spine_group_info[path_type][path_category]['distances'].__getitem__)
             spine_group_info[path_type][path_category]['distances'] = \
-                map(spine_group_info[path_type][path_category]['distances'].__getitem__, indexes)
+                list(map(spine_group_info[path_type][path_category]['distances'].__getitem__, indexes))
             spine_group_info[path_type][path_category]['path_indexes'] = \
-                map(spine_group_info[path_type][path_category]['path_indexes'].__getitem__, indexes)
+                list(map(spine_group_info[path_type][path_category]['path_indexes'].__getitem__, indexes))
         if verbose:
             for path_category in spine_group_info[path_type]:
-                print path_type, '-', path_category
+                print(path_type, '-', path_category)
                 for i, distance in enumerate(spine_group_info[path_type][path_category]['distances']):
-                    print spine_group_info[path_type][path_category]['path_indexes'][i], distance
+                    print(spine_group_info[path_type][path_category]['path_indexes'][i], distance)
     return spine_group_info
 
 
@@ -190,7 +190,7 @@ def get_expected_EPSP(sim_file, group_index, equilibrate, duration, dt=0.02):
     left, right = time2index(interp_t, equilibrate-3., equilibrate-1.)
     start, stop = time2index(interp_t, equilibrate-2., duration)
     trace_dict = {}
-    for rec in sim['rec'].itervalues():
+    for rec in viewvalues(sim['rec']):
         location = rec.attrs['description']
         vm = rec[:]
         interp_vm = np.interp(interp_t, t, vm)
@@ -239,7 +239,7 @@ def get_expected_vs_actual(expected_sim_file, actual_sim_file, expected_index_ma
         interp_t = np.arange(0., duration, dt)
         left, right = time2index(interp_t, equilibrate-3., equilibrate-1.)
         start, stop = time2index(interp_t, equilibrate-2., duration)
-        for rec in sim['rec'].itervalues():
+        for rec in viewvalues(sim['rec']):
             location = rec.attrs['description']
             if not location in actual:
                 actual[location] = []
@@ -254,8 +254,8 @@ def get_expected_vs_actual(expected_sim_file, actual_sim_file, expected_index_ma
     interp_t -= interp_t[0] + 2.
     expected = {}
     summed_traces = {}
-    equilibrate = expected_sim_file.itervalues().next().attrs['equilibrate']
-    duration = expected_sim_file.itervalues().next().attrs['duration']
+    equilibrate = next(iter(viewvalues(expected_sim_file))).attrs['equilibrate']
+    duration = next(iter(viewvalues(expected_sim_file))).attrs['duration']
     for i, spine_index in enumerate(spine_list):
         group_index = expected_index_map[spine_index]
         trace_dict = get_expected_EPSP(expected_sim_file, group_index, equilibrate, duration, dt)
@@ -287,7 +287,7 @@ def export_nmdar_cooperativity(expected_filename, actual_filename, description="
     """
     sim_key_dict = {}
     with h5py.File(data_dir+actual_filename+'.hdf5', 'r') as actual_file:
-        for key, sim in actual_file.iteritems():
+        for key, sim in viewitems(actual_file):
             path_index = sim.attrs['path_index']
             if path_index not in sim_key_dict:
                 sim_key_dict[path_index] = []
@@ -313,7 +313,7 @@ def export_nmdar_cooperativity(expected_filename, actual_filename, description="
                     path_group.attrs['origin_distance'] = origin_distance
                     expected_dict, actual_dict = get_expected_vs_actual(expected_file, actual_file,
                                                                         expected_index_map[path_index], sim_keys)
-                    for rec in sim['rec'].itervalues():
+                    for rec in viewvalues(sim['rec']):
                         location = rec.attrs['description']
                         rec_group = path_group.create_group(location)
                         rec_group.create_dataset('expected', compression='gzip', compression_opts=9,
@@ -329,11 +329,11 @@ def sliding_window(unsorted_x, y=None, bin_size=60., window_size=3, start=-60., 
     :param y: array
     :return: bin_center, density, rolling_mean: array, array, array
     """
-    indexes = range(len(unsorted_x))
+    indexes = list(range(len(unsorted_x)))
     indexes.sort(key=unsorted_x.__getitem__)
-    sorted_x = map(unsorted_x.__getitem__, indexes)
+    sorted_x = list(map(unsorted_x.__getitem__, indexes))
     if y is not None:
-        sorted_y = map(y.__getitem__, indexes)
+        sorted_y = list(map(y.__getitem__, indexes))
     window_dur = bin_size * window_size
     bin_centers = np.arange(start+window_dur/2., end-window_dur/2.+bin_size, bin_size)
     density = np.zeros(len(bin_centers))
@@ -360,7 +360,7 @@ def flush_engine_buffer(result):
     for stdout in result.stdout:
         if stdout:
             for line in stdout.splitlines():
-                print line
+                print(line)
     sys.stdout.flush()
 
 
@@ -418,7 +418,7 @@ def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.005, vm_tol=0.5, i
     vm_rest = np.mean(vm[int((duration - 3.) / dt):int((duration - 1.) / dt)])
     vm_before = vm_rest
     if sim.verbose:
-        print 'offset_vm: pid: %i; %s; vm_rest: %.1f, vm_target: %.1f' % (os.getpid(), rec_name, vm_rest, vm_target)
+        print('offset_vm: pid: %i; %s; vm_rest: %.1f, vm_target: %.1f' % (os.getpid(), rec_name, vm_rest, vm_target))
 
     if dynamic is True:
         dyn_i_inc = i_inc
@@ -439,8 +439,8 @@ def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.005, vm_tol=0.5, i
             i_inc_mult = vm_diff / vm_inc
             dyn_i_inc = i_inc_mult * prev_i_inc
             if sim.verbose:
-                print 'offset_vm: pid: %i; %s; %s i_holding to %.3f nA; vm_rest: %.1f; i_inc_mult: %.1f; ' \
-                      'i_inc: %.5f' % (os.getpid(), rec_name, delta_str, i_amp, vm_rest, i_inc_mult, dyn_i_inc)
+                print('offset_vm: pid: %i; %s; %s i_holding to %.3f nA; vm_rest: %.1f; i_inc_mult: %.1f; ' \
+                      'i_inc: %.5f' % (os.getpid(), rec_name, delta_str, i_amp, vm_rest, i_inc_mult, dyn_i_inc))
     else:
         if vm_rest > vm_target:
             i_inc *= -1.
@@ -452,8 +452,8 @@ def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.005, vm_tol=0.5, i
                 vm = np.interp(t, sim.tvec, rec)
                 vm_rest = np.mean(vm[int((duration - 3.) / dt):int((duration - 1.) / dt)])
                 if sim.verbose:
-                    print 'offset_vm: pid: %i; %s; %s i_holding to %.3f nA; vm_rest: %.1f' % \
-                          (os.getpid(), rec_name, delta_str, i_amp, vm_rest)
+                    print('offset_vm: pid: %i; %s; %s i_holding to %.3f nA; vm_rest: %.1f' % \
+                          (os.getpid(), rec_name, delta_str, i_amp, vm_rest))
         if i_inc < 0.:
             i_inc *= -1.
         delta_str = 'increased'
@@ -465,97 +465,21 @@ def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.005, vm_tol=0.5, i
             vm = np.interp(t, sim.tvec, rec)
             vm_rest = np.mean(vm[int((duration - 3.) / dt):int((duration - 1.) / dt)])
             if sim.verbose:
-                print 'offset_vm: pid: %i; %s; %s i_holding to %.3f nA; vm_rest: %.1f' % \
-                      (os.getpid(), rec_name, delta_str, i_amp, vm_rest)
+                print('offset_vm: pid: %i; %s; %s i_holding to %.3f nA; vm_rest: %.1f' % \
+                      (os.getpid(), rec_name, delta_str, i_amp, vm_rest))
         if abs(vm_rest - vm_target) > abs(prev_vm_rest - vm_target):
             i_amp -= i_inc
             vm_rest = prev_vm_rest
         sim.modify_stim('holding', amp=i_amp)
 
         if sim.verbose:
-            print 'offset_vm: pid: %i; %s; vm_rest: %.1f, vm_target: %.1f' % (os.getpid(), rec_name, vm_rest, vm_target)
+            print('offset_vm: pid: %i; %s; vm_rest: %.1f, vm_target: %.1f' % (os.getpid(), rec_name, vm_rest, vm_target))
 
     if i_history is not None:
         i_history[rec_name][vm_target] = i_amp
     sim.restore_state()
     vm_after = vm_rest
     return vm_before, vm_after, i_amp
-
-
-def get_spike_shape(vm, spike_times, context=None):
-    """
-
-    :param vm: array
-    :param spike_times: array
-    :param context: :class:'Context'
-    :return: tuple of float: (v_peak, th_v, ADP, AHP)
-    """
-    if context is None:
-        raise RuntimeError('get_spike_shape: pid: %i; missing required Context object' % os.getpid())
-    equilibrate = context.equilibrate
-    dt = context.dt
-    th_dvdt = context.th_dvdt  # slope of voltage change at spike threshold
-
-    start = int((equilibrate + 1.) / dt)  # start time after equilibrate, expressed in time step
-    vm = vm[start:]
-    dvdt = np.gradient(vm, dt)  # slope of voltage change
-    th_x_indexes = np.where(dvdt >= th_dvdt)[0]
-    if th_x_indexes.any():
-        th_x = th_x_indexes[0] - int(1.6 / dt)  # the true spike onset is before the slope threshold is crossed
-    else:
-        th_x_indexes = np.where(vm > -30.)[0]
-        if th_x_indexes.any():
-            th_x = th_x_indexes[0] - int(2. / dt)
-        else:
-            return None
-    th_v = vm[th_x]
-    v_before = np.mean(vm[th_x - int(0.1 / dt):th_x])
-
-    spike_detector_delay = spike_times[0] - (equilibrate + 1. + th_x * dt)
-    window_dur = 100.  # ms
-    fAHP_window_dur = 20.  # ms
-    ADP_min_start = 5.  # ms
-    ADP_window_dur = 75. # ms
-    if len(spike_times) > 1:
-        window_dur = min(window_dur, spike_times[1] - spike_times[0])
-    window_end = min(len(vm), th_x + int(window_dur / dt))
-    fAHP_window_end = min(window_end, th_x + int(fAHP_window_dur / dt))
-    ADP_min_start_len = min(window_end - th_x, int(ADP_min_start / dt))
-    ADP_window_end = min(window_end, th_x + int(ADP_window_dur / dt))
-
-    x_peak = np.argmax(vm[th_x:window_end]) + th_x
-    v_peak = vm[x_peak]
-
-    # find fAHP trough
-    rising_x = np.where(dvdt[x_peak+1:fAHP_window_end] > 0.)[0]
-    if rising_x.any():
-        fAHP_window_end = x_peak + 1 + rising_x[0]
-    x_fAHP = np.argmin(vm[x_peak:fAHP_window_end]) + x_peak
-    v_fAHP = vm[x_fAHP]
-    fAHP = v_before - v_fAHP
-
-    # find ADP and mAHP
-    rising_x = np.where(dvdt[x_fAHP:ADP_window_end] > 0.)[0]
-    if not rising_x.any():
-        ADP = 0.
-        mAHP = 0.
-    else:
-        falling_x = np.where(dvdt[x_fAHP + rising_x[0]:ADP_window_end] < 0.)[0]
-        if not falling_x.any():
-            ADP = 0.
-            mAHP = 0.
-        else:
-            x_ADP = np.argmax(vm[x_fAHP + rising_x[0]:x_fAHP + rising_x[0] + falling_x[0]]) + x_fAHP + rising_x[0]
-            if x_ADP - th_x < ADP_min_start_len:
-                ADP = 0.
-                mAHP = 0.
-            else:
-                v_ADP = vm[x_ADP]
-                ADP = v_ADP - v_fAHP
-                mAHP = v_before - np.min(vm[x_ADP:window_end])
-
-    return {'v_peak': v_peak, 'th_v': th_v, 'fAHP': fAHP, 'ADP': ADP, 'mAHP': mAHP,
-            'spike_detector_delay': spike_detector_delay}
 
 
 def get_spike_adaptation_indexes(spike_times):
@@ -569,7 +493,7 @@ def get_spike_adaptation_indexes(spike_times):
         return None
     isi = np.diff(spike_times)
     adi = []
-    for i in xrange(len(isi) - 1):
+    for i in range(len(isi) - 1):
         adi.append((isi[i + 1] - isi[i]) / (isi[i + 1] + isi[i]))
     return np.array(adi)
 
@@ -602,7 +526,7 @@ def get_thickest_dend_branch(cell, distance_target=None, sec_type='apical', dist
                     candidate_distances.append(distance)
                     candidate_diams.append(branch.sec(loc).diam)
                     candidate_locs.append(loc)
-    indexes = range(len(candidate_distances))
+    indexes = list(range(len(candidate_distances)))
     if len(indexes) == 0:
         raise RuntimeError('get_thickest_dend_branch: pid: %i; %s cell %i: cannot find branch to satisfy '
                            'provided filter' % (os.getpid(), cell.pop_name, cell.gid))
@@ -632,7 +556,7 @@ def get_distal_most_terminal_branch(cell, distance_target=None, sec_type='apical
             if distance_target is None or distance > distance_target:
                 candidate_branches.append(branch)
                 candidate_distances.append(get_distance_to_node(cell, cell.tree.root, branch, 1.))
-    indexes = range(len(candidate_distances))
+    indexes = list(range(len(candidate_distances)))
     if len(indexes) == 0:
         raise RuntimeError('get_distal_most_terminal_branch: pid: %i; %s cell %i: cannot find branch to satisfy '
                            'provided filter' % (os.getpid(), cell.pop_name, cell.gid))
@@ -651,7 +575,7 @@ def reset_biophysics(x, context=None):
     """
     if context is None:
         raise RuntimeError('reset_biophysics: missing required Context object')
-    init_biophysics(context.cell, reset_cable=False, from_file=True, correct_g_pas=context.correct_for_spines,
+    init_biophysics(context.cell, reset_cable=False, reset_mech_dict=True, correct_g_pas=context.correct_for_spines,
                     env=context.env)
 
 
@@ -663,7 +587,7 @@ def reset_syn_mechanisms(x, context=None):
     """
     if context is None:
         raise RuntimeError('reset_syn_mechanisms: missing required Context object')
-    init_syn_mech_attrs(context.cell, env=context.env, from_file=True, update_targets=True)
+    init_syn_mech_attrs(context.cell, env=context.env, reset_mech_dict=True, update_targets=True)
 
 
 def log10_fit(x, slope, offset):

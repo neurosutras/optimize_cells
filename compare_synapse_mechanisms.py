@@ -1,3 +1,4 @@
+from cell_utils import *
 from dentate.biophysics_utils import *
 
 context = Context()
@@ -6,12 +7,15 @@ context = Context()
 @click.command()
 @click.option("--gid", required=True, type=int, default=0)
 @click.option("--pop-name", required=True, type=str, default='GC')
-@click.option("--config-file", required=True, type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='../dentate/config/Small_Scale_Control_LN_weights.yaml')
-@click.option("--template-paths", type=str, default='../dgc/Mateos-Aparicio2014:../dentate/templates')
-@click.option("--hoc-lib-path", type=str, default='../dentate')
+@click.option("--config-file", required=True, type=str,
+              default='Small_Scale_Control_LN_weights_Sat.yaml')
+@click.option("--template-paths", type=str, default='../DGC/Mateos-Aparicio2014:../dentate/templates')
+@click.option("--hoc-lib-path", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
+              default='../dentate')
 @click.option("--dataset-prefix", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
-              default='../dentate/datasets')  # '/mnt/s' #'../dentate/datasets'
+              default='../dentate/datasets')
+@click.option("--config-prefix", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
+              default='../dentate/config')
 @click.option("--results-path", required=True, type=click.Path(exists=True, file_okay=False, dir_okay=True),
               default='data')
 @click.option("--mech-file-path", required=True, type=click.Path(exists=True, file_okay=True, dir_okay=False),
@@ -20,8 +24,8 @@ context = Context()
 @click.option('--mech-name', '-m', type=str, multiple=True, default=['SatExp2Syn', 'FacilNMDA'])
 @click.option('--num-inputs', type=int, default=1)
 @click.option('--shared', is_flag=True)
-def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefix, results_path, mech_file_path,
-         verbose, mech_name, num_inputs, shared):
+def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefix, config_prefix, results_path,
+         mech_file_path, verbose, mech_name, num_inputs, shared):
     """
 
     :param gid:
@@ -30,6 +34,7 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     :param template_paths:
     :param hoc_lib_path:
     :param dataset_prefix:
+    :param config_prefix:
     :param results_path:
     :param mech_file_path: str
     :param verbose
@@ -39,14 +44,13 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     """
     comm = MPI.COMM_WORLD
     np.seterr(all='raise')
-    env = Env(comm, config_file, template_paths, hoc_lib_path, dataset_prefix, verbose=verbose)
+    env = Env(comm, config_file, template_paths, hoc_lib_path, dataset_prefix, config_prefix, verbose=verbose)
     configure_hoc_env(env)
 
-    cell = get_biophys_cell(env, gid, pop_name)
+    cell = get_biophys_cell(env, pop_name, gid, mech_file_path=mech_file_path)
     context.update(locals())
 
-    init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=mech_file_path, correct_cm=True,
-                    correct_g_pas=True, env=env)
+    init_biophysics(cell, reset_cable=True, correct_cm=True, correct_g_pas=True, env=env)
 
     zero_na(cell)
 
@@ -76,15 +80,15 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     syn_attrs = env.synapse_attributes
     syn_node = cell.apical[-1]  # cell.tree.root
 
-    add_synapse = add_shared_synapse if shared else add_unique_synapse
+    make_synapse_mech = make_shared_synapse_mech if shared else make_unique_synapse_mech
     shared_syns_dict = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: None)))
     syn_obj_dict = defaultdict(dict)
     nc_obj_dict = defaultdict(dict)
     syns_set = set()
 
-    for i in xrange(num_inputs):
+    for i in range(num_inputs):
         for syn_name in mech_name:
-            syn = add_synapse(syn_name=syn_name, seg=syn_node.sec(0.5), syns_dict=shared_syns_dict)
+            syn = make_synapse_mech(syn_name=syn_name, seg=syn_node.sec(0.5), syns_dict=shared_syns_dict)
             syn_obj_dict[i][syn_name] = syn
             if syn not in syns_set:
                 syns_set.add(syn)
@@ -93,10 +97,10 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     # drive input with spike train
     ISI = 100.
     equilibrate = 250.
-    input_spike_train = [equilibrate + i * ISI for i in xrange(3)]
+    input_spike_train = [equilibrate + i * ISI for i in range(3)]
     last_spike_time = input_spike_train[-1]
     ISI = 10.
-    input_spike_train += [last_spike_time + 150. + i * ISI for i in xrange(10)]
+    input_spike_train += [last_spike_time + 150. + i * ISI for i in range(10)]
     last_spike_time = input_spike_train[-1]
     input_spike_train += [last_spike_time + 100.]
     # input_spike_train = []
@@ -133,7 +137,7 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
 
             if 'netcon_params' in recordings[syn_name]:
                 this_netcon = nc_obj_dict[syn_id][syn_name]
-                for param_name, j in recordings[syn_name]['netcon_params'].iteritems():
+                for param_name, j in viewitems(recordings[syn_name]['netcon_params']):
                     if j > 1:
                         description = '%s_%s_%i' % (param_name, syn_name, syn_id)
                         sim.append_rec(cell, syn_node, description)
@@ -142,7 +146,7 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     context.update(locals())
 
     sim.run()
-    print 'num_inputs: %i; num_mechs: %i; num_syns: %i' % (num_inputs, len(mech_name), len(syns_set))
+    print('num_inputs: %i; num_mechs: %i; num_syns: %i' % (num_inputs, len(mech_name), len(syns_set)))
     rec_sum = defaultdict(lambda: defaultdict(list))
     for syn_id in rec_description_dict:
         for syn_name in rec_description_dict[syn_id]:
@@ -157,7 +161,7 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     window = right + int(25. / sim.dt)
     soma_vm = sim.get_rec('soma')['vec'].as_numpy()
     unit_amp = np.max(soma_vm[right:window]) - np.mean(soma_vm[left:right])
-    print 'unit amp: %.3f' % unit_amp
+    print('unit amp: %.3f' % unit_amp)
 
     fig, axes = plt.subplots(3, sharex=True)
     for j, syn_name in enumerate(mech_name):
@@ -179,7 +183,7 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
     axes[2].set_xlabel('Time (ms)')
     axes[2].set_ylabel('Voltage (mV)')
     axes[2].set_ylim(-80., -10.)
-    for i in xrange(len(axes)):
+    for i in range(len(axes)):
         axes[i].legend(loc='best', frameon=False, framealpha=0.5)
     clean_axes(axes)
     fig.tight_layout()

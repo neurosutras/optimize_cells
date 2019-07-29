@@ -6,100 +6,13 @@ Requires use of a nested.parallel interface.
 """
 __author__ = 'Aaron D. Milstein and Grace Ng'
 from dentate.biophysics_utils import *
+from nested.parallel import *
 from nested.optimize_utils import *
 from cell_utils import *
 import click
 import uuid
 
-
 context = Context()
-
-
-@click.command()
-@click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='config/optimize_DG_GC_synaptic_integration_config.yaml')
-@click.option("--output-dir", type=click.Path(exists=True, file_okay=False, dir_okay=True), default='data')
-@click.option("--export", is_flag=True)
-@click.option("--export-file-path", type=str, default=None)
-@click.option("--label", type=str, default=None)
-@click.option("--verbose", type=int, default=2)
-@click.option("--plot", is_flag=True)
-@click.option("--debug", is_flag=True)
-@click.option("--run-tests", is_flag=True)
-@click.option("--interactive", is_flag=True)
-def main(config_file_path, output_dir, export, export_file_path, label, verbose, plot, debug, run_tests, interactive):
-    """
-
-    :param config_file_path: str (path)
-    :param output_dir: str (path)
-    :param export: bool
-    :param export_file_path: str
-    :param label: str
-    :param verbose: bool
-    :param plot: bool
-    :param debug: bool
-    :param run_tests: bool
-    :param interactive: bool
-    """
-    # requires a global variable context: :class:'Context'
-    context.update(locals())
-    disp = verbose > 0
-
-    from nested.parallel import ParallelContextInterface
-    context.interface = ParallelContextInterface()
-    context.interface.apply(config_optimize_interactive, __file__, config_file_path=config_file_path,
-                            output_dir=output_dir, export=export, export_file_path=export_file_path, label=label,
-                            disp=disp, verbose=verbose, debug=debug)
-    context.interface.start(disp=True)
-    context.interface.ensure_controller()
-
-    if run_tests:
-        unit_tests_synaptic_integration()
-
-    if not interactive:
-        context.interface.stop()
-
-
-def unit_tests_synaptic_integration():
-    """
-
-    """
-    features = dict()
-    objectives = dict()
-
-    # Stage 0:
-    args = get_args_dynamic_unitary_EPSP_amp(context.x0_array, features)
-    group_size = len(args[0])
-    sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
-                [[context.plot] * group_size]
-    primitives = context.interface.map(compute_features_unitary_EPSP_amp, *sequences)
-    this_features = filter_features_unitary_EPSP_amp(primitives, features, context.export)
-    features.update(this_features)
-
-    context.interface.apply(export_unitary_EPSP_traces)
-
-    # Stage 1:
-    args = get_args_dynamic_compound_EPSP_amp(context.x0_array, features)
-    group_size = len(args[0])
-    sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
-                [[context.plot] * group_size]
-    primitives = context.interface.map(compute_features_compound_EPSP_amp, *sequences)
-    this_features = filter_features_compound_EPSP_amp(primitives, features, context.export)
-    features.update(this_features)
-    
-    context.interface.apply(export_compound_EPSP_traces)
-
-    features, objectives = get_objectives_synaptic_integration(features, context.export)
-
-    context.interface.apply(shutdown_worker)
-
-    context.update(locals())
-    print 'params:'
-    pprint.pprint(context.x0_dict)
-    print 'features:'
-    pprint.pprint(features)
-    print 'objectives:'
-    pprint.pprint(objectives)
 
 
 def config_worker():
@@ -110,8 +23,106 @@ def config_worker():
         context.plot = False
     if 'debug' not in context():
         context.debug = False
+    if 'limited_branches' not in context():
+        context.limited_branches = False
     if not context_has_sim_env(context):
         build_sim_env(context, **context.kwargs)
+
+
+@click.command(context_settings=dict(ignore_unknown_options=True, allow_extra_args=True, ))
+@click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
+              default='config/optimize_DG_GC_synaptic_integration_config.yaml')
+@click.option("--output-dir", type=click.Path(exists=True, file_okay=False, dir_okay=True), default='data')
+@click.option("--export", is_flag=True)
+@click.option("--export-file-path", type=str, default=None)
+@click.option("--label", type=str, default=None)
+@click.option("--verbose", type=int, default=2)
+@click.option("--plot", is_flag=True)
+@click.option("--interactive", is_flag=True)
+@click.option("--debug", is_flag=True)
+@click.option("--limited-branches", is_flag=True)
+@click.pass_context
+def main(cli, config_file_path, output_dir, export, export_file_path, label, verbose, plot, interactive, debug,
+         limited_branches):
+    """
+
+    :param cli: contains unrecognized args as list of str
+    :param config_file_path: str (path)
+    :param output_dir: str (path)
+    :param export: bool
+    :param export_file_path: str
+    :param label: str
+    :param verbose: bool
+    :param plot: bool
+    :param interactive: bool
+    :param debug: bool
+    :param limited_branches: bool
+    """
+    # requires a global variable context: :class:'Context'
+    context.update(locals())
+    kwargs = get_unknown_click_arg_dict(cli.args)
+    context.disp = verbose > 0
+
+    context.interface = get_parallel_interface(source_file=__file__, source_package=__package__, **kwargs)
+    context.interface.start(disp=context.disp)
+    context.interface.ensure_controller()
+    config_optimize_interactive(__file__, config_file_path=config_file_path, output_dir=output_dir,
+                                export=export, export_file_path=export_file_path, label=label,
+                                disp=context.disp, interface=context.interface, verbose=verbose, plot=plot,
+                                debug=debug, **kwargs)
+
+    if plot:
+        from dentate.plot import plot_synaptic_attribute_distribution
+        plot_synaptic_attribute_distribution(context.cell, context.env, context.NMDA_type, 'g_unit',
+                                             from_mech_attrs=True, from_target_attrs=True, show=True)
+        plot_synaptic_attribute_distribution(context.cell, context.env, context.AMPA_type, 'g_unit',
+                                             from_mech_attrs=True, from_target_attrs=True, show=True)
+
+    if not debug:
+        features = dict()
+
+        # Stage 0:
+        args = context.interface.execute(get_args_dynamic_unitary_EPSP_amp, context.x0_array, features)
+        group_size = len(args[0])
+        sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
+                    [[context.plot] * group_size]
+        primitives = context.interface.map(compute_features_unitary_EPSP_amp, *sequences)
+        this_features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
+        features.update(this_features)
+        context.update(locals())
+        context.interface.apply(export_unitary_EPSP_traces)
+
+        # Stage 1:
+        args = context.interface.execute(get_args_dynamic_compound_EPSP_amp, context.x0_array, features)
+        group_size = len(args[0])
+        sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
+                    [[context.plot] * group_size]
+        primitives = context.interface.map(compute_features_compound_EPSP_amp, *sequences)
+        this_features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
+        features.update(this_features)
+        context.update(locals())
+        context.interface.apply(export_compound_EPSP_traces)
+
+        features, objectives = context.interface.execute(get_objectives_synaptic_integration, features, context.export)
+        if export:
+            collect_and_merge_temp_output(context.interface, context.export_file_path, verbose=context.disp)
+        sys.stdout.flush()
+        time.sleep(1.)
+        context.interface.apply(shutdown_worker)
+        print('params:')
+        pprint.pprint(context.x0_dict)
+        print('features:')
+        pprint.pprint(features)
+        print('objectives:')
+        pprint.pprint(objectives)
+        sys.stdout.flush()
+        time.sleep(1.)
+        if context.plot:
+            context.interface.apply(plt.show)
+    context.update(locals())
+
+    if not interactive:
+        context.interface.stop()
 
 
 def context_has_sim_env(context):
@@ -137,7 +148,7 @@ def init_context():
     min_random_inter_syn_distance = 30.  # um
 
     # number of branches to test temporal integration of clustered inputs
-    if 'debug' in context() and context.debug:
+    if 'limited_branches' in context() and context.limited_branches:
         max_syns_per_random_branch = 1
         num_clustered_branches = 1
         num_syns_per_clustered_branch = 10
@@ -148,7 +159,7 @@ def init_context():
 
     min_expected_compound_EPSP_amp, max_expected_compound_EPSP_amp = 6., 12.  # mV
 
-    clustered_branch_names = ['clustered%i' % i for i in xrange(num_clustered_branches)]
+    clustered_branch_names = ['clustered%i' % i for i in range(num_clustered_branches)]
 
     ISI = {'units': 200., 'clustered': 1.1}  # inter-stimulus interval for synaptic stim (ms)
     units_per_sim = 5
@@ -178,12 +189,12 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
     init_context()
     context.env = Env(comm=context.comm, verbose=verbose > 1, **kwargs)
     configure_hoc_env(context.env)
-    cell = get_biophys_cell(context.env, gid=context.gid, pop_name=context.cell_type, set_edge_delays=False)
-    init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path,
-                    correct_cm=context.correct_for_spines, correct_g_pas=context.correct_for_spines, env=context.env,
-                    verbose=verbose > 1)
-    init_syn_mech_attrs(cell, context.env, from_file=True)
-    context.sim = QuickSim(context.duration, cvode=cvode, daspk=daspk, dt=context.dt, verbose=verbose>1)
+    cell = get_biophys_cell(context.env, gid=context.gid, pop_name=context.cell_type, set_edge_delays=False,
+                            mech_file_path=context.mech_file_path)
+    init_biophysics(cell, reset_cable=True, correct_cm=context.correct_for_spines,
+                    correct_g_pas=context.correct_for_spines, env=context.env, verbose=verbose > 1)
+    init_syn_mech_attrs(cell, context.env)
+    context.sim = QuickSim(context.duration, cvode=cvode, daspk=daspk, dt=context.dt, verbose=verbose > 1)
     context.spike_output_vec = h.Vector()
     cell.spike_detector.record(context.spike_output_vec)
     context.cell = cell
@@ -284,12 +295,6 @@ def config_sim_env(context):
     sim.parameters['duration'] = duration
     sim.parameters['equilibrate'] = equilibrate
     context.previous_module = __file__
-    if context.plot:
-        from dentate.plot import plot_synaptic_attribute_distribution
-        plot_synaptic_attribute_distribution(cell, env, context.NMDA_type, 'g_unit', from_mech_attrs=True,
-                                             from_target_attrs=True, show=True)
-        plot_synaptic_attribute_distribution(cell, env, context.AMPA_type, 'g_unit', from_mech_attrs=True,
-                                             from_target_attrs=True, show=True)
 
 
 def update_syn_mechanisms(x, context=None):
@@ -333,7 +338,7 @@ def shutdown_worker():
     if context.temp_model_data_file is not None:
         context.temp_model_data_file.close()
     time.sleep(2.)
-    if context.interface.global_comm.rank == 0 and not context.debug:
+    if context.interface.global_comm.rank == 0:
         os.remove(context.temp_model_data_file_path)
 
 
@@ -382,7 +387,7 @@ def consolidate_compound_EPSP_traces(source_dict):
                 target_dict[syn_group][syn_condition] = {}
             for rec_name in context.sim.recs:
                 target_array = np.empty((num_syn_ids, trace_len))
-                for i in xrange(num_syn_ids):
+                for i in range(num_syn_ids):
                     num_syns = i + 1
                     target_array[i,:] = source_dict[syn_group][syn_condition][num_syns][rec_name]
                 target_dict[syn_group][syn_condition][rec_name] = target_array
@@ -410,7 +415,7 @@ def export_unitary_EPSP_traces():
         dict_merge(context.temp_model_data, temp_model_data_from_master)
 
     if context.interface.global_comm.rank > 0:
-        model_keys = context.temp_model_data.keys()
+        model_keys = list(context.temp_model_data.keys())
         model_keys = context.interface.worker_comm.gather(model_keys, root=0)
         if context.interface.worker_comm.rank == 0:
             model_keys = list(set([key for key_list in model_keys for key in key_list]))
@@ -485,8 +490,13 @@ def export_unitary_EPSP_traces():
         context.interface.pc.post('merge2', [context.temp_model_data_file_path])
         context.interface.pc.post('merge3', context.temp_model_data_legend)
 
+    sys.stdout.flush()
+    time.sleep(1.)
     if context.interface.global_comm.rank == 1 and context.disp:
-        print 'optimize_DG_GC_synaptic_integration: export_unitary_EPSP_traces took %.2f s' % (time.time() - start_time)
+        print('optimize_DG_GC_synaptic_integration: export_unitary_EPSP_traces took %.2f s' %
+              (time.time() - start_time))
+        sys.stdout.flush()
+        time.sleep(1.)
 
 
 def export_compound_EPSP_traces():
@@ -506,7 +516,7 @@ def export_compound_EPSP_traces():
         dict_merge(context.temp_model_data, temp_model_data_from_master)
 
     if context.interface.global_comm.rank > 0:
-        model_keys = context.temp_model_data.keys()
+        model_keys = list(context.temp_model_data.keys())
         model_keys = context.interface.worker_comm.gather(model_keys, root=0)
         if context.interface.worker_comm.rank == 0:
             model_keys = list(set([key for key_list in model_keys for key in key_list]))
@@ -565,9 +575,13 @@ def export_compound_EPSP_traces():
     elif context.interface.global_comm.rank == 1:
         context.interface.pc.post('merge5', 0)
 
+    sys.stdout.flush()
+    time.sleep(1.)
     if context.interface.global_comm.rank == 1 and context.disp:
-        print 'optimize_DG_GC_synaptic_integration: export_compound_EPSP_traces took %.2f s' % \
-              (time.time() - start_time)
+        print('optimize_DG_GC_synaptic_integration: export_compound_EPSP_traces took %.2f s' %
+              (time.time() - start_time))
+        sys.stdout.flush()
+        time.sleep(1.)
 
 
 def get_args_dynamic_unitary_EPSP_amp(x, features):
@@ -684,7 +698,7 @@ def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, mode
     new_model_data = {model_key: {'unitary_EPSP_traces': {syn_group: {syn_condition: traces_dict}}}}
 
     dict_merge(context.temp_model_data, new_model_data)
-    
+
     result = {'model_key': model_key}
 
     title = 'unitary_EPSP_amp'
@@ -695,12 +709,22 @@ def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, mode
     sim.parameters['description'] = description
 
     if context.verbose > 0:
-        print 'compute_features_unitary_EPSP_amp: pid: %i; %s: %s took %.3f s' % \
-              (os.getpid(), title, description, time.time() - start_time)
+        print('compute_features_unitary_EPSP_amp: pid: %i; %s: %s took %.3f s' %
+              (os.getpid(), title, description, time.time() - start_time))
+        sys.stdout.flush()
     if plot:
         context.sim.plot()
+
     if export:
-        context.sim.export_to_file(context.temp_output_path)
+        print('debug: pid: %i; temp_output_path: %s' % (os.getpid(), context.temp_output_path))
+        sys.stdout.flush()
+        try:
+            context.sim.export_to_file(context.temp_output_path)
+        except Exception as e:
+            traceback.print_last()
+            sys.stdout.flush()
+            raise e
+
     sim.restore_state()
 
     return result
@@ -829,11 +853,7 @@ def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, mod
             this_nc.pre().play(h.Vector())
 
     num_syns = len(syn_ids)
-    new_model_data = {model_key:
-                          {'compound_EPSP_traces':
-                               {syn_group:
-                                    {syn_condition:
-                                         {num_syns: traces_dict}}}}}
+    new_model_data = {model_key: {'compound_EPSP_traces': {syn_group: {syn_condition: {num_syns: traces_dict}}}}}
 
     dict_merge(context.temp_model_data, new_model_data)
 
@@ -847,8 +867,9 @@ def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, mod
     sim.parameters['description'] = description
 
     if context.verbose > 0:
-        print 'compute_features_compound_EPSP_amp: pid: %i; %s: %s took %.3f s' % \
-              (os.getpid(), title, description, time.time() - start_time)
+        print('compute_features_compound_EPSP_amp: pid: %i; %s: %s took %.3f s' %
+              (os.getpid(), title, description, time.time() - start_time))
+        sys.stdout.flush()
     if plot:
         context.sim.plot()
     if export:
@@ -888,13 +909,13 @@ def get_expected_compound_EPSP_traces(unitary_traces_dict, syn_id_dict):
     baseline_len = int(context.trace_baseline / context.dt)
     unitary_len = int(context.ISI['units'] / context.dt)
     trace_len = int((context.sim_duration['clustered'] - context.equilibrate) / context.dt) + baseline_len
-    for i in xrange(len(syn_id_dict)):
+    for i in range(len(syn_id_dict)):
         num_syns = i + 1
         traces[num_syns] = {}
         for count, syn_id in enumerate(syn_id_dict[:num_syns]):
             start = baseline_len + int(count * context.ISI['clustered'] / context.dt)
             end = start + unitary_len
-            for rec_name, this_trace in unitary_traces_dict[syn_id].iteritems():
+            for rec_name, this_trace in viewitems(unitary_traces_dict[syn_id]):
                 if rec_name not in traces[num_syns]:
                     traces[num_syns][rec_name] = np.zeros(trace_len)
                 traces[num_syns][rec_name][start:end] += this_trace[baseline_len:]
@@ -932,7 +953,7 @@ def get_objectives_synaptic_integration(features, export=False):
             for syn_condition in temp_model_data_file[group_key][description][syn_group]:
                 this_group = temp_model_data_file[group_key][description][syn_group][syn_condition]
                 for rec_name in context.sim.recs:
-                    for i in xrange(num_syn_ids):
+                    for i in range(num_syn_ids):
                         num_syns = i + 1
                         compound_EPSP_traces_dict[syn_group][syn_condition][num_syns][rec_name] = \
                             this_group[rec_name][i,:]
@@ -960,7 +981,7 @@ def get_objectives_synaptic_integration(features, export=False):
     objectives['mean_NMDA_contribution_residuals'] = mean_NMDA_contribution_residuals
 
     for syn_group in compound_EPSP_traces_dict:
-        for syn_condition in compound_EPSP_traces_dict[syn_group].keys():
+        for syn_condition in list(compound_EPSP_traces_dict[syn_group].keys()):
             expected_key = 'expected_' + syn_condition
             compound_EPSP_traces_dict[syn_group][expected_key] = \
                 get_expected_compound_EPSP_traces(unitary_EPSP_traces_dict[syn_group][syn_condition],
@@ -989,11 +1010,12 @@ def get_objectives_synaptic_integration(features, export=False):
                                            context.target_range[feature_key]) ** 2.
             initial_gain_residuals[syn_condition].append(this_initial_gain_residuals)
             indexes = np.where(this_expected <= context.max_expected_compound_EPSP_amp)[0]
-            if not np.any(indexes) or (not context.debug and syn_condition == 'control' and
+            if not np.any(indexes) or (not context.limited_branches and syn_condition == 'control' and
                                        max(this_expected) < context.min_expected_compound_EPSP_amp):
                 if context.verbose > 0:
-                    print 'optimize_DG_GC_synaptic_integration: get_objectives: pid: %i; aborting - expected ' \
-                          'compound EPSP amplitude below criterion' % os.getpid()
+                    print('optimize_DG_GC_synaptic_integration: get_objectives: pid: %i; aborting - expected ' \
+                          'compound EPSP amplitude below criterion' % os.getpid())
+                    sys.stdout.flush()
                 return dict(), dict()
             slope, intercept, r_value, p_value, std_err = stats.linregress(this_expected[indexes], this_actual[indexes])
             integration_gain[syn_condition].append(slope)
@@ -1031,7 +1053,7 @@ def get_objectives_synaptic_integration(features, export=False):
                 data_group.create_group(syn_group)
                 for syn_condition in unitary_EPSP_traces_dict[syn_group]:
                     this_group = data_group[syn_group].create_group(syn_condition)
-                    for rec_name in unitary_EPSP_traces_dict[syn_group][syn_condition].itervalues().next():
+                    for rec_name in next(iter(viewvalues(unitary_EPSP_traces_dict[syn_group][syn_condition]))):
                         this_condition_array_list = []
                         for syn_id in unitary_EPSP_traces_dict[syn_group][syn_condition]:
                             this_condition_array_list.append(
@@ -1064,13 +1086,8 @@ def get_objectives_synaptic_integration(features, export=False):
                                               data=soma_compound_EPSP_amp[syn_group][syn_condition])
 
     if context.verbose > 1:
-        print 'get_objectives_synaptic_integration: pid: %i; took %.3f s' % (os.getpid(), time.time() - start_time)
-
-    if context.debug:
-        print 'features:'
-        pprint.pprint(features)
-        print 'objectives:'
-        pprint.pprint(objectives)
+        print('get_objectives_synaptic_integration: pid: %i; took %.3f s' % (os.getpid(), time.time() - start_time))
+        sys.stdout.flush()
 
     return features, objectives
 

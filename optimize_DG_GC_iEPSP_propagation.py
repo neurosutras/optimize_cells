@@ -6,15 +6,15 @@ Requires use of a nested.parallel interface.
 """
 __author__ = 'Aaron D. Milstein and Grace Ng'
 from dentate.biophysics_utils import *
+from nested.parallel import *
 from nested.optimize_utils import *
 from cell_utils import *
 import click
 
-
 context = Context()
 
 
-@click.command()
+@click.command(context_settings=dict(ignore_unknown_options=True, allow_extra_args=True, ))
 @click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
               default='config/optimize_DG_GC_iEPSP_propagation_config.yaml')
 @click.option("--output-dir", type=click.Path(exists=True, file_okay=False, dir_okay=True), default='data')
@@ -23,10 +23,13 @@ context = Context()
 @click.option("--label", type=str, default=None)
 @click.option("--verbose", type=int, default=2)
 @click.option("--plot", is_flag=True)
-@click.option("--run-tests", is_flag=True)
-def main(config_file_path, output_dir, export, export_file_path, label, verbose, plot, run_tests):
+@click.option("--interactive", is_flag=True)
+@click.option("--debug", is_flag=True)
+@click.pass_context
+def main(cli, config_file_path, output_dir, export, export_file_path, label, verbose, plot, interactive, debug):
     """
 
+    :param cli: contains unrecognized args as list of str
     :param config_file_path: str (path)
     :param output_dir: str (path)
     :param export: bool
@@ -34,47 +37,62 @@ def main(config_file_path, output_dir, export, export_file_path, label, verbose,
     :param label: str
     :param verbose: bool
     :param plot: bool
-    :param run_tests: bool
+    :param interactive: bool
+    :param debug: bool
     """
     # requires a global variable context: :class:'Context'
     context.update(locals())
-    disp = verbose > 0
-    config_optimize_interactive(__file__, config_file_path=config_file_path, output_dir=output_dir, export=export,
-                       export_file_path=export_file_path, label=label, disp=disp)
+    kwargs = get_unknown_click_arg_dict(cli.args)
+    context.disp = verbose > 0
 
-    if run_tests:
-        unit_tests_iEPSP()
+    context.interface = get_parallel_interface(source_file=__file__, source_package=__package__, **kwargs)
+    context.interface.start(disp=context.disp)
+    context.interface.ensure_controller()
+    config_optimize_interactive(__file__, config_file_path=config_file_path, output_dir=output_dir,
+                                export=export, export_file_path=export_file_path, label=label,
+                                disp=context.disp, interface=context.interface, verbose=verbose, plot=plot,
+                                debug=debug, **kwargs)
 
+    if not debug:
+        features = dict()
+        # Stage 0:
+        args = context.interface.execute(get_args_dynamic_i_holding, context.x0_array, features)
+        group_size = len(args[0])
+        sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
+                    [[context.plot] * group_size]
+        primitives = context.interface.map(compute_features_iEPSP_i_unit, *sequences)
+        features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
+        context.update(locals())
 
-def unit_tests_iEPSP():
-    """
+        # Stage 1:
+        args = context.interface.execute(get_args_dynamic_iEPSP_attenuation, context.x0_array, features)
+        group_size = len(args[0])
+        sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
+                    [[context.plot] * group_size]
+        primitives = context.interface.map(compute_features_iEPSP_attenuation, *sequences)
+        this_features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
+        features.update(this_features)
+        context.update(locals())
 
-    """
-    features = dict()
-    # Stage 0:
-    args = get_args_dynamic_i_holding(context.x0_array, features)
-    group_size = len(args[0])
-    sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
-                [[context.plot] * group_size]
-    primitives = map(compute_features_iEPSP_i_unit, *sequences)
-    features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
+        features, objectives = context.interface.execute(get_objectives_iEPSP_propagation, features, context.export)
+        if export:
+            collect_and_merge_temp_output(context.interface, context.export_file_path, verbose=context.disp)
+        sys.stdout.flush()
+        time.sleep(1.)
+        print('params:')
+        pprint.pprint(context.x0_dict)
+        print('features:')
+        pprint.pprint(features)
+        print('objectives:')
+        pprint.pprint(objectives)
+        sys.stdout.flush()
+        time.sleep(1.)
+        if context.plot:
+            context.interface.apply(plt.show)
+    context.update(locals())
 
-    # Stage 1:
-    args = get_args_dynamic_iEPSP_attenuation(context.x0_array, features)
-    group_size = len(args[0])
-    sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
-                [[context.plot] * group_size]
-    primitives = map(compute_features_iEPSP_attenuation, *sequences)
-    this_features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
-    features.update(this_features)
-
-    features, objectives = get_objectives_iEPSP_propagation(features, context.export)
-    print 'params:'
-    pprint.pprint(context.x0_dict)
-    print 'features:'
-    pprint.pprint(features)
-    print 'objectives:'
-    pprint.pprint(objectives)
+    if not interactive:
+        context.interface.stop()
 
 
 def config_worker():
@@ -126,11 +144,11 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
     init_context()
     context.env = Env(comm=context.comm, verbose=verbose > 1, **kwargs)
     configure_hoc_env(context.env)
-    cell = get_biophys_cell(context.env, gid=context.gid, pop_name=context.cell_type, load_edges=False)
-    init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path,
-                    correct_cm=context.correct_for_spines, correct_g_pas=context.correct_for_spines, env=context.env,
-                    verbose=verbose>1)
-    context.sim = QuickSim(context.duration, cvode=cvode, daspk=daspk, dt=context.dt, verbose=verbose>1)
+    cell = get_biophys_cell(context.env, gid=context.gid, pop_name=context.cell_type, load_edges=False,
+                            mech_file_path=context.mech_file_path)
+    init_biophysics(cell, reset_cable=True, correct_cm=context.correct_for_spines,
+                    correct_g_pas=context.correct_for_spines, env=context.env, verbose=verbose > 1)
+    context.sim = QuickSim(context.duration, cvode=cvode, daspk=daspk, dt=context.dt, verbose=verbose > 1)
     context.spike_output_vec = h.Vector()
     cell.spike_detector.record(context.spike_output_vec)
     context.cell = cell
@@ -203,8 +221,8 @@ def iEPSP_amp_error(x):
     iEPSP_amp = np.max(vm[int(equilibrate / dt):])
     Err = ((iEPSP_amp - context.target_val['iEPSP_unit_amp']) / (0.01 * context.target_val['iEPSP_unit_amp'])) ** 2.
     if context.verbose > 1:
-        print 'iEPSP_amp_error: %s.i_unit: %.3f, soma iEPSP amp: %.2f; took %.1f s' % \
-              (context.syn_mech_name, x[0], iEPSP_amp, time.time() - start_time)
+        print('iEPSP_amp_error: %s.i_unit: %.3f, soma iEPSP amp: %.2f; took %.1f s' % \
+              (context.syn_mech_name, x[0], iEPSP_amp, time.time() - start_time))
     return Err
 
 
@@ -268,8 +286,8 @@ def compute_features_iEPSP_i_unit(x, i_holding, export=False, plot=False):
     sim.parameters['description'] = description
 
     if context.verbose > 0:
-        print 'compute_features_iEPSP_i_unit: pid: %i; %s: %s took %.3f s' % \
-              (os.getpid(), title, description, time.time() - start_time)
+        print('compute_features_iEPSP_i_unit: pid: %i; %s: %s took %.3f s' % \
+              (os.getpid(), title, description, time.time() - start_time))
     if plot:
         context.sim.plot()
     if export:
@@ -328,7 +346,7 @@ def compute_features_iEPSP_attenuation(x, i_holding, ISI_key, i_EPSC, export=Fal
     sim.backup_state()
     sim.set_state(dt=dt, tstop=duration, cvode=False)
 
-    context.i_vs.play(h.Vector([equilibrate + i * ISI for i in xrange(context.num_pulses)]))
+    context.i_vs.play(h.Vector([equilibrate + i * ISI for i in range(context.num_pulses)]))
     config_syn(context.syn_mech_name, context.env.synapse_attributes.syn_param_rules, syn=context.i_syn, i_unit=i_EPSC)
     sim.run(v_active)
 
@@ -351,8 +369,8 @@ def compute_features_iEPSP_attenuation(x, i_holding, ISI_key, i_EPSC, export=Fal
     sim.parameters['description'] = description
 
     if context.verbose > 0:
-        print 'compute_features_iEPSP_attenuation: pid: %i; %s: %s took %.3f s' % \
-              (os.getpid(), title, description, time.time() - start_time)
+        print('compute_features_iEPSP_attenuation: pid: %i; %s: %s took %.3f s' %
+              (os.getpid(), title, description, time.time() - start_time))
     if plot:
         context.sim.plot()
     if export:

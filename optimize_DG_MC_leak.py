@@ -6,15 +6,15 @@ Requires use of a nested.parallel interface.
 """
 __author__ = 'Aaron D. Milstein and Grace Ng'
 from dentate.biophysics_utils import *
+from nested.parallel import *
 from nested.optimize_utils import *
 from cell_utils import *
 import click
 
-
 context = Context()
 
 
-@click.command()
+@click.command(context_settings=dict(ignore_unknown_options=True, allow_extra_args=True, ))
 @click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
               default='config/optimize_DG_MC_leak_config.yaml')
 @click.option("--output-dir", type=click.Path(exists=True, file_okay=False, dir_okay=True), default='data')
@@ -25,9 +25,11 @@ context = Context()
 @click.option("--plot", is_flag=True)
 @click.option("--interactive", is_flag=True)
 @click.option("--debug", is_flag=True)
-def main(config_file_path, output_dir, export, export_file_path, label, verbose, plot, interactive, debug):
+@click.pass_context
+def main(cli, config_file_path, output_dir, export, export_file_path, label, verbose, plot, interactive, debug):
     """
 
+    :param cli: contains unrecognized args as list of str
     :param config_file_path: str (path)
     :param output_dir: str (path)
     :param export: bool
@@ -40,33 +42,34 @@ def main(config_file_path, output_dir, export, export_file_path, label, verbose,
     """
     # requires a global variable context: :class:'Context'
     context.update(locals())
-    comm = MPI.COMM_WORLD
+    kwargs = get_unknown_click_arg_dict(cli.args)
+    context.disp = verbose > 0
 
-    from nested.parallel import ParallelContextInterface
-    context.interface = ParallelContextInterface()
-    context.interface.start(disp=True)
+    context.interface = get_parallel_interface(source_file=__file__, source_package=__package__, **kwargs)
+    context.interface.start(disp=context.disp)
     context.interface.ensure_controller()
-    context.interface.apply(config_optimize_interactive, __file__, config_file_path=config_file_path,
-                            output_dir=output_dir, export=export, export_file_path=export_file_path, label=label,
-                            disp=verbose > 0, verbose=verbose, plot=plot)
-    sys.stdout.flush()
-    time.sleep(1.)
+    config_optimize_interactive(__file__, config_file_path=config_file_path, output_dir=output_dir,
+                                export=export, export_file_path=export_file_path, label=label,
+                                disp=context.disp, interface=context.interface, verbose=verbose, plot=plot,
+                                debug=debug, **kwargs)
 
-    if not context.debug:
+    if not debug:
         args = context.interface.execute(get_args_static_leak)
         group_size = len(args[0])
         sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
                     [[context.plot] * group_size]
         primitives = context.interface.map(compute_features_leak, *sequences)
-        features = {key: value for feature_dict in primitives for key, value in feature_dict.iteritems()}
+        features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
         features, objectives = context.interface.execute(get_objectives_leak, features, context.export)
+        if export:
+            collect_and_merge_temp_output(context.interface, context.export_file_path, verbose=context.disp)
         sys.stdout.flush()
         time.sleep(1.)
-        print 'params:'
+        print('params:')
         pprint.pprint(context.x0_dict)
-        print 'features:'
+        print('features:')
         pprint.pprint(features)
-        print 'objectives:'
+        print('objectives:')
         pprint.pprint(objectives)
         sys.stdout.flush()
         time.sleep(1.)
@@ -119,11 +122,11 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
     init_context()
     context.env = Env(comm=context.comm, verbose=verbose > 1, **kwargs)
     configure_hoc_env(context.env)
-    cell = get_biophys_cell(context.env, gid=context.gid, pop_name=context.cell_type, load_edges=False)
-    init_biophysics(cell, reset_cable=True, from_file=True, mech_file_path=context.mech_file_path,
-                    correct_cm=context.correct_for_spines, correct_g_pas=context.correct_for_spines, env=context.env,
-                    verbose=verbose > 1)
-    context.sim = QuickSim(context.duration, cvode=cvode, daspk=daspk, dt=context.dt, verbose=verbose>1)
+    cell = get_biophys_cell(context.env, gid=context.gid, pop_name=context.cell_type, load_edges=False,
+                            mech_file_path=context.mech_file_path)
+    init_biophysics(cell, reset_cable=True, correct_cm=context.correct_for_spines,
+                    correct_g_pas=context.correct_for_spines, env=context.env, verbose=verbose > 1)
+    context.sim = QuickSim(context.duration, cvode=cvode, daspk=daspk, dt=context.dt, verbose=verbose > 1)
     context.spike_output_vec = h.Vector()
     cell.spike_detector.record(context.spike_output_vec)
     context.cell = cell
@@ -246,8 +249,9 @@ def compute_features_leak(x, section, block_h, export=False, plot=False):
     else:
         result['%s R_inp' % section] = R_inp
     if context.verbose > 0:
-        print 'compute_features_leak: pid: %i; %s: %s took %.1f s; R_inp: %.1f' % \
-              (os.getpid(), title, description, time.time() - start_time, R_inp)
+        print('compute_features_leak: pid: %i; %s: %s took %.1f s; R_inp: %.1f' %
+              (os.getpid(), title, description, time.time() - start_time, R_inp))
+        sys.stdout.flush()
     if plot:
         sim.plot()
     if export:
