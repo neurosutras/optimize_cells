@@ -109,7 +109,7 @@ class SimpleNetwork(object):
         self.debug = debug
 
         self.pop_sizes = pop_sizes
-        self.total_cells = np.sum(self.pop_sizes.values())
+        self.total_cells = np.sum(list(self.pop_sizes.values()))
 
         self.pop_gid_ranges = pop_gid_ranges
         self.pop_cell_types = pop_cell_types
@@ -139,7 +139,7 @@ class SimpleNetwork(object):
 
         self.local_random = random.Random()
         self.local_np_random = np.random.RandomState()
-        self.spikes_seed = spikes_seed
+        self.spikes_seed = int(spikes_seed)
 
         self.cells = defaultdict(dict)
         self.mkcells()
@@ -153,13 +153,14 @@ class SimpleNetwork(object):
         rank = int(self.pc.id())
         nhost = int(self.pc.nhost())
 
-        for pop_name, (gid_start, gid_stop) in self.pop_gid_ranges.iteritems():
+        for pop_name, (gid_start, gid_stop) in viewitems(self.pop_gid_ranges):
             cell_type = self.pop_cell_types[pop_name]
-            for i, gid in enumerate(xrange(gid_start, gid_stop)):
+            for i, gid in enumerate(range(gid_start, gid_stop)):
                 # round-robin distribution of cells across MPI ranks
                 if i % nhost == rank:
                     if self.verbose > 1:
                         print('SimpleNetwork.mkcells: rank: %i got %s gid: %i' % (rank, pop_name, gid))
+                        sys.stdout.flush()
                     if cell_type == 'input':
                         cell = FFCell(pop_name, gid)
                         if self.input_pop_firing_rates is not None and pop_name in self.input_pop_firing_rates and \
@@ -256,6 +257,7 @@ class SimpleNetwork(object):
         :param connectivity_type: str
         :param connection_seed: int: random seed for reproducible connections
         """
+        connection_seed = int(connection_seed)
         rank = int(self.pc.id())
         for target_pop_name in self.pop_syn_proportions:
             total_syn_count = self.pop_syn_counts[target_pop_name]
@@ -293,6 +295,7 @@ class SimpleNetwork(object):
                                   'source: %s; syn_count: %i' %
                                   (connectivity_type, rank, target_pop_name, target_gid, syn_type, source_pop_name,
                                    this_syn_count))
+                            sys.stdout.flush()
 
     def assign_connection_weights(self, default_weight_distribution_type='normal',
                                   connection_weight_distribution_types=None, weights_seed=200000000):
@@ -302,6 +305,7 @@ class SimpleNetwork(object):
         :param connection_weight_distribution_types: nested dict: {target_pop_name: {source_pop_name: str}}
         :param weights_seed: int: random seed for reproducible connection weights
         """
+        weights_seed = int(weights_seed)
         rank = int(self.pc.id())
         for target_pop_name in self.ncdict:
             for target_gid in self.ncdict[target_pop_name]:
@@ -323,6 +327,7 @@ class SimpleNetwork(object):
                             print('SimpleNetwork.assign_connection_weights: target: %s, source: %s, dist_type: %s, '
                                   'mu: %.3f, norm_sigma: %.3f' %
                                   (target_pop_name, source_pop_name, this_weight_distribution_type, mu, norm_sigma))
+                            sys.stdout.flush()
 
                         for source_gid in self.ncdict[target_pop_name][target_gid][source_pop_name]:
                             if this_weight_distribution_type == 'normal':
@@ -346,20 +351,58 @@ class SimpleNetwork(object):
                                                   syn_mech_param_rules=self.syn_mech_param_rules,
                                                   weight=this_weight)
 
-    # TODO: direct_scale should be multiplied by mean peak (?), sigma should be some existing sigma factor
-    def scale_connection_weights(self, peak_locs=None, sigma=1, direct_scale=3.):
-        from scipy.stats import norm
-        for target_pop_name in self.ncdict:
-            for target_gid in self.ncdict[target_pop_name]:
-                tpeak = peak_locs[target_pop_name][target_gid]
-                tpeak_y = norm.pdf(tpeak, loc=tpeak, scale=sigma)
-                for source_pop_name in self.ncdict[target_pop_name][target_gid]:
-                    for source_gid in self.ncdict[target_pop_name][target_gid][source_pop_name]:
-                        speak = peak_locs[source_pop_name][source_gid]
-                        self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid].weight[0] += \
-                        norm.pdf(speak, loc=tpeak, scale=sigma) * (direct_scale/tpeak_y)
+    def structure_connection_weights(self, structured_weight_params, tuning_peak_locs):
+        """
 
-    def visualize_weights(self, peak_locs=None, n=1):
+        :param structured_weight_params: nested dict
+        :param tuning_peak_locs: nested dict: {'pop_name': {'gid': float} }
+        """
+
+        duration = self.tstop - self.equilibrate
+        for target_pop_name in (target_pop_name for target_pop_name in structured_weight_params
+                                if target_pop_name in self.ncdict):
+            if target_pop_name not in tuning_peak_locs:
+                raise RuntimeError('structure_connection_weights: spatial tuning locations not found for target '
+                                   'population: %s' % target_pop_name)
+            this_tuning_type = structured_weight_params[target_pop_name]['tuning_type']
+            this_peak_delta_weight = structured_weight_params[target_pop_name]['peak_delta_weight']
+            this_norm_tuning_width = structured_weight_params[target_pop_name]['norm_tuning_width']
+            this_tuning_width = duration * this_norm_tuning_width
+            this_sigma = this_tuning_width / 3. / np.sqrt(2.)
+            this_tuning_f = lambda delta_loc: this_peak_delta_weight * np.exp(-(delta_loc / this_sigma) ** 2.)
+            for source_pop_name, syn_type in \
+                    ((source_pop['name'], source_pop['syn_type'])
+                     for source_pop in structured_weight_params['E']['source_pop']):
+                if source_pop_name not in tuning_peak_locs:
+                    raise RuntimeError('structure_connection_weights: spatial tuning locations not found for source '
+                                       'population: %s' % source_pop_name)
+                this_mean_connection_weight = self.connection_weights_mean[target_pop_name][source_pop_name]
+                for target_gid in (target_gid for target_gid in self.ncdict[target_pop_name]
+                                   if source_pop_name in self.ncdict[target_pop_name][target_gid]):
+                    target_cell = self.cells[target_pop_name][target_gid]
+                    this_syn = target_cell.syns[syn_type][source_pop_name]
+                    this_target_loc = tuning_peak_locs[target_pop_name][target_gid]
+                    for source_gid in self.ncdict[target_pop_name][target_gid][source_pop_name]:
+                        this_delta_loc = tuning_peak_locs[source_pop_name][source_gid] - this_target_loc
+                        this_delta_weight = this_tuning_f(this_delta_loc)
+                        for this_nc in self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid]:
+                            initial_weight = get_connection_param(syn_type, 'weight', syn=this_syn, nc=this_nc,
+                                                                  syn_mech_names=self.syn_mech_names,
+                                                                  syn_mech_param_rules=self.syn_mech_param_rules)
+                            if this_tuning_type == 'additive':
+                                updated_weight = initial_weight + this_delta_weight * this_mean_connection_weight
+                            elif this_tuning_type == 'multiplicative':
+                                updated_weight = initial_weight * (1. + this_delta_weight)
+                            if self.debug and self.verbose:
+                                print('target_pop_name: %s, target_gid: %i; source_pop_name: %s, source_gid: %i, '
+                                      'initial weight: %.3f, updated weight: %.3f' %
+                                      (target_pop_name, target_gid, source_pop_name, source_gid, initial_weight,
+                                       updated_weight))
+                            config_connection(syn_type, syn=this_syn, nc=this_nc, syn_mech_names=self.syn_mech_names,
+                                              syn_mech_param_rules=self.syn_mech_param_rules, weight=updated_weight)
+
+    def visualize_weights(self, peak_locs=None, n=1, sigma=1):
+        from scipy.stats import norm
         for target_pop_name in self.ncdict:
             if target_pop_name not in self.cells:
                 continue
@@ -371,7 +414,9 @@ class SimpleNetwork(object):
                 for source_pop_name in self.ncdict[target_pop_name][target_gid]:
                     for source_gid in self.ncdict[target_pop_name][target_gid][source_pop_name]:
                         speak = peak_locs[source_pop_name][source_gid]
-                        plt.scatter(speak, self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid].weight[0], c='b')
+                        plt.scatter(
+                            speak, self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid].weight[0],
+                            c='b')
                 plt.title("Cell {} at peak loc {}".format(target_gid, tpeak))
 
     def visualize_connections(self, pop_cell_positions, n=1):
@@ -400,7 +445,7 @@ class SimpleNetwork(object):
     # Instrumentation - stimulation and recording
     def spike_record(self):
         for pop_name in self.cells:
-            for gid, cell in self.cells[pop_name].iteritems():
+            for gid, cell in viewitems(self.cells[pop_name]):
                 tvec = h.Vector()
                 nc = cell.spike_detector
                 nc.record(tvec)
@@ -409,7 +454,7 @@ class SimpleNetwork(object):
     def voltage_record(self):
         self.voltage_recvec = defaultdict(dict)
         for pop_name in self.cells:
-            for gid, cell in self.cells[pop_name].iteritems():
+            for gid, cell in viewitems(self.cells[pop_name]):
                 if cell.is_art(): continue
                 rec = h.Vector()
                 rec.record(getattr(cell.sec(.5), '_ref_v'))
@@ -427,7 +472,7 @@ class SimpleNetwork(object):
         spikes_dict = dict()
         for pop_name in self.spikes_dict:
             spikes_dict[pop_name] = dict()
-            for gid, spike_train in self.spikes_dict[pop_name].iteritems():
+            for gid, spike_train in viewitems(self.spikes_dict[pop_name]):
                 spike_train_array = np.array(spike_train, dtype='float32')
                 indexes = np.where(spike_train_array >= self.equilibrate)[0]
                 if len(indexes) > 0:
@@ -442,7 +487,7 @@ class SimpleNetwork(object):
         voltage_rec_dict = dict()
         for pop_name in self.voltage_recvec:
             voltage_rec_dict[pop_name] = dict()
-            for gid, recvec in self.voltage_recvec[pop_name].iteritems():
+            for gid, recvec in viewitems(self.voltage_recvec[pop_name]):
                 voltage_rec_dict[pop_name][gid] = np.array(recvec)[start_index:]
         return voltage_rec_dict
 
@@ -452,20 +497,57 @@ class SimpleNetwork(object):
             weights[target_pop_name] = dict()
             for target_gid in self.ncdict[target_pop_name]:
                 weights[target_pop_name][target_gid] = dict()
-                for source_pop_name in self.connection_weights_mean[target_pop_name]:
-                    weights[target_pop_name][target_gid][source_pop_name] = dict()
-                    start_gid = self.pop_gid_ranges[source_pop_name][0]
-                    stop_gid = self.pop_gid_ranges[source_pop_name][1]
-                    for source_gid in xrange(start_gid, stop_gid):
-                        if source_gid in self.ncdict[target_pop_name][target_gid][source_pop_name]:
-                            this_weight_list = [this_nc.weight[0] for this_nc in
-                                                self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid]]
-                            weights[target_pop_name][target_gid][source_pop_name][source_gid] = \
-                                np.mean(this_weight_list)
-                        else:
-                            weights[target_pop_name][target_gid][source_pop_name][source_gid] = 0.
+                target_cell = self.cells[target_pop_name][target_gid]
+                for syn_type in self.pop_syn_proportions[target_pop_name]:
+                    for source_pop_name in self.pop_syn_proportions[target_pop_name][syn_type]:
+                        this_syn = target_cell.syns[syn_type][source_pop_name]
+                        weights[target_pop_name][target_gid][source_pop_name] = dict()
+                        start_gid = self.pop_gid_ranges[source_pop_name][0]
+                        stop_gid = self.pop_gid_ranges[source_pop_name][1]
+                        for source_gid in range(start_gid, stop_gid):
+                            if source_gid in self.ncdict[target_pop_name][target_gid][source_pop_name]:
+                                this_weight_list = []
+                                for this_nc in self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid]:
+                                    this_weight_list.append(
+                                        get_connection_param(syn_type, 'weight', syn=this_syn, nc=this_nc,
+                                                             syn_mech_names=self.syn_mech_names,
+                                                             syn_mech_param_rules=self.syn_mech_param_rules))
+                                weights[target_pop_name][target_gid][source_pop_name][source_gid] = \
+                                    np.mean(this_weight_list)
+                            else:
+                                weights[target_pop_name][target_gid][source_pop_name][source_gid] = 0.
 
         return weights
+
+
+def get_connection_param(syn_type, syn_mech_param, syn=None, nc=None, delay=None, syn_mech_names=None,
+                         syn_mech_param_rules=None):
+    """
+    :param syn_type: str
+    :param syn_mech_param: str
+    :param syn: NEURON point process object
+    :param nc: NEURON netcon object
+    :param delay: float
+    :param syn_mech_names: dict
+    :param syn_mech_param_rules: dict
+    """
+    if syn is None and nc is None:
+        raise RuntimeError('get_connection_param: must provide at least one: synaptic point process or netcon object')
+    if nc is not None and delay is not None:
+        nc.delay = delay
+    if syn_mech_names is None:
+        syn_mech_names = default_syn_mech_names
+    syn_mech_name = syn_mech_names[syn_type]
+    if syn_mech_param_rules is None:
+        syn_mech_param_rules = default_syn_mech_param_rules
+    if syn_mech_param in syn_mech_param_rules[syn_mech_name]['mech_params'] and syn is not None:
+        return getattr(syn, syn_mech_param)
+    elif syn_mech_param in syn_mech_param_rules[syn_mech_name]['netcon_params'] and nc is not None:
+        index = syn_mech_param_rules[syn_mech_name]['netcon_params'][syn_mech_param]
+        return nc.weight[index]
+    else:
+        raise RuntimeError('get_connection_param: invalid syn_mech_param: %s' % syn_mech_param)
+
 
 def config_connection(syn_type, syn=None, nc=None, delay=None, syn_mech_names=None, syn_mech_param_rules=None,
                       **syn_mech_params):
@@ -686,7 +768,7 @@ def infer_firing_rates(spike_trains_dict, t, alpha, beta, pad_dur):
     """
     inferred_firing_rates = defaultdict(dict)
     for pop_name in spike_trains_dict:
-        for gid, spike_train in spike_trains_dict[pop_name].iteritems():
+        for gid, spike_train in viewitems(spike_trains_dict[pop_name]):
             if len(spike_train) > 0:
                 smoothed = padded_baks(spike_train, t, alpha=alpha, beta=beta, pad_dur=pad_dur)
             else:
@@ -785,7 +867,7 @@ def get_pop_activity_stats(spikes_dict, firing_rates_dict, t, threshold=1., plot
             mean_rate_active_cells_dict[pop_name] = np.zeros_like(t)
         pop_fraction_active_dict[pop_name] = np.divide(this_active_cell_count, len(spikes_dict[pop_name]))
         mean_rate_from_spike_count_dict[pop_name] = \
-            np.divide(np.mean(binned_spike_count_dict[pop_name].values(), axis=0), dt / 1000.)
+            np.divide(np.mean(list(binned_spike_count_dict[pop_name].values()), axis=0), dt / 1000.)
 
     if plot:
         fig, axes = plt.subplots(1, 2)
@@ -886,6 +968,7 @@ def PSTI(f, power, band=None, verbose=False):
         print('PSTI: delta_power: %.5f; power_std: %.5f, norm_f_signal_width: %.5f, half_width_edges: [%.5f, %.5f]' %
               (signal_mean - noise_mean, power_std, norm_f_signal_width, f[band_indexes][half_width_indexes[0]],
                f[band_indexes][half_width_indexes[1]]))
+        sys.stdout.flush()
 
     this_PSTI = (signal_mean - noise_mean) / power_std / norm_f_signal_width / 2.
     return this_PSTI
@@ -915,6 +998,7 @@ def get_bandpass_filtered_signal_stats(signal, t, sos, filter_band, bins=100, si
         if verbose > 0:
             print('%s\n%s bandpass filter (%.1f:%.1f Hz); Failed - no signal' %
                   (signal_label, filter_label, min(filter_band), max(filter_band)))
+            sys.stdout.flush()
         return signal, np.zeros_like(signal), 0., 0., 0.
     if pad and pad_len is None:
         dt = t[1] - t[0]  # ms
@@ -1000,7 +1084,7 @@ def get_pop_bandpass_filtered_signal_stats(signal_dict, t, filter_band_dict, ord
     envelope_ratio_dict = {}
     centroid_freq_dict = {}
     freq_tuning_index_dict = {}
-    for filter_label, filter_band in filter_band_dict.iteritems():
+    for filter_label, filter_band in viewitems(filter_band_dict):
         filtered_signal_dict[filter_label] = {}
         envelope_dict[filter_label] = {}
         envelope_ratio_dict[filter_label] = {}
@@ -1128,20 +1212,19 @@ def plot_inferred_spike_rates(binned_spikes_dict, firing_rates_dict, t, active_r
         pop_names = list(binned_spikes_dict.keys())
     for pop_name in pop_names:
         fig, axes = plt.subplots(rows, cols, sharex=True, sharey=True, figsize=(cols*3, rows*3))
-        for j in xrange(cols):
+        for j in range(cols):
             axes[rows-1][j].set_xlabel('Time (ms)')
-        for i in xrange(rows):
+        for i in range(rows):
             axes[i][0].set_ylabel('Firing rate (Hz)')
         active_gid_range = []
-        for gid, rate in firing_rates_dict[pop_name].iteritems():
+        for gid, rate in viewitems(firing_rates_dict[pop_name]):
             if np.max(rate) >= active_rate_threshold:
                 active_gid_range.append(gid)
         gid_sample = random.sample(active_gid_range, min(len(active_gid_range), rows * cols))
         for i, gid in enumerate(gid_sample):
             inferred_rate = firing_rates_dict[pop_name][gid]
-            # spike_train = binned_spikes_dict[pop_name][gid]
-            binned_spike_indexes = np.where(binned_spikes_dict[pop_name][gid] > 0.)[0]  # find_nearest(spike_train, t)
-            row = i / cols
+            binned_spike_indexes = np.where(binned_spikes_dict[pop_name][gid] > 0.)[0]
+            row = i // cols
             col = i % cols
             axes[row][col].plot(t, inferred_rate, label='Rate')
             axes[row][col].plot(t[binned_spike_indexes], np.ones(len(binned_spike_indexes)), 'k.', label='Spikes')
@@ -1167,15 +1250,15 @@ def plot_voltage_traces(voltage_rec_dict, rec_t, spikes_dict=None, rows=3, cols=
         pop_names = list(voltage_rec_dict.keys())
     for pop_name in pop_names:
         fig, axes = plt.subplots(rows, cols, sharex=True, sharey=True, figsize=(cols*3, rows*3))
-        for j in xrange(cols):
+        for j in range(cols):
             axes[rows - 1][j].set_xlabel('Time (ms)')
-        for i in xrange(rows):
+        for i in range(rows):
             axes[i][0].set_ylabel('Voltage (mV)')
         this_gid_range = list(voltage_rec_dict[pop_name].keys())
         gid_sample = random.sample(this_gid_range, min(len(this_gid_range), rows * cols))
         for i, gid in enumerate(gid_sample):
             rec = voltage_rec_dict[pop_name][gid]
-            row = i / cols
+            row = i // cols
             col = i % cols
             axes[row][col].plot(rec_t, rec, label='Vm', c='grey')
             if spikes_dict is not None:
@@ -1211,11 +1294,11 @@ def plot_weight_matrix(connection_weights_dict, pop_names=None):
                 for j, source_gid in enumerate(sorted_source_gids):
                     weight_matrix[i][j] = \
                         connection_weights_dict[target_pop_name][target_gid][source_pop_name][source_gid]
-            y_interval = max(2, len(sorted_target_gids) / 10)
-            yticks = range(0, len(sorted_target_gids), y_interval)
+            y_interval = max(2, len(sorted_target_gids) // 10)
+            yticks = list(range(0, len(sorted_target_gids), y_interval))
             ylabels = np.array(sorted_target_gids)[yticks]
-            x_interval = max(2, len(sorted_source_gids) / 10)
-            xticks = range(0, len(sorted_source_gids), x_interval)
+            x_interval = max(2, len(sorted_source_gids) // 10)
+            xticks = list(range(0, len(sorted_source_gids), x_interval))
             xlabels = np.array(sorted_source_gids)[xticks]
             plot_heatmap_from_matrix(weight_matrix, xticks=xticks, xtick_labels=xlabels, yticks=yticks,
                                      ytick_labels=ylabels, ax=axes[col], aspect='auto', cbar_label='Synaptic weight')
@@ -1243,12 +1326,12 @@ def plot_firing_rate_heatmaps(firing_rates_dict, t, pop_names=None):
         rate_matrix = np.empty((len(sorted_gids), len(t)), dtype='float32')
         for i, gid in enumerate(sorted_gids):
             rate_matrix[i][:] = firing_rates_dict[pop_name][gid]
-        y_interval = max(2, len(sorted_gids) / 10)
-        yticks = range(0, len(sorted_gids), y_interval)
+        y_interval = max(2, len(sorted_gids) // 10)
+        yticks = list(range(0, len(sorted_gids), y_interval))
         ylabels = np.array(sorted_gids)[yticks]
         dt = t[1] - t[0]
         x_interval = int(1000. / dt)
-        xticks = range(0, len(t), x_interval)
+        xticks = list(range(0, len(t), x_interval))
         xlabels = np.array(t)[xticks].astype('int32')
         plot_heatmap_from_matrix(rate_matrix, xticks=xticks, xtick_labels=xlabels, yticks=yticks,
                                  ytick_labels=ylabels, ax=axes, aspect='auto', cbar_label='Firing rate (Hz)')

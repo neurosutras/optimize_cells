@@ -112,6 +112,7 @@ kwargs:
   spikes_seed: 160000000
   weights_seed: 260000000
   location_seed: 360000000
+  tuning_seed: 460000000
   connectivity_type: gaussian
   spatial_dim: 2
   default_weight_distribution_type: normal

@@ -1,15 +1,16 @@
+from nested.parallel import *
 from nested.optimize_utils import *
 from simple_network_utils import *
 import click
 import time
 
-
 context = Context()
 
 
-@click.command()
+@click.command(context_settings=dict(ignore_unknown_options=True, allow_extra_args=True, ))
 @click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='config/optimize_simple_network_gaussian_connections_lognormal_weights_gaussian_inputs_config.yaml')
+              default='config/optimize_simple_network_gaussian_connections_lognormal_weights_gaussian_inputs_'
+                      'config.yaml')
 @click.option("--export", is_flag=True)
 @click.option("--output-dir", type=str, default='data')
 @click.option("--export-file-path", type=str, default=None)
@@ -18,9 +19,11 @@ context = Context()
 @click.option("--verbose", type=int, default=2)
 @click.option("--plot", is_flag=True)
 @click.option("--debug", is_flag=True)
-def main(config_file_path, export, output_dir, export_file_path, label, interactive, verbose, plot, debug):
+@click.pass_context
+def main(cli, config_file_path, export, output_dir, export_file_path, label, interactive, verbose, plot, debug):
     """
 
+    :param cli: contains unrecognized args as list of str
     :param config_file_path: str (path)
     :param export: bool
     :param output_dir: str
@@ -33,32 +36,39 @@ def main(config_file_path, export, output_dir, export_file_path, label, interact
     """
     # requires a global variable context: :class:'Context'
     context.update(locals())
-    comm = MPI.COMM_WORLD
+    kwargs = get_unknown_click_arg_dict(cli.args)
+    context.disp = verbose > 0
 
-    from nested.parallel import ParallelContextInterface
-    context.interface = ParallelContextInterface(procs_per_worker=comm.size)
-    context.interface.start(disp=True)
+    if 'procs_per_worker' not in kwargs:
+        kwargs['procs_per_worker'] = int(MPI.COMM_WORLD.size)
+
+    context.interface = get_parallel_interface(source_file=__file__, source_package=__package__, **kwargs)
+    context.interface.start(disp=context.disp)
     context.interface.ensure_controller()
-    context.interface.apply(config_optimize_interactive, __file__, config_file_path=config_file_path,
-                            output_dir=output_dir, export=export, export_file_path=export_file_path, label=label,
-                            disp=verbose > 0, verbose=verbose, plot=plot)
+    config_optimize_interactive(__file__, config_file_path=config_file_path, output_dir=output_dir,
+                                export=export, export_file_path=export_file_path, label=label,
+                                disp=context.disp, interface=context.interface, verbose=verbose, plot=plot,
+                                debug=debug, **kwargs)
+
+    features = context.interface.execute(compute_features, context.x0_array, context.export)
     sys.stdout.flush()
     time.sleep(1.)
-    if not context.debug:
-        features = context.interface.execute(compute_features, context.x0_array, context.export)
-        sys.stdout.flush()
-        time.sleep(1.)
+    if len(features) > 0:
         features, objectives = context.interface.execute(get_objectives, features)
-        sys.stdout.flush()
-        time.sleep(1.)
-        print 'params:'
-        pprint.pprint(context.x0_dict)
-        print 'features:'
-        pprint.pprint(features)
-        print 'objectives:'
-        pprint.pprint(objectives)
-        sys.stdout.flush()
-        time.sleep(1.)
+    else:
+        objectives = dict()
+    sys.stdout.flush()
+    time.sleep(1.)
+    print('params:')
+    pprint.pprint(context.x0_dict)
+    print('features:')
+    pprint.pprint(features)
+    print('objectives:')
+    pprint.pprint(objectives)
+    sys.stdout.flush()
+    time.sleep(1.)
+    if context.plot:
+        context.interface.apply(plt.show)
     context.update(locals())
 
     if not interactive:
@@ -116,18 +126,25 @@ def init_context():
     baks_pad_dur = 1000.  # ms
     filter_bands = {'Theta': [4., 10.], 'Gamma': [30., 100.]}
 
+    local_np_random = np.random.RandomState()
+    if (any([this_input_type == 'gaussian' for this_input_type in context.input_types.values()]) or
+            ('structured_weight_params' in context() and context.structured_weight_params is not None)):
+        if 'tuning_seed' not in context():
+            raise RuntimeError('optimize_simple_network: config_file missing required parameter: tuning_seed')
+        local_np_random.seed(int(context.tuning_seed))
+
     if context.comm.rank == 0:
         input_pop_t = dict()
         input_pop_firing_rates = dict()
-        peak_locs = dict()
-        print(context.input_types)
+        tuning_peak_locs = dict()  # {'pop_name': {'gid': float} }
+
         for pop_name in context.input_types:
             if pop_name not in pop_cell_types or pop_cell_types[pop_name] != 'input':
                 raise RuntimeError('optimize_simple_network: %s not specified as an input population' % pop_name)
             if pop_name not in input_pop_firing_rates:
                 input_pop_firing_rates[pop_name] = dict()
-            if pop_name not in peak_locs:
-                peak_locs[pop_name] = dict()
+            if pop_name not in tuning_peak_locs:
+                tuning_peak_locs[pop_name] = dict()
             if context.input_types[pop_name] == 'constant':
                 try:
                     this_mean_rate = context.input_mean_rates[pop_name]
@@ -136,7 +153,7 @@ def init_context():
                                        'population: %s' % (context.input_types[pop_name], pop_name))
                 if pop_name not in input_pop_t:
                     input_pop_t[pop_name] = [0., tstop]
-                for gid in xrange(pop_gid_ranges[pop_name][0], pop_gid_ranges[pop_name][1]):
+                for gid in range(pop_gid_ranges[pop_name][0], pop_gid_ranges[pop_name][1]):
                     input_pop_firing_rates[pop_name][gid] = [this_mean_rate, this_mean_rate]
             elif context.input_types[pop_name] == 'gaussian':
                 try:
@@ -153,34 +170,50 @@ def init_context():
 
                 this_tuning_width = duration * this_norm_tuning_width
                 this_sigma = this_tuning_width / 3. / np.sqrt(2.)
-
-                peak_locs_array = np.linspace(-2. * this_tuning_width / 3.,
-                                        tstop + 2. * this_tuning_width / 3., pop_sizes[pop_name])
-
-                for peak_loc, gid in zip(peak_locs_array, xrange(pop_gid_ranges[pop_name][0], pop_gid_ranges[pop_name][1])):
-                    peak_locs[pop_name][gid] = peak_loc
+                peak_locs_array = \
+                    np.linspace(-0.75 * this_tuning_width, tstop + 0.75 * this_tuning_width, pop_sizes[pop_name])
+                local_np_random.shuffle(peak_locs_array)
+                for peak_loc, gid in zip(peak_locs_array, range(pop_gid_ranges[pop_name][0],
+                                                                pop_gid_ranges[pop_name][1])):
+                    tuning_peak_locs[pop_name][gid] = peak_loc
                     input_pop_firing_rates[pop_name][gid] = \
                         get_gaussian_rate(t=this_stim_t, peak_loc=peak_loc, sigma=this_sigma, min_rate=this_min_rate,
                                           max_rate=this_max_rate)
+
                 if context.debug and context.plot:
                     fig, axes = plt.subplots()
                     for gid in range(pop_gid_ranges[pop_name][0],
                                      pop_gid_ranges[pop_name][1])[::int(pop_sizes[pop_name] / 25)]:
                         axes.plot(this_stim_t - equilibrate, input_pop_firing_rates[pop_name][gid])
-                    mean_input = np.mean(input_pop_firing_rates[pop_name].values(), axis=0)
+                    mean_input = np.mean(list(input_pop_firing_rates[pop_name].values()), axis=0)
                     axes.plot(this_stim_t - equilibrate, mean_input, c='k', linewidth=2.)
                     axes.set_ylabel('Firing rate (Hz)')
                     axes.set_xlabel('Time (ms)')
                     clean_axes(axes)
                     fig.show()
+
+        if 'structured_weight_params' in context() and context.structured_weight_params is not None:
+            for target_pop_name in context.structured_weight_params:
+                if target_pop_name not in tuning_peak_locs:
+                    tuning_peak_locs[target_pop_name] = dict()
+                this_norm_tuning_width = \
+                    context.structured_weight_params[target_pop_name]['norm_tuning_width']
+                this_tuning_width = duration * this_norm_tuning_width
+                this_sigma = this_tuning_width / 3. / np.sqrt(2.)
+                peak_locs_array = \
+                    np.linspace(-0.75 * this_tuning_width, tstop + 0.75 * this_tuning_width, pop_sizes[target_pop_name])
+                local_np_random.shuffle(peak_locs_array)
+                for peak_loc, target_gid in zip(peak_locs_array,
+                                                range(pop_gid_ranges[target_pop_name][0],
+                                                      pop_gid_ranges[target_pop_name][1])):
+                    tuning_peak_locs[target_pop_name][target_gid] = peak_loc
     else:
         input_pop_t = None
         input_pop_firing_rates = None
+        tuning_peak_locs = None
     input_pop_t = context.comm.bcast(input_pop_t, root=0)
     input_pop_firing_rates = context.comm.bcast(input_pop_firing_rates, root=0)
-    peak_locs = context.comm.bcast(peak_locs, root=0)
-
-    print(peak_locs)
+    tuning_peak_locs = context.comm.bcast(tuning_peak_locs, root=0)
 
     if context.connectivity_type == 'gaussian':
         pop_axon_extents = {'FF': 1., 'E': 1., 'I': 1.}
@@ -190,11 +223,10 @@ def init_context():
                                    '%s' % param_name)
 
         if context.comm.rank == 0:
-            local_np_random = np.random.RandomState()
             pop_cell_positions = dict()
             for pop_name in pop_gid_ranges:
-                for gid in xrange(pop_gid_ranges[pop_name][0], pop_gid_ranges[pop_name][1]):
-                    local_np_random.seed(context.location_seed + gid)
+                for gid in range(pop_gid_ranges[pop_name][0], pop_gid_ranges[pop_name][1]):
+                    local_np_random.seed(int(context.location_seed) + gid)
                     if pop_name not in pop_cell_positions:
                         pop_cell_positions[pop_name] = dict()
                     pop_cell_positions[pop_name][gid] = local_np_random.uniform(-1., 1., size=context.spatial_dim)
@@ -202,14 +234,10 @@ def init_context():
             pop_cell_positions = None
         pop_cell_positions = context.comm.bcast(pop_cell_positions, root=0)
 
-    """
-    if context.debug:
-        raise RuntimeError('debug condition forced exit')
-    """
-
     context.update(locals())
     if int(context.pc.id()) == 0 and context.verbose > 0:
         print('INITIALIZATION TIME: %.2f s' % (time.time() - start_time))
+        sys.stdout.flush()
 
 
 def update_context(x, local_context=None):
@@ -282,12 +310,12 @@ def analyze_network_output(network, export=False, plot=False):
         firing_rates_dict = merge_list_of_dict(firing_rates_dict)
         connection_weights_dict = merge_list_of_dict(connection_weights_dict)
         mean_rate_dict, peak_rate_dict, mean_rate_active_cells_dict, pop_fraction_active_dict, \
-        binned_spike_count_dict, mean_rate_from_spike_count_dict = \
+            binned_spike_count_dict, mean_rate_from_spike_count_dict = \
             get_pop_activity_stats(spikes_dict, firing_rates_dict, binned_t, threshold=context.active_rate_threshold,
                                    plot=plot)
 
         filtered_mean_rate_dict, filter_envelope_dict, filter_envelope_ratio_dict, centroid_freq_dict, \
-        freq_tuning_index_dict = \
+            freq_tuning_index_dict = \
             get_pop_bandpass_filtered_signal_stats(mean_rate_from_spike_count_dict, binned_t, context.filter_bands,
                                                    plot=plot, verbose=context.verbose > 1)
 
@@ -310,8 +338,8 @@ def analyze_network_output(network, export=False, plot=False):
 
         result['E_mean_active_rate'] = np.mean(mean_rate_active_cells_dict['E'])
         result['I_mean_active_rate'] = np.mean(mean_rate_active_cells_dict['I'])
-        result['E_peak_rate'] = np.mean(peak_rate_dict['E'].values())
-        result['I_peak_rate'] = np.mean(peak_rate_dict['I'].values())
+        result['E_peak_rate'] = np.mean(list(peak_rate_dict['E'].values()))
+        result['I_peak_rate'] = np.mean(list(peak_rate_dict['I'].values()))
         result['FF_frac_active'] = np.mean(pop_fraction_active_dict['FF'])
         result['E_frac_active'] = np.mean(pop_fraction_active_dict['E'])
         result['I_frac_active'] = np.mean(pop_fraction_active_dict['I'])
@@ -332,8 +360,9 @@ def analyze_network_output(network, export=False, plot=False):
 
         if any(voltages_exceed_threshold_list):
             if context.verbose > 0:
-                print ('optimize_simple_network: pid: %i; model failed - mean membrane voltage in some Izhi cells '
-                       'exceeds spike threshold' % os.getpid())
+                print('optimize_simple_network: pid: %i; model failed - mean membrane voltage in some Izhi cells '
+                      'exceeds spike threshold' % os.getpid())
+                sys.stdout.flush()
             result['failed'] = True
 
         if context.interactive:
@@ -376,34 +405,32 @@ def compute_features(x, export=False):
         connection_weight_distribution_types=context.connection_weight_distribution_types,
         weights_seed=context.weights_seed)
 
-    # UNCOMMENT THIS WHEN ADDED AS FLAG!
-    context.network.scale_connection_weights(
-        peak_locs=context.peak_locs)
-
-    context.network.visualize_weights(
-        peak_locs=context.peak_locs)
-
-    if int(context.pc.id()) == 0 and context.verbose > 0:
-        print('NETWORK BUILD RUNTIME: %.2f s' % (time.time() - start_time))
-    current_time = time.time()
-
+    if 'structured_weight_params' in context() and context.structured_weight_params is not None:
+        context.network.structure_connection_weights(structured_weight_params=context.structured_weight_params,
+                                                     tuning_peak_locs=context.tuning_peak_locs)
     """
     if context.debug:
         context.update(locals())
         return dict()
     """
+    # context.network.visualize_weights(input_peak_locs=context.input_peak_locs)
+
+    if int(context.pc.id()) == 0 and context.verbose > 0:
+        print('NETWORK BUILD RUNTIME: %.2f s' % (time.time() - start_time))
+        sys.stdout.flush()
+    current_time = time.time()
 
     context.network.run()
     if int(context.pc.id()) == 0 and context.verbose > 0:
         print('NETWORK SIMULATION RUNTIME: %.2f s' % (time.time() - current_time))
+        sys.stdout.flush()
     current_time = time.time()
 
     results = analyze_network_output(context.network, export=export, plot=context.plot)
     if int(context.pc.id()) == 0:
         if context.verbose > 0:
             print('NETWORK ANALYSIS RUNTIME: %.2f s' % (time.time() - current_time))
-        if context.plot:
-            plt.show()
+            sys.stdout.flush()
         if results is None:
             return dict()
         return results

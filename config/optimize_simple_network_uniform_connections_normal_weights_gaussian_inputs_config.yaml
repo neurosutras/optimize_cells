@@ -111,6 +111,7 @@ kwargs:
   connection_seed: 10000000
   spikes_seed: 110000000
   weights_seed: 210000000
+  tuning_seed: 410000000
   connectivity_type: uniform
   default_weight_distribution_type: normal
   input_types:
