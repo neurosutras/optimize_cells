@@ -1273,10 +1273,13 @@ def plot_voltage_traces(voltage_rec_dict, rec_t, spikes_dict=None, rows=3, cols=
         fig.show()
 
 
-def plot_weight_matrix(connection_weights_dict, pop_names=None):
+def plot_weight_matrix(connection_weights_dict, structured_weight_params=None, tuning_peak_locs=None, pop_names=None):
     """
-    Plots heat maps of connection strengths across all connected cell populations.
-    :param connection_weights_dict: nested dict of float
+    Plots heat maps of connection strengths across all connected cell populations. If input activity or input weights
+    are spatially tuned, cell ids are also sorted by peak location.
+    :param connection_weights_dict: nested dict: {'target_pop_name': {'target_gid': {'source_pop_name':
+                                                    {'source_gid': float} } } }
+    :param structured_weight_params: nested dict: {'pop_name
     :param pop_names: list of str
     """
     if pop_names is None:

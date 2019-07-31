@@ -102,8 +102,18 @@ def init_context():
     pop_syn_proportions = defaultdict(lambda: defaultdict(dict))
     connection_weights_mean = defaultdict(dict)  # {'target_pop_name': {'source_pop_name': float} }
     connection_weights_norm_sigma = defaultdict(dict)  # {'target_pop_name': {'source_pop_name': float} }
-    if 'connection_weight_distribution_types' not in context():
-        connection_weight_distribution_types = dict()
+    if 'connection_weight_distribution_types' not in context() or context.connection_weight_distribution_types is None:
+        context.connection_weight_distribution_types = dict()
+    if 'structured_weight_params' not in context() or context.structured_weight_params is None:
+        context.structured_weight_params = dict()
+        structured_weights = False
+    else:
+        structured_weights = True
+    local_np_random = np.random.RandomState()
+    if any([this_input_type == 'gaussian' for this_input_type in context.input_types.values()]) or structured_weights:
+        if 'tuning_seed' not in context() or context.tuning_seed is None:
+            raise RuntimeError('optimize_simple_network: config_file missing required parameter: tuning_seed')
+        local_np_random.seed(int(context.tuning_seed))
 
     syn_mech_params = defaultdict(lambda: defaultdict(dict))
     syn_mech_params['I']['FF']['g_unit'] = 0.0001925
@@ -125,13 +135,6 @@ def init_context():
     baks_beta = 0.41969058927343522
     baks_pad_dur = 1000.  # ms
     filter_bands = {'Theta': [4., 10.], 'Gamma': [30., 100.]}
-
-    local_np_random = np.random.RandomState()
-    if (any([this_input_type == 'gaussian' for this_input_type in context.input_types.values()]) or
-            ('structured_weight_params' in context() and context.structured_weight_params is not None)):
-        if 'tuning_seed' not in context():
-            raise RuntimeError('optimize_simple_network: config_file missing required parameter: tuning_seed')
-        local_np_random.seed(int(context.tuning_seed))
 
     if context.comm.rank == 0:
         input_pop_t = dict()
@@ -192,21 +195,20 @@ def init_context():
                     clean_axes(axes)
                     fig.show()
 
-        if 'structured_weight_params' in context() and context.structured_weight_params is not None:
-            for target_pop_name in context.structured_weight_params:
-                if target_pop_name not in tuning_peak_locs:
-                    tuning_peak_locs[target_pop_name] = dict()
-                this_norm_tuning_width = \
-                    context.structured_weight_params[target_pop_name]['norm_tuning_width']
-                this_tuning_width = duration * this_norm_tuning_width
-                this_sigma = this_tuning_width / 3. / np.sqrt(2.)
-                peak_locs_array = \
-                    np.linspace(-0.75 * this_tuning_width, tstop + 0.75 * this_tuning_width, pop_sizes[target_pop_name])
-                local_np_random.shuffle(peak_locs_array)
-                for peak_loc, target_gid in zip(peak_locs_array,
-                                                range(pop_gid_ranges[target_pop_name][0],
-                                                      pop_gid_ranges[target_pop_name][1])):
-                    tuning_peak_locs[target_pop_name][target_gid] = peak_loc
+        for target_pop_name in context.structured_weight_params:
+            if target_pop_name not in tuning_peak_locs:
+                tuning_peak_locs[target_pop_name] = dict()
+            this_norm_tuning_width = \
+                context.structured_weight_params[target_pop_name]['norm_tuning_width']
+            this_tuning_width = duration * this_norm_tuning_width
+            this_sigma = this_tuning_width / 3. / np.sqrt(2.)
+            peak_locs_array = \
+                np.linspace(-0.75 * this_tuning_width, tstop + 0.75 * this_tuning_width, pop_sizes[target_pop_name])
+            local_np_random.shuffle(peak_locs_array)
+            for peak_loc, target_gid in zip(peak_locs_array,
+                                            range(pop_gid_ranges[target_pop_name][0],
+                                                  pop_gid_ranges[target_pop_name][1])):
+                tuning_peak_locs[target_pop_name][target_gid] = peak_loc
     else:
         input_pop_t = None
         input_pop_firing_rates = None
@@ -323,7 +325,8 @@ def analyze_network_output(network, export=False, plot=False):
             plot_inferred_spike_rates(binned_spike_count_dict, firing_rates_dict, binned_t,
                                       context.active_rate_threshold)
             plot_voltage_traces(voltage_rec_dict, rec_t, spikes_dict)
-            plot_weight_matrix(connection_weights_dict)
+            plot_weight_matrix(connection_weights_dict, structured_weight_params=context.structured_weight_params,
+                               tuning_peak_locs=context.tuning_peak_locs)
             plot_firing_rate_heatmaps(firing_rates_dict, binned_t)
             if context.connectivity_type == 'gaussian':
                 context.network.visualize_connections(context.pop_cell_positions, n=1)
@@ -405,7 +408,7 @@ def compute_features(x, export=False):
         connection_weight_distribution_types=context.connection_weight_distribution_types,
         weights_seed=context.weights_seed)
 
-    if 'structured_weight_params' in context() and context.structured_weight_params is not None:
+    if context.structured_weights:
         context.network.structure_connection_weights(structured_weight_params=context.structured_weight_params,
                                                      tuning_peak_locs=context.tuning_peak_locs)
     """
@@ -413,7 +416,6 @@ def compute_features(x, export=False):
         context.update(locals())
         return dict()
     """
-    # context.network.visualize_weights(input_peak_locs=context.input_peak_locs)
 
     if int(context.pc.id()) == 0 and context.verbose > 0:
         print('NETWORK BUILD RUNTIME: %.2f s' % (time.time() - start_time))
