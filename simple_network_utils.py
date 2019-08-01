@@ -240,9 +240,9 @@ class SimpleNetwork(object):
         :return: array of float
         """
         from scipy.spatial.distance import cdist
-        target_cell_position = pop_cell_positions[target_pop_name][target_gid]
+        target_cell_position = pop_cell_positions[target_pop_name][str(target_gid)]
         source_cell_positions = \
-            [pop_cell_positions[source_pop_name][source_gid] for source_gid in potential_source_gids]
+            [pop_cell_positions[source_pop_name][str(source_gid)] for source_gid in potential_source_gids]
         distances = cdist([target_cell_position], source_cell_positions)[0]
         sigma = pop_axon_extents[source_pop_name] / 3. / np.sqrt(2.)
         prob_connection = np.exp(-(distances / sigma) ** 2.)
@@ -403,64 +403,16 @@ class SimpleNetwork(object):
                                                   syn_mech_names=self.syn_mech_names,
                                                   syn_mech_param_rules=self.syn_mech_param_rules, weight=updated_weight)
 
-    def visualize_connections(self, pop_cell_positions, n=1):
-        """
-        :param pop_cell_positions: nested dict
-        :param n: int
-        """
+    def get_gid_connections_dict(self):
+        gid_dict = defaultdict(lambda: defaultdict(dict))
         for target_pop_name in self.pop_syn_proportions:
-            if target_pop_name not in self.cells:
-                continue
-            target_gids = random.sample(list(self.cells[target_pop_name].keys()), n)
+            target_gids = list(self.cells[target_pop_name].keys())
             for target_gid in target_gids:
-                target_loc = pop_cell_positions[target_pop_name][target_gid]
                 for syn_type in self.pop_syn_proportions[target_pop_name]:
                     for source_pop_name in self.pop_syn_proportions[target_pop_name][syn_type]:
                         source_gids = list(self.ncdict[target_pop_name][target_gid][source_pop_name].keys())
-                        if not source_gids:  # if the list is empty
-                            continue
-                        xs = []
-                        ys = []
-                        for source_gid in source_gids:
-                            xs.append(pop_cell_positions[source_pop_name][source_gid][0])
-                            ys.append(pop_cell_positions[source_pop_name][source_gid][1])
-                        vals, xedge, yedge = np.histogram2d(x=xs, y=ys, bins=np.linspace(-1.0, 1.0, 51))
-                        fig = plt.figure()
-                        plt.pcolor(xedge, yedge, vals)
-                        plt.title("Cell {} at {}, {} to {} via {} syn".format(target_gid, target_loc, source_pop_name,
-                                                                              target_pop_name, syn_type))
-
-    def plot_rel_distance(self, pop_cell_positions):
-        """
-        Generate 2D histograms of relative distances
-        :param pop_cell_positions: nested dict
-        """
-        for target_pop_name in self.pop_syn_proportions:
-            if target_pop_name not in self.cells: continue
-            target_gids = list(self.cells[target_pop_name].keys())
-            d = len(pop_cell_positions[target_pop_name][target_gids[0]]) if target_gids else 0
-            if d < 2: continue
-            for syn_type in self.pop_syn_proportions[target_pop_name]:
-                for source_pop_name in self.pop_syn_proportions[target_pop_name][syn_type]:
-                    x_dist = []
-                    y_dist = []
-                    if source_pop_name not in self.cells: continue
-                    for target_gid in target_gids:
-                        x_target = pop_cell_positions[target_pop_name][target_gid][0]
-                        y_target = pop_cell_positions[target_pop_name][target_gid][1]
-                        source_gids = list(self.ncdict[target_pop_name][target_gid][source_pop_name].keys())
-                        if not source_gids: continue
-                        for i, source_gid in enumerate(source_gids):
-                            x_source = pop_cell_positions[source_pop_name][source_gid][0]
-                            y_source = pop_cell_positions[source_pop_name][source_gid][1]
-                            x_dist.append(x_source - x_target)
-                            y_dist.append(y_source - y_target)
-                    fig = plt.figure()
-                    plt.hist2d(x_dist, y_dist)
-                    plt.colorbar().set_label("Count")
-                    plt.xlabel('x')
-                    plt.ylabel('y')
-                    plt.title("{} to {} distances".format(source_pop_name, target_pop_name))
+                        gid_dict[target_pop_name][str(target_gid)][source_pop_name] = source_gids
+        return gid_dict
 
     # Instrumentation - stimulation and recording
     def spike_record(self):
@@ -1396,6 +1348,75 @@ def plot_firing_rate_heatmaps(firing_rates_dict, t, pop_names=None, tuning_peak_
         clean_axes(axes)
         fig.tight_layout()
         fig.show()
+
+def visualize_connections(pop_gid_ranges, pop_cell_types, pop_syn_proportions, pop_cell_positions, gid_connections, n=1):
+    """
+    :param pop_cell_positions: nested dict
+    :param gid_connections: nested dict
+    :param n: int
+    """
+    for target_pop_name in pop_syn_proportions:
+        if pop_cell_types[target_pop_name] == 'input':
+            continue
+        start_idx, end_idx = pop_gid_ranges[target_pop_name]
+        target_gids = random.sample(range(start_idx, end_idx), n)
+        for target_gid in target_gids:
+            target_gid = str(target_gid)
+            target_loc = pop_cell_positions[target_pop_name][target_gid]
+            for syn_type in pop_syn_proportions[target_pop_name]:
+                for source_pop_name in pop_syn_proportions[target_pop_name][syn_type]:
+                    source_gids = gid_connections[target_pop_name][target_gid][source_pop_name]
+                    if not len(source_gids):  # if the list is empty
+                        continue
+                    xs = []
+                    ys = []
+                    for source_gid in source_gids:
+                        source_gid = str(source_gid)
+                        xs.append(pop_cell_positions[source_pop_name][source_gid][0])
+                        ys.append(pop_cell_positions[source_pop_name][source_gid][1])
+                    vals, xedge, yedge = np.histogram2d(x=xs, y=ys, bins=np.linspace(-1.0, 1.0, 51))
+                    fig = plt.figure()
+                    plt.pcolor(xedge, yedge, vals)
+                    plt.title("Cell {} at {}, {} to {} via {} syn".format(target_gid, target_loc, source_pop_name,
+                                                                          target_pop_name, syn_type))
+                    fig.show()
+
+def plot_rel_distance(pop_gid_ranges, pop_cell_types, pop_syn_proportions, pop_cell_positions, gid_connections):
+    """
+    Generate 2D histograms of relative distances
+    :param pop_cell_positions: nested dict
+    :param gid_connections: nested dict
+    """
+    for target_pop_name in pop_syn_proportions:
+        if pop_cell_types[target_pop_name] == 'input':
+            continue
+        start_idx, end_idx = pop_gid_ranges[target_pop_name]
+        target_gids = np.arange(start_idx, end_idx)
+        d = len(pop_cell_positions[target_pop_name][str(target_gids[0])])
+        if d < 2: continue
+        for syn_type in pop_syn_proportions[target_pop_name]:
+            for source_pop_name in pop_syn_proportions[target_pop_name][syn_type]:
+                x_dist = []
+                y_dist = []
+                for target_gid in target_gids:
+                    target_gid = str(target_gid)
+                    x_target = pop_cell_positions[target_pop_name][target_gid][0]
+                    y_target = pop_cell_positions[target_pop_name][target_gid][1]
+                    source_gids = gid_connections[target_pop_name][target_gid][source_pop_name]
+                    if not len(source_gids): continue
+                    for source_gid in source_gids:
+                        source_gid = str(source_gid)
+                        x_source = pop_cell_positions[source_pop_name][source_gid][0]
+                        y_source = pop_cell_positions[source_pop_name][source_gid][1]
+                        x_dist.append(x_source - x_target)
+                        y_dist.append(y_source - y_target)
+                fig = plt.figure()
+                plt.hist2d(x_dist, y_dist)
+                plt.colorbar().set_label("Count")
+                plt.xlabel('x')
+                plt.ylabel('y')
+                plt.title("{} to {} distances".format(source_pop_name, target_pop_name))
+                fig.show()
 
 #---------------------------------------save/load functions
 
