@@ -326,7 +326,7 @@ def analyze_network_output(network, export=False, plot=False):
                                       context.active_rate_threshold)
             plot_voltage_traces(voltage_rec_dict, rec_t, spikes_dict)
             plot_weight_matrix(connection_weights_dict, tuning_peak_locs=context.tuning_peak_locs)
-            plot_firing_rate_heatmaps(firing_rates_dict, binned_t)
+            plot_firing_rate_heatmaps(firing_rates_dict, binned_t, tuning_peak_locs=context.tuning_peak_locs)
             if context.connectivity_type == 'gaussian':
                 context.network.plot_rel_distance(context.pop_cell_positions)
                 context.network.visualize_connections(context.pop_cell_positions, n=1)

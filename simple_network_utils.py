@@ -1357,7 +1357,7 @@ def plot_weight_matrix(connection_weights_dict, tuning_peak_locs=None, pop_names
         fig.show()
 
 
-def plot_firing_rate_heatmaps(firing_rates_dict, t, pop_names=None):
+def plot_firing_rate_heatmaps(firing_rates_dict, t, pop_names=None, tuning_peak_locs=None):
     """
 
     :param firing_rates_dict: dict of array
@@ -1367,8 +1367,13 @@ def plot_firing_rate_heatmaps(firing_rates_dict, t, pop_names=None):
     if pop_names is None:
         pop_names = list(firing_rates_dict.keys())
     for pop_name in pop_names:
+        sort = pop_name in tuning_peak_locs
+        if sort:
+            sorted_indexes = np.argsort(list(tuning_peak_locs[pop_name].values()))
+            sorted_gids = np.array(list(tuning_peak_locs[pop_name].keys()))[sorted_indexes]
+        else:
+            sorted_gids = sorted(list(firing_rates_dict[pop_name].keys()))
         fig, axes = plt.subplots()
-        sorted_gids = sorted(list(firing_rates_dict[pop_name].keys()))
         rate_matrix = np.empty((len(sorted_gids), len(t)), dtype='float32')
         for i, gid in enumerate(sorted_gids):
             rate_matrix[i][:] = firing_rates_dict[pop_name][gid]
@@ -1383,7 +1388,10 @@ def plot_firing_rate_heatmaps(firing_rates_dict, t, pop_names=None):
                                  ytick_labels=ylabels, ax=axes, aspect='auto', cbar_label='Firing rate (Hz)')
         axes.set_xlabel('Time (ms)')
         axes.set_ylabel('Target: %s\nCell ID' % pop_name)
-        axes.set_title('Firing rate: %s population' % pop_name)
+        if sort:
+            axes.set_title('Sorted firing rate: %s population' % pop_name)
+        else:
+            axes.set_title('Firing rate: %s population' % pop_name)
         clean_axes(axes)
         fig.tight_layout()
         fig.show()
