@@ -6,7 +6,6 @@ import time
 
 context = Context()
 
-
 @click.command(context_settings=dict(ignore_unknown_options=True, allow_extra_args=True, ))
 @click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
               default='config/optimize_simple_network_gaussian_connections_lognormal_weights_gaussian_inputs_'
@@ -283,11 +282,12 @@ def update_context(x, local_context=None):
     local_context.pop_syn_proportions['I']['I']['I'] = 1. - x_dict['I_E_syn_proportion']
 
 
-def analyze_network_output(network, export=False, plot=False):
+def analyze_network_output(network, export=False, export_file_path=None, plot=False):
     """
 
     :param network: :class:'SimpleNetwork'
     :param export: bool
+    :param export_file_path: str
     :param plot: bool
     :return: dict
     """
@@ -330,6 +330,22 @@ def analyze_network_output(network, export=False, plot=False):
             if context.connectivity_type == 'gaussian':
                 context.network.plot_rel_distance(context.pop_cell_positions)
                 context.network.visualize_connections(context.pop_cell_positions, n=1)
+
+        if export:
+            varname_dict = {'binned spike count': binned_spike_count_dict,
+                            'spikes' : spikes_dict,
+                            'firing rates': firing_rates_dict,
+                            'binned t': binned_t,
+                            'active rate threshold': context.active_rate_threshold,
+                            'voltage recording': voltage_rec_dict,
+                            'rec t': rec_t,
+                            'filter bands' : context.filter_bands,
+                            'mean rate from spike count' : mean_rate_from_spike_count_dict,
+                            'connection weights': connection_weights_dict,
+                            'tuning peak locs': context.tuning_peak_locs,
+                            'cell positions': context.pop_cell_positions,
+                            }
+            export_plot_vars(export_file_path, varname_dict)
 
         """
         if context.debug:
@@ -428,7 +444,8 @@ def compute_features(x, export=False):
         sys.stdout.flush()
     current_time = time.time()
 
-    results = analyze_network_output(context.network, export=export, plot=context.plot)
+    results = analyze_network_output(context.network, export=export, export_file_path=context.export_file_path,
+                                     plot=context.plot)
     if int(context.pc.id()) == 0:
         if context.verbose > 0:
             print('NETWORK ANALYSIS RUNTIME: %.2f s' % (time.time() - current_time))
@@ -455,7 +472,6 @@ def get_objectives(features, export=False):
                 objectives[objective_name] = ((context.target_val[objective_name] - features[objective_name]) /
                                             context.target_range[objective_name]) ** 2.
         return features, objectives
-
 
 if __name__ == '__main__':
     main(args=sys.argv[(list_find(lambda s: s.find(os.path.basename(__file__)) != -1, sys.argv) + 1):],

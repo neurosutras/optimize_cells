@@ -4,6 +4,7 @@ from dentate.utils import baks
 from scipy.signal import butter, sosfiltfilt, sosfreqz, hilbert, periodogram
 from collections import namedtuple, defaultdict
 from dentate.stgen import get_inhom_poisson_spike_times_by_thinning
+import h5py
 
 
 # Based on http://modeldb.yale.edu/39948
@@ -1247,7 +1248,7 @@ def plot_inferred_spike_rates(binned_spikes_dict, firing_rates_dict, t, active_r
             col = i % cols
             axes[row][col].plot(t, inferred_rate, label='Rate')
             axes[row][col].plot(t[binned_spike_indexes], np.ones(len(binned_spike_indexes)), 'k.', label='Spikes')
-            axes[row][col].set_title('gid: %i' % gid)
+            axes[row][col].set_title('gid: {}'.format(gid))
         axes[0][cols-1].legend(loc='center left', frameon=False, framealpha=0.5, bbox_to_anchor=(1., 0.5))
         clean_axes(axes)
         fig.suptitle('Inferred spike rates: %s population' % pop_name)
@@ -1280,10 +1281,10 @@ def plot_voltage_traces(voltage_rec_dict, rec_t, spikes_dict=None, rows=3, cols=
             row = i // cols
             col = i % cols
             axes[row][col].plot(rec_t, rec, label='Vm', c='grey')
-            if spikes_dict is not None:
+            if spikes_dict is not None and pop_name in spikes_dict and gid in spikes_dict[pop_name]:
                 binned_spike_indexes = find_nearest(spikes_dict[pop_name][gid], rec_t)
                 axes[row][col].plot(rec_t[binned_spike_indexes], rec[binned_spike_indexes], 'k.', label='Spikes')
-            axes[row][col].set_title('gid: %i' % gid)
+            axes[row][col].set_title('gid: {}'.format(gid))
         axes[0][cols-1].legend(loc='center left', frameon=False, framealpha=0.5, bbox_to_anchor=(1., 0.5))
         clean_axes(axes)
         fig.suptitle('Voltage recordings: %s population' % pop_name)
@@ -1395,3 +1396,36 @@ def plot_firing_rate_heatmaps(firing_rates_dict, t, pop_names=None, tuning_peak_
         clean_axes(axes)
         fig.tight_layout()
         fig.show()
+
+#---------------------------------------save/load functions
+
+def export_plot_vars(export_file_path, varname_dict):
+    f = h5py.File(export_file_path, "w")
+    for name, var in varname_dict.items():
+        if isinstance(var, dict):
+            recursive_save(f, name + '/', var)
+        else:
+            f.create_dataset(name, data=var)
+    f.close()
+
+def recursive_save(h5file, path, dic):
+    for key, item in dic.items():
+        if isinstance(item, dict):
+            recursive_save(h5file, path + str(key) + '/', item)
+        elif isinstance(item, np.ndarray) and not len(item):
+            pass
+        else:
+            h5file[path + str(key)] = item
+
+def load_plot_variables(file_path):
+    with h5py.File(file_path, 'r') as h5file:
+        return recursive_load(h5file, '/')
+
+def recursive_load(h5file, path):
+    res = {}
+    for key, item in h5file[path].items():
+        if isinstance(item, h5py._hl.dataset.Dataset):
+            res[key] = item[...]
+        elif isinstance(item, h5py._hl.group.Group):
+            res[key] = recursive_load(h5file, path + key + '/')
+    return res
