@@ -130,9 +130,8 @@ kwargs:
     FF: 0.5
   structured_weight_params:
     E:  # target_pop_name
-      source_pop:
-        - name: FF
-          syn_type: E
+      source_pop_names:
+        - FF
       tuning_type: additive
       peak_delta_weight: 1.5
       norm_tuning_width: 0.5

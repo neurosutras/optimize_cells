@@ -357,7 +357,6 @@ class SimpleNetwork(object):
         :param structured_weight_params: nested dict
         :param tuning_peak_locs: nested dict: {'pop_name': {'gid': float} }
         """
-
         duration = self.tstop - self.equilibrate
         for target_pop_name in (target_pop_name for target_pop_name in structured_weight_params
                                 if target_pop_name in self.ncdict):
@@ -370,56 +369,45 @@ class SimpleNetwork(object):
             this_tuning_width = duration * this_norm_tuning_width
             this_sigma = this_tuning_width / 3. / np.sqrt(2.)
             this_tuning_f = lambda delta_loc: this_peak_delta_weight * np.exp(-(delta_loc / this_sigma) ** 2.)
-            for source_pop_name, syn_type in \
-                    ((source_pop['name'], source_pop['syn_type'])
-                     for source_pop in structured_weight_params['E']['source_pop']):
-                if source_pop_name not in tuning_peak_locs:
-                    raise RuntimeError('structure_connection_weights: spatial tuning locations not found for source '
-                                       'population: %s' % source_pop_name)
-                this_mean_connection_weight = self.connection_weights_mean[target_pop_name][source_pop_name]
-                for target_gid in (target_gid for target_gid in self.ncdict[target_pop_name]
-                                   if source_pop_name in self.ncdict[target_pop_name][target_gid]):
-                    target_cell = self.cells[target_pop_name][target_gid]
-                    this_syn = target_cell.syns[syn_type][source_pop_name]
-                    this_target_loc = tuning_peak_locs[target_pop_name][target_gid]
-                    for source_gid in self.ncdict[target_pop_name][target_gid][source_pop_name]:
-                        this_delta_loc = tuning_peak_locs[source_pop_name][source_gid] - this_target_loc
-                        this_delta_weight = this_tuning_f(this_delta_loc)
-                        for this_nc in self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid]:
-                            initial_weight = get_connection_param(syn_type, 'weight', syn=this_syn, nc=this_nc,
-                                                                  syn_mech_names=self.syn_mech_names,
-                                                                  syn_mech_param_rules=self.syn_mech_param_rules)
-                            if this_tuning_type == 'additive':
-                                updated_weight = initial_weight + this_delta_weight * this_mean_connection_weight
-                            elif this_tuning_type == 'multiplicative':
-                                updated_weight = initial_weight * (1. + this_delta_weight)
-                            if self.debug and self.verbose:
-                                print('target_pop_name: %s, target_gid: %i; source_pop_name: %s, source_gid: %i, '
-                                      'initial weight: %.3f, updated weight: %.3f' %
-                                      (target_pop_name, target_gid, source_pop_name, source_gid, initial_weight,
-                                       updated_weight))
-                            config_connection(syn_type, syn=this_syn, nc=this_nc, syn_mech_names=self.syn_mech_names,
-                                              syn_mech_param_rules=self.syn_mech_param_rules, weight=updated_weight)
-
-    def visualize_weights(self, peak_locs=None, n=1, sigma=1):
-        from scipy.stats import norm
-        for target_pop_name in self.ncdict:
-            if target_pop_name not in self.cells:
-                continue
-            target_gids = random.sample(list(self.cells[target_pop_name].keys()), n)
-            for target_gid in target_gids:
-                tpeak = peak_locs[target_pop_name][target_gid]
-                tpeak_y = norm.pdf(tpeak, loc=tpeak, scale=sigma)
-                plt.scatter(tpeak, tpeak_y, c='r')
-                for source_pop_name in self.ncdict[target_pop_name][target_gid]:
-                    for source_gid in self.ncdict[target_pop_name][target_gid][source_pop_name]:
-                        speak = peak_locs[source_pop_name][source_gid]
-                        plt.scatter(
-                            speak, self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid].weight[0],
-                            c='b')
-                plt.title("Cell {} at peak loc {}".format(target_gid, tpeak))
+            for syn_type in self.pop_syn_proportions[target_pop_name]:
+                for source_pop_name in \
+                        (source_pop_name for source_pop_name in self.pop_syn_proportions[target_pop_name][syn_type]
+                         if source_pop_name in structured_weight_params[target_pop_name]['source_pop_names']):
+                    if source_pop_name not in tuning_peak_locs:
+                        raise RuntimeError('structure_connection_weights: spatial tuning locations not found for '
+                                           'source population: %s' % source_pop_name)
+                    this_mean_connection_weight = self.connection_weights_mean[target_pop_name][source_pop_name]
+                    for target_gid in (target_gid for target_gid in self.ncdict[target_pop_name]
+                                       if source_pop_name in self.ncdict[target_pop_name][target_gid]):
+                        target_cell = self.cells[target_pop_name][target_gid]
+                        this_syn = target_cell.syns[syn_type][source_pop_name]
+                        this_target_loc = tuning_peak_locs[target_pop_name][target_gid]
+                        for source_gid in self.ncdict[target_pop_name][target_gid][source_pop_name]:
+                            this_delta_loc = tuning_peak_locs[source_pop_name][source_gid] - this_target_loc
+                            this_delta_weight = this_tuning_f(this_delta_loc)
+                            for this_nc in self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid]:
+                                initial_weight = get_connection_param(syn_type, 'weight', syn=this_syn, nc=this_nc,
+                                                                      syn_mech_names=self.syn_mech_names,
+                                                                      syn_mech_param_rules=self.syn_mech_param_rules)
+                                if this_tuning_type == 'additive':
+                                    updated_weight = initial_weight + this_delta_weight * this_mean_connection_weight
+                                elif this_tuning_type == 'multiplicative':
+                                    updated_weight = initial_weight * (1. + this_delta_weight)
+                                if self.debug and self.verbose:
+                                    print('target_pop_name: %s, target_gid: %i; source_pop_name: %s, source_gid: %i, '
+                                          'initial weight: %.3f, updated weight: %.3f' %
+                                          (target_pop_name, target_gid, source_pop_name, source_gid, initial_weight,
+                                           updated_weight))
+                                config_connection(syn_type, syn=this_syn, nc=this_nc,
+                                                  syn_mech_names=self.syn_mech_names,
+                                                  syn_mech_param_rules=self.syn_mech_param_rules, weight=updated_weight)
 
     def visualize_connections(self, pop_cell_positions, n=1):
+        """
+        TODO: Generate normalized 2D histograms of relative distances rather than absolute position
+        :param pop_cell_positions: nested dict
+        :param n: int
+        """
         for target_pop_name in self.pop_syn_proportions:
             if target_pop_name not in self.cells:
                 continue
@@ -1273,40 +1261,64 @@ def plot_voltage_traces(voltage_rec_dict, rec_t, spikes_dict=None, rows=3, cols=
         fig.show()
 
 
-def plot_weight_matrix(connection_weights_dict, structured_weight_params=None, tuning_peak_locs=None, pop_names=None):
+def plot_weight_matrix(connection_weights_dict, tuning_peak_locs=None, pop_names=None):
     """
     Plots heat maps of connection strengths across all connected cell populations. If input activity or input weights
     are spatially tuned, cell ids are also sorted by peak location.
     :param connection_weights_dict: nested dict: {'target_pop_name': {'target_gid': {'source_pop_name':
                                                     {'source_gid': float} } } }
-    :param structured_weight_params: nested dict: {'pop_name
+    :param tuning_peak_locs: nested dict: {'pop_name': {'gid': float} }
     :param pop_names: list of str
     """
     if pop_names is None:
         pop_names = list(connection_weights_dict.keys())
+    sorted_gids = dict()
+    sorted_populations = []
     for target_pop_name in pop_names:
-        sorted_target_gids = sorted(list(connection_weights_dict[target_pop_name].keys()))
-        source_pop_list = list(connection_weights_dict[target_pop_name][sorted_target_gids[0]].keys())
+        if target_pop_name not in sorted_gids:
+            if target_pop_name in tuning_peak_locs:
+                sorted_indexes = np.argsort(list(tuning_peak_locs[target_pop_name].values()))
+                sorted_gids[target_pop_name] = np.array(list(tuning_peak_locs[target_pop_name].keys()))[sorted_indexes]
+                sorted_populations.append(target_pop_name)
+            else:
+                sorted_gids[target_pop_name] = sorted(list(connection_weights_dict[target_pop_name].keys()))
+        first_target_gid = sorted_gids[target_pop_name][0]
+        source_pop_list = list(connection_weights_dict[target_pop_name][first_target_gid].keys())
         cols = len(source_pop_list)
         fig, axes = plt.subplots(1, cols, sharey=True, figsize=(5*cols, 5))
+        y_interval = max(2, len(sorted_gids[target_pop_name]) // 10)
+        yticks = list(range(0, len(sorted_gids[target_pop_name]), y_interval))
+        if target_pop_name in sorted_populations:
+            axes[0].set_ylabel('Target: %s\nSorted Cell ID' % target_pop_name)
+            ylabels = yticks
+        else:
+            axes[0].set_ylabel('Target: %s\nCell ID' % target_pop_name)
+            ylabels = np.array(sorted_gids[target_pop_name])[yticks]
         for col, source_pop_name in enumerate(source_pop_list):
-            sorted_source_gids = sorted(list(
-                connection_weights_dict[target_pop_name][sorted_target_gids[0]][source_pop_name].keys()))
-            weight_matrix = np.empty((len(sorted_target_gids), len(sorted_source_gids)), dtype='float32')
-            for i, target_gid in enumerate(sorted_target_gids):
-                for j, source_gid in enumerate(sorted_source_gids):
+            if source_pop_name not in sorted_gids:
+                if source_pop_name in tuning_peak_locs:
+                    sorted_indexes = np.argsort(list(tuning_peak_locs[source_pop_name].values()))
+                    sorted_gids[source_pop_name] = \
+                        np.array(list(tuning_peak_locs[source_pop_name].keys()))[sorted_indexes]
+                    sorted_populations.append(source_pop_name)
+                else:
+                    sorted_gids[source_pop_name] = sorted(list(
+                        connection_weights_dict[target_pop_name][first_target_gid][source_pop_name].keys()))
+            weight_matrix = np.empty((len(sorted_gids[target_pop_name]), len(sorted_gids[source_pop_name])), dtype='float32')
+            for i, target_gid in enumerate(sorted_gids[target_pop_name]):
+                for j, source_gid in enumerate(sorted_gids[source_pop_name]):
                     weight_matrix[i][j] = \
                         connection_weights_dict[target_pop_name][target_gid][source_pop_name][source_gid]
-            y_interval = max(2, len(sorted_target_gids) // 10)
-            yticks = list(range(0, len(sorted_target_gids), y_interval))
-            ylabels = np.array(sorted_target_gids)[yticks]
-            x_interval = max(2, len(sorted_source_gids) // 10)
-            xticks = list(range(0, len(sorted_source_gids), x_interval))
-            xlabels = np.array(sorted_source_gids)[xticks]
+            x_interval = max(2, len(sorted_gids[source_pop_name]) // 10)
+            xticks = list(range(0, len(sorted_gids[source_pop_name]), x_interval))
+            if source_pop_name in sorted_populations:
+                xlabels = xticks
+                axes[col].set_xlabel('Sorted Cell ID\nSource: %s' % source_pop_name)
+            else:
+                xlabels = np.array(sorted_gids[source_pop_name])[xticks]
+                axes[col].set_xlabel('Cell ID\nSource: %s' % source_pop_name)
             plot_heatmap_from_matrix(weight_matrix, xticks=xticks, xtick_labels=xlabels, yticks=yticks,
                                      ytick_labels=ylabels, ax=axes[col], aspect='auto', cbar_label='Synaptic weight')
-            axes[col].set_xlabel('Cell ID\nSource: %s' % source_pop_name)
-            axes[0].set_ylabel('Target: %s\nCell ID' % target_pop_name)
         clean_axes(axes)
         fig.suptitle('Connection weights onto %s population' % target_pop_name, )
         fig.tight_layout()
