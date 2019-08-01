@@ -328,6 +328,7 @@ def analyze_network_output(network, export=False, plot=False):
             plot_weight_matrix(connection_weights_dict, tuning_peak_locs=context.tuning_peak_locs)
             plot_firing_rate_heatmaps(firing_rates_dict, binned_t)
             if context.connectivity_type == 'gaussian':
+                context.network.plot_rel_distance(context.pop_cell_positions)
                 context.network.visualize_connections(context.pop_cell_positions, n=1)
 
         """

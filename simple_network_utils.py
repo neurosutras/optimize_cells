@@ -404,7 +404,6 @@ class SimpleNetwork(object):
 
     def visualize_connections(self, pop_cell_positions, n=1):
         """
-        TODO: Generate normalized 2D histograms of relative distances rather than absolute position
         :param pop_cell_positions: nested dict
         :param n: int
         """
@@ -429,6 +428,38 @@ class SimpleNetwork(object):
                         plt.pcolor(xedge, yedge, vals)
                         plt.title("Cell {} at {}, {} to {} via {} syn".format(target_gid, target_loc, source_pop_name,
                                                                               target_pop_name, syn_type))
+
+    def plot_rel_distance(self, pop_cell_positions):
+        """
+        Generate 2D histograms of relative distances
+        :param pop_cell_positions: nested dict
+        """
+        for target_pop_name in self.pop_syn_proportions:
+            if target_pop_name not in self.cells: continue
+            target_gids = list(self.cells[target_pop_name].keys())
+            d = len(pop_cell_positions[target_pop_name][target_gids[0]]) if target_gids else 0
+            if d < 2: continue
+            for syn_type in self.pop_syn_proportions[target_pop_name]:
+                for source_pop_name in self.pop_syn_proportions[target_pop_name][syn_type]:
+                    x_dist = []
+                    y_dist = []
+                    if source_pop_name not in self.cells: continue
+                    for target_gid in target_gids:
+                        x_target = pop_cell_positions[target_pop_name][target_gid][0]
+                        y_target = pop_cell_positions[target_pop_name][target_gid][1]
+                        source_gids = list(self.ncdict[target_pop_name][target_gid][source_pop_name].keys())
+                        if not source_gids: continue
+                        for i, source_gid in enumerate(source_gids):
+                            x_source = pop_cell_positions[source_pop_name][source_gid][0]
+                            y_source = pop_cell_positions[source_pop_name][source_gid][1]
+                            x_dist.append(x_source - x_target)
+                            y_dist.append(y_source - y_target)
+                    fig = plt.figure()
+                    plt.hist2d(x_dist, y_dist)
+                    plt.colorbar().set_label("Count")
+                    plt.xlabel('x')
+                    plt.ylabel('y')
+                    plt.title("{} to {} distances".format(source_pop_name, target_pop_name))
 
     # Instrumentation - stimulation and recording
     def spike_record(self):
