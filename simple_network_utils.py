@@ -4,6 +4,7 @@ from dentate.utils import baks
 from scipy.signal import butter, sosfiltfilt, sosfreqz, hilbert, periodogram
 from collections import namedtuple, defaultdict
 from dentate.stgen import get_inhom_poisson_spike_times_by_thinning
+import h5py
 
 
 # Based on http://modeldb.yale.edu/39948
@@ -239,9 +240,9 @@ class SimpleNetwork(object):
         :return: array of float
         """
         from scipy.spatial.distance import cdist
-        target_cell_position = pop_cell_positions[target_pop_name][target_gid]
+        target_cell_position = pop_cell_positions[target_pop_name][str(target_gid)]
         source_cell_positions = \
-            [pop_cell_positions[source_pop_name][source_gid] for source_gid in potential_source_gids]
+            [pop_cell_positions[source_pop_name][str(source_gid)] for source_gid in potential_source_gids]
         distances = cdist([target_cell_position], source_cell_positions)[0]
         sigma = pop_axon_extents[source_pop_name] / 3. / np.sqrt(2.)
         prob_connection = np.exp(-(distances / sigma) ** 2.)
@@ -402,33 +403,16 @@ class SimpleNetwork(object):
                                                   syn_mech_names=self.syn_mech_names,
                                                   syn_mech_param_rules=self.syn_mech_param_rules, weight=updated_weight)
 
-    def visualize_connections(self, pop_cell_positions, n=1):
-        """
-        TODO: Generate normalized 2D histograms of relative distances rather than absolute position
-        :param pop_cell_positions: nested dict
-        :param n: int
-        """
+    def get_gid_connections_dict(self):
+        gid_dict = defaultdict(lambda: defaultdict(dict))
         for target_pop_name in self.pop_syn_proportions:
-            if target_pop_name not in self.cells:
-                continue
-            target_gids = random.sample(list(self.cells[target_pop_name].keys()), n)
+            target_gids = list(self.cells[target_pop_name].keys())
             for target_gid in target_gids:
-                target_loc = pop_cell_positions[target_pop_name][target_gid]
                 for syn_type in self.pop_syn_proportions[target_pop_name]:
                     for source_pop_name in self.pop_syn_proportions[target_pop_name][syn_type]:
                         source_gids = list(self.ncdict[target_pop_name][target_gid][source_pop_name].keys())
-                        if not source_gids:  # if the list is empty
-                            continue
-                        xs = []
-                        ys = []
-                        for source_gid in source_gids:
-                            xs.append(pop_cell_positions[source_pop_name][source_gid][0])
-                            ys.append(pop_cell_positions[source_pop_name][source_gid][1])
-                        vals, xedge, yedge = np.histogram2d(x=xs, y=ys, bins=np.linspace(-1.0, 1.0, 51))
-                        fig = plt.figure()
-                        plt.pcolor(xedge, yedge, vals)
-                        plt.title("Cell {} at {}, {} to {} via {} syn".format(target_gid, target_loc, source_pop_name,
-                                                                              target_pop_name, syn_type))
+                        gid_dict[target_pop_name][str(target_gid)][source_pop_name] = source_gids
+        return gid_dict
 
     # Instrumentation - stimulation and recording
     def spike_record(self):
@@ -1216,7 +1200,7 @@ def plot_inferred_spike_rates(binned_spikes_dict, firing_rates_dict, t, active_r
             col = i % cols
             axes[row][col].plot(t, inferred_rate, label='Rate')
             axes[row][col].plot(t[binned_spike_indexes], np.ones(len(binned_spike_indexes)), 'k.', label='Spikes')
-            axes[row][col].set_title('gid: %i' % gid)
+            axes[row][col].set_title('gid: {}'.format(gid))
         axes[0][cols-1].legend(loc='center left', frameon=False, framealpha=0.5, bbox_to_anchor=(1., 0.5))
         clean_axes(axes)
         fig.suptitle('Inferred spike rates: %s population' % pop_name)
@@ -1249,10 +1233,10 @@ def plot_voltage_traces(voltage_rec_dict, rec_t, spikes_dict=None, rows=3, cols=
             row = i // cols
             col = i % cols
             axes[row][col].plot(rec_t, rec, label='Vm', c='grey')
-            if spikes_dict is not None:
+            if spikes_dict is not None and pop_name in spikes_dict and gid in spikes_dict[pop_name]:
                 binned_spike_indexes = find_nearest(spikes_dict[pop_name][gid], rec_t)
                 axes[row][col].plot(rec_t[binned_spike_indexes], rec[binned_spike_indexes], 'k.', label='Spikes')
-            axes[row][col].set_title('gid: %i' % gid)
+            axes[row][col].set_title('gid: {}'.format(gid))
         axes[0][cols-1].legend(loc='center left', frameon=False, framealpha=0.5, bbox_to_anchor=(1., 0.5))
         clean_axes(axes)
         fig.suptitle('Voltage recordings: %s population' % pop_name)
@@ -1326,7 +1310,7 @@ def plot_weight_matrix(connection_weights_dict, tuning_peak_locs=None, pop_names
         fig.show()
 
 
-def plot_firing_rate_heatmaps(firing_rates_dict, t, pop_names=None):
+def plot_firing_rate_heatmaps(firing_rates_dict, t, pop_names=None, tuning_peak_locs=None):
     """
 
     :param firing_rates_dict: dict of array
@@ -1336,8 +1320,13 @@ def plot_firing_rate_heatmaps(firing_rates_dict, t, pop_names=None):
     if pop_names is None:
         pop_names = list(firing_rates_dict.keys())
     for pop_name in pop_names:
+        sort = pop_name in tuning_peak_locs
+        if sort:
+            sorted_indexes = np.argsort(list(tuning_peak_locs[pop_name].values()))
+            sorted_gids = np.array(list(tuning_peak_locs[pop_name].keys()))[sorted_indexes]
+        else:
+            sorted_gids = sorted(list(firing_rates_dict[pop_name].keys()))
         fig, axes = plt.subplots()
-        sorted_gids = sorted(list(firing_rates_dict[pop_name].keys()))
         rate_matrix = np.empty((len(sorted_gids), len(t)), dtype='float32')
         for i, gid in enumerate(sorted_gids):
             rate_matrix[i][:] = firing_rates_dict[pop_name][gid]
@@ -1352,7 +1341,112 @@ def plot_firing_rate_heatmaps(firing_rates_dict, t, pop_names=None):
                                  ytick_labels=ylabels, ax=axes, aspect='auto', cbar_label='Firing rate (Hz)')
         axes.set_xlabel('Time (ms)')
         axes.set_ylabel('Target: %s\nCell ID' % pop_name)
-        axes.set_title('Firing rate: %s population' % pop_name)
+        if sort:
+            axes.set_title('Sorted firing rate: %s population' % pop_name)
+        else:
+            axes.set_title('Firing rate: %s population' % pop_name)
         clean_axes(axes)
         fig.tight_layout()
         fig.show()
+
+def visualize_connections(pop_gid_ranges, pop_cell_types, pop_syn_proportions, pop_cell_positions, gid_connections, n=1):
+    """
+    :param pop_cell_positions: nested dict
+    :param gid_connections: nested dict
+    :param n: int
+    """
+    for target_pop_name in pop_syn_proportions:
+        if pop_cell_types[target_pop_name] == 'input':
+            continue
+        start_idx, end_idx = pop_gid_ranges[target_pop_name]
+        target_gids = random.sample(range(start_idx, end_idx), n)
+        for target_gid in target_gids:
+            target_gid = str(target_gid)
+            target_loc = pop_cell_positions[target_pop_name][target_gid]
+            for syn_type in pop_syn_proportions[target_pop_name]:
+                for source_pop_name in pop_syn_proportions[target_pop_name][syn_type]:
+                    source_gids = gid_connections[target_pop_name][target_gid][source_pop_name]
+                    if not len(source_gids):  # if the list is empty
+                        continue
+                    xs = []
+                    ys = []
+                    for source_gid in source_gids:
+                        source_gid = str(source_gid)
+                        xs.append(pop_cell_positions[source_pop_name][source_gid][0])
+                        ys.append(pop_cell_positions[source_pop_name][source_gid][1])
+                    vals, xedge, yedge = np.histogram2d(x=xs, y=ys, bins=np.linspace(-1.0, 1.0, 51))
+                    fig = plt.figure()
+                    plt.pcolor(xedge, yedge, vals)
+                    plt.title("Cell {} at {}, {} to {} via {} syn".format(target_gid, target_loc, source_pop_name,
+                                                                          target_pop_name, syn_type))
+                    fig.show()
+
+def plot_rel_distance(pop_gid_ranges, pop_cell_types, pop_syn_proportions, pop_cell_positions, gid_connections):
+    """
+    Generate 2D histograms of relative distances
+    :param pop_cell_positions: nested dict
+    :param gid_connections: nested dict
+    """
+    for target_pop_name in pop_syn_proportions:
+        if pop_cell_types[target_pop_name] == 'input':
+            continue
+        start_idx, end_idx = pop_gid_ranges[target_pop_name]
+        target_gids = np.arange(start_idx, end_idx)
+        d = len(pop_cell_positions[target_pop_name][str(target_gids[0])])
+        if d < 2: continue
+        for syn_type in pop_syn_proportions[target_pop_name]:
+            for source_pop_name in pop_syn_proportions[target_pop_name][syn_type]:
+                x_dist = []
+                y_dist = []
+                for target_gid in target_gids:
+                    target_gid = str(target_gid)
+                    x_target = pop_cell_positions[target_pop_name][target_gid][0]
+                    y_target = pop_cell_positions[target_pop_name][target_gid][1]
+                    source_gids = gid_connections[target_pop_name][target_gid][source_pop_name]
+                    if not len(source_gids): continue
+                    for source_gid in source_gids:
+                        source_gid = str(source_gid)
+                        x_source = pop_cell_positions[source_pop_name][source_gid][0]
+                        y_source = pop_cell_positions[source_pop_name][source_gid][1]
+                        x_dist.append(x_source - x_target)
+                        y_dist.append(y_source - y_target)
+                fig = plt.figure()
+                plt.hist2d(x_dist, y_dist)
+                plt.colorbar().set_label("Count")
+                plt.xlabel('x')
+                plt.ylabel('y')
+                plt.title("{} to {} distances".format(source_pop_name, target_pop_name))
+                fig.show()
+
+#---------------------------------------save/load functions
+
+def export_plot_vars(export_file_path, varname_dict):
+    f = h5py.File(export_file_path, "w")
+    for name, var in varname_dict.items():
+        if isinstance(var, dict):
+            recursive_save(f, name + '/', var)
+        else:
+            f.create_dataset(name, data=var)
+    f.close()
+
+def recursive_save(h5file, path, dic):
+    for key, item in dic.items():
+        if isinstance(item, dict):
+            recursive_save(h5file, path + str(key) + '/', item)
+        elif isinstance(item, np.ndarray) and not len(item):
+            pass
+        else:
+            h5file[path + str(key)] = item
+
+def load_plot_variables(file_path):
+    with h5py.File(file_path, 'r') as h5file:
+        return recursive_load(h5file, '/')
+
+def recursive_load(h5file, path):
+    res = {}
+    for key, item in h5file[path].items():
+        if isinstance(item, h5py._hl.dataset.Dataset):
+            res[key] = item[...]
+        elif isinstance(item, h5py._hl.group.Group):
+            res[key] = recursive_load(h5file, path + key + '/')
+    return res
