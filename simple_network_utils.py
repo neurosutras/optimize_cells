@@ -154,7 +154,7 @@ class SimpleNetwork(object):
         rank = int(self.pc.id())
         nhost = int(self.pc.nhost())
 
-        for pop_name, (gid_start, gid_stop) in viewitems(self.pop_gid_ranges):
+        for pop_name, (gid_start, gid_stop) in self.pop_gid_ranges.items():
             cell_type = self.pop_cell_types[pop_name]
             for i, gid in enumerate(range(gid_start, gid_stop)):
                 # round-robin distribution of cells across MPI ranks
@@ -207,8 +207,8 @@ class SimpleNetwork(object):
                     else:
                         target_izhi_celltype = izhi_cell_type_param_dict[target_cell_type].celltype
                         if target_izhi_celltype != this_cell.izh.celltype:
-                            raise RuntimeError('SimpleNetwork.verify_cell_types: %s gid: %i; should be %s '
-                                           'Izhi type %i, but is type %i' %
+                            raise RuntimeError('SimpleNetwork.verify_cell_types: %s gid: %i; should be %i '
+                                               'Izhi type, but is type %i' %
                                                (pop_name, gid, target_izhi_celltype, this_cell.izh.celltype))
                 else:
                     raise RuntimeError('SimpleNetwork.verify_cell_types: %s gid: %i is an unknown type: %s' %
@@ -240,9 +240,9 @@ class SimpleNetwork(object):
         :return: array of float
         """
         from scipy.spatial.distance import cdist
-        target_cell_position = pop_cell_positions[target_pop_name][str(target_gid)]
+        target_cell_position = pop_cell_positions[target_pop_name][target_gid]
         source_cell_positions = \
-            [pop_cell_positions[source_pop_name][str(source_gid)] for source_gid in potential_source_gids]
+            [pop_cell_positions[source_pop_name][source_gid] for source_gid in potential_source_gids]
         distances = cdist([target_cell_position], source_cell_positions)[0]
         sigma = pop_axon_extents[source_pop_name] / 3. / np.sqrt(2.)
         prob_connection = np.exp(-(distances / sigma) ** 2.)
@@ -272,6 +272,7 @@ class SimpleNetwork(object):
                         potential_source_gids = np.arange(self.pop_gid_ranges[source_pop_name][0],
                                                           self.pop_gid_ranges[source_pop_name][1], 1)
                         # avoid connections to self
+                        p_connection = None
                         potential_source_gids = potential_source_gids[potential_source_gids != target_gid]
                         if connectivity_type == 'uniform':
                             p_connection = self.get_prob_connection_uniform(potential_source_gids)
@@ -404,20 +405,20 @@ class SimpleNetwork(object):
                                                   syn_mech_param_rules=self.syn_mech_param_rules, weight=updated_weight)
 
     def get_gid_connections_dict(self):
-        gid_dict = defaultdict(lambda: defaultdict(dict))
+        gid_dict = defaultdict(dd)
         for target_pop_name in self.pop_syn_proportions:
             target_gids = list(self.cells[target_pop_name].keys())
             for target_gid in target_gids:
                 for syn_type in self.pop_syn_proportions[target_pop_name]:
                     for source_pop_name in self.pop_syn_proportions[target_pop_name][syn_type]:
                         source_gids = list(self.ncdict[target_pop_name][target_gid][source_pop_name].keys())
-                        gid_dict[target_pop_name][str(target_gid)][source_pop_name] = source_gids
+                        gid_dict[target_pop_name][target_gid][source_pop_name] = source_gids
         return gid_dict
 
     # Instrumentation - stimulation and recording
     def spike_record(self):
         for pop_name in self.cells:
-            for gid, cell in viewitems(self.cells[pop_name]):
+            for gid, cell in self.cells[pop_name].items():
                 tvec = h.Vector()
                 nc = cell.spike_detector
                 nc.record(tvec)
@@ -426,7 +427,7 @@ class SimpleNetwork(object):
     def voltage_record(self):
         self.voltage_recvec = defaultdict(dict)
         for pop_name in self.cells:
-            for gid, cell in viewitems(self.cells[pop_name]):
+            for gid, cell in self.cells[pop_name].items():
                 if cell.is_art(): continue
                 rec = h.Vector()
                 rec.record(getattr(cell.sec(.5), '_ref_v'))
@@ -444,7 +445,7 @@ class SimpleNetwork(object):
         spikes_dict = dict()
         for pop_name in self.spikes_dict:
             spikes_dict[pop_name] = dict()
-            for gid, spike_train in viewitems(self.spikes_dict[pop_name]):
+            for gid, spike_train in self.spikes_dict[pop_name].items():
                 spike_train_array = np.array(spike_train, dtype='float32')
                 indexes = np.where(spike_train_array >= self.equilibrate)[0]
                 if len(indexes) > 0:
@@ -459,7 +460,7 @@ class SimpleNetwork(object):
         voltage_rec_dict = dict()
         for pop_name in self.voltage_recvec:
             voltage_rec_dict[pop_name] = dict()
-            for gid, recvec in viewitems(self.voltage_recvec[pop_name]):
+            for gid, recvec in self.voltage_recvec[pop_name].items():
                 voltage_rec_dict[pop_name][gid] = np.array(recvec)[start_index:]
         return voltage_rec_dict
 
@@ -648,7 +649,7 @@ class MinimalCell(object):
 
     def connect2target(self, target=None):
         nc = h.NetCon(self.sec(1)._ref_v, target, sec=self.sec)
-        nc.threshold = izhi_cell_type_param_dict[self.cell_type].vpeak
+        # nc.threshold = izhi_cell_type_param_dict[self.cell_type].vpeak
         return nc
 
     def is_art(self):
@@ -740,7 +741,7 @@ def infer_firing_rates(spike_trains_dict, t, alpha, beta, pad_dur):
     """
     inferred_firing_rates = defaultdict(dict)
     for pop_name in spike_trains_dict:
-        for gid, spike_train in viewitems(spike_trains_dict[pop_name]):
+        for gid, spike_train in spike_trains_dict[pop_name].items():
             if len(spike_train) > 0:
                 smoothed = padded_baks(spike_train, t, alpha=alpha, beta=beta, pad_dur=pad_dur)
             else:
@@ -972,8 +973,8 @@ def get_bandpass_filtered_signal_stats(signal, t, sos, filter_band, bins=100, si
                   (signal_label, filter_label, min(filter_band), max(filter_band)))
             sys.stdout.flush()
         return signal, np.zeros_like(signal), 0., 0., 0.
+    dt = t[1] - t[0]  # ms
     if pad and pad_len is None:
-        dt = t[1] - t[0]  # ms
         pad_dur = min(10. * 1000. / np.min(filter_band), len(t) * dt)  # ms
         pad_len = min(int(pad_dur / dt), len(t) - 1)
     if pad:
@@ -1056,7 +1057,7 @@ def get_pop_bandpass_filtered_signal_stats(signal_dict, t, filter_band_dict, ord
     envelope_ratio_dict = {}
     centroid_freq_dict = {}
     freq_tuning_index_dict = {}
-    for filter_label, filter_band in viewitems(filter_band_dict):
+    for filter_label, filter_band in filter_band_dict.items():
         filtered_signal_dict[filter_label] = {}
         envelope_dict[filter_label] = {}
         envelope_ratio_dict[filter_label] = {}
@@ -1189,7 +1190,7 @@ def plot_inferred_spike_rates(binned_spikes_dict, firing_rates_dict, t, active_r
         for i in range(rows):
             axes[i][0].set_ylabel('Firing rate (Hz)')
         active_gid_range = []
-        for gid, rate in viewitems(firing_rates_dict[pop_name]):
+        for gid, rate in firing_rates_dict[pop_name].items():
             if np.max(rate) >= active_rate_threshold:
                 active_gid_range.append(gid)
         gid_sample = random.sample(active_gid_range, min(len(active_gid_range), rows * cols))
@@ -1349,7 +1350,8 @@ def plot_firing_rate_heatmaps(firing_rates_dict, t, pop_names=None, tuning_peak_
         fig.tight_layout()
         fig.show()
 
-def visualize_connections(pop_gid_ranges, pop_cell_types, pop_syn_proportions, pop_cell_positions, gid_connections, n=1):
+def visualize_connections(pop_gid_ranges, pop_cell_types, pop_syn_proportions, pop_cell_positions, gid_connections, n=1,
+                          plot_from_hdf5=True):
     """
     :param pop_cell_positions: nested dict
     :param gid_connections: nested dict
@@ -1361,7 +1363,7 @@ def visualize_connections(pop_gid_ranges, pop_cell_types, pop_syn_proportions, p
         start_idx, end_idx = pop_gid_ranges[target_pop_name]
         target_gids = random.sample(range(start_idx, end_idx), n)
         for target_gid in target_gids:
-            target_gid = str(target_gid)
+            if plot_from_hdf5: target_gid = str(target_gid)
             target_loc = pop_cell_positions[target_pop_name][target_gid]
             for syn_type in pop_syn_proportions[target_pop_name]:
                 for source_pop_name in pop_syn_proportions[target_pop_name][syn_type]:
@@ -1371,7 +1373,7 @@ def visualize_connections(pop_gid_ranges, pop_cell_types, pop_syn_proportions, p
                     xs = []
                     ys = []
                     for source_gid in source_gids:
-                        source_gid = str(source_gid)
+                        if plot_from_hdf5: source_gid = str(source_gid)
                         xs.append(pop_cell_positions[source_pop_name][source_gid][0])
                         ys.append(pop_cell_positions[source_pop_name][source_gid][1])
                     vals, xedge, yedge = np.histogram2d(x=xs, y=ys, bins=np.linspace(-1.0, 1.0, 51))
@@ -1381,7 +1383,8 @@ def visualize_connections(pop_gid_ranges, pop_cell_types, pop_syn_proportions, p
                                                                           target_pop_name, syn_type))
                     fig.show()
 
-def plot_rel_distance(pop_gid_ranges, pop_cell_types, pop_syn_proportions, pop_cell_positions, gid_connections):
+def plot_rel_distance(pop_gid_ranges, pop_cell_types, pop_syn_proportions, pop_cell_positions, gid_connections,
+                      plot_from_hdf5=True):
     """
     Generate 2D histograms of relative distances
     :param pop_cell_positions: nested dict
@@ -1392,20 +1395,21 @@ def plot_rel_distance(pop_gid_ranges, pop_cell_types, pop_syn_proportions, pop_c
             continue
         start_idx, end_idx = pop_gid_ranges[target_pop_name]
         target_gids = np.arange(start_idx, end_idx)
-        d = len(pop_cell_positions[target_pop_name][str(target_gids[0])])
+        tmp_target_gid = str(target_gids[0]) if plot_from_hdf5 else target_gids[0]
+        d = len(pop_cell_positions[target_pop_name][tmp_target_gid])
         if d < 2: continue
         for syn_type in pop_syn_proportions[target_pop_name]:
             for source_pop_name in pop_syn_proportions[target_pop_name][syn_type]:
                 x_dist = []
                 y_dist = []
                 for target_gid in target_gids:
-                    target_gid = str(target_gid)
+                    if plot_from_hdf5: target_gid = str(target_gid)
                     x_target = pop_cell_positions[target_pop_name][target_gid][0]
                     y_target = pop_cell_positions[target_pop_name][target_gid][1]
                     source_gids = gid_connections[target_pop_name][target_gid][source_pop_name]
                     if not len(source_gids): continue
                     for source_gid in source_gids:
-                        source_gid = str(source_gid)
+                        if plot_from_hdf5: source_gid = str(source_gid)
                         x_source = pop_cell_positions[source_pop_name][source_gid][0]
                         y_source = pop_cell_positions[source_pop_name][source_gid][1]
                         x_dist.append(x_source - x_target)
@@ -1419,6 +1423,20 @@ def plot_rel_distance(pop_gid_ranges, pop_cell_types, pop_syn_proportions, pop_c
                 fig.show()
 
 #---------------------------------------save/load functions
+"""
+run sim with --export flag
+
+ipython
+from optimize_cells.simple_network_utils import *
+data = load_plot_variables("path/to/export.hdf5")
+data.keys()
+e.g. plot_rel_distance(data['pop_gid_ranges'], data['pop_cell_types'], data['pop_syn_proportions'], 
+    data['pop_cell_positions'], data['gid_connections'])
+
+plot functions:
+plot_rel_distance, visualize_connections, plot_voltage_traces, plot_weight_matrix, plot_firing_rate_heatmaps,
+plot_inferred_spike_rates, get_pop_bandpass_filtered_signal_stats, get_pop_activity_stats
+"""
 
 def export_plot_vars(export_file_path, varname_dict):
     f = h5py.File(export_file_path, "w")
@@ -1450,3 +1468,7 @@ def recursive_load(h5file, path):
         elif isinstance(item, h5py._hl.group.Group):
             res[key] = recursive_load(h5file, path + key + '/')
     return res
+
+def dd():
+    # see https://stackoverflow.com/questions/16439301/cant-pickle-defaultdict
+    return defaultdict(dict)
