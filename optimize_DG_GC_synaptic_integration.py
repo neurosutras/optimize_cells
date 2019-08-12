@@ -36,7 +36,7 @@ def config_worker():
 @click.option("--export", is_flag=True)
 @click.option("--export-file-path", type=str, default=None)
 @click.option("--label", type=str, default=None)
-@click.option("--verbose", type=int, default=2)
+@click.option("--verbose", type=int, default=1)
 @click.option("--plot", is_flag=True)
 @click.option("--interactive", is_flag=True)
 @click.option("--debug", is_flag=True)
@@ -718,12 +718,7 @@ def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, mode
     if export:
         print('debug: pid: %i; temp_output_path: %s' % (os.getpid(), context.temp_output_path))
         sys.stdout.flush()
-        try:
-            context.sim.export_to_file(context.temp_output_path)
-        except Exception as e:
-            traceback.print_last()
-            sys.stdout.flush()
-            raise e
+        context.sim.export_to_file(context.temp_output_path)
 
     sim.restore_state()
 
