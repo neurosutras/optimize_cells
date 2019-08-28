@@ -331,7 +331,7 @@ def analyze_network_output(network, export=False, export_file_path=None, plot=Fa
             plot_firing_rate_heatmaps(firing_rates_dict, binned_t, tuning_peak_locs=context.tuning_peak_locs)
             if context.connectivity_type == 'gaussian':
                 plot_rel_distance(context.network.pop_gid_ranges, context.pop_cell_types, context.pop_syn_proportions,
-                                  context.pop_cell_positions, gid_connections, plot_from_hdf5=False)
+                                  context.pop_cell_positions, gid_connections)
                 visualize_connections(context.network.pop_gid_ranges, context.pop_cell_types, context.pop_syn_proportions,
                                       context.pop_cell_positions, gid_connections, n=1, plot_from_hdf5=False)
 
@@ -349,7 +349,7 @@ def analyze_network_output(network, export=False, export_file_path=None, plot=Fa
                             'pop_syn_proportions' : context.pop_syn_proportions,
                             'gid_connections' : gid_connections,
                             'mean_rate_from_spike_count_dict' : mean_rate_from_spike_count_dict,
-                            'connection weights': connection_weights_dict,
+                            'connection_weights_dict': connection_weights_dict,
                             'tuning_peak_locs': context.tuning_peak_locs,
                             'pop_cell_positions': context.pop_cell_positions,
                             }

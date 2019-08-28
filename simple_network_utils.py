@@ -4,6 +4,7 @@ from dentate.utils import baks
 from scipy.signal import butter, sosfiltfilt, sosfreqz, hilbert, periodogram
 from collections import namedtuple, defaultdict
 from dentate.stgen import get_inhom_poisson_spike_times_by_thinning
+from scipy import ndimage
 import h5py
 
 
@@ -947,6 +948,64 @@ def PSTI(f, power, band=None, verbose=False):
     return this_PSTI
 
 
+def get_tuning_width(firing_rates, bin_size, active_rate_threshold=1.):
+    active_idx = np.where(firing_rates > active_rate_threshold)[0]
+    if len(active_idx) == 0:
+        return 0.
+    contiguous_active_areas = ndimage.find_objects(ndimage.label(active_idx)[0])
+    active_widths = [len(firing_rates[area]) for area in contiguous_active_areas]
+
+    return np.max(active_widths) * bin_size
+
+
+def spatial_tuning_index(firing_rates):
+    """
+
+    :param firing_rates: 1d arr
+    :return:
+    """
+    firing_std = np.std(firing_rates)
+    if firing_std == 0. or np.max(firing_rates) - np.min(firing_rates) == 0.:
+        return 0.
+
+    top_quartile_indexes = get_mass_index(firing_rates, 0.375), get_mass_index(firing_rates, 0.625)
+    if top_quartile_indexes[0] == top_quartile_indexes[1]:
+        signal_mean = firing_rates[top_quartile_indexes[0]]
+    else:
+        signal_indexes = np.arange(top_quartile_indexes[0], top_quartile_indexes[1], 1)
+        signal_mean = np.mean(firing_rates[signal_indexes])
+    if signal_mean == 0.:
+        return 0.
+
+    bottom_quartile_indexes = get_mass_index(firing_rates, 0.125), get_mass_index(firing_rates, 0.875)
+    noise_indexes = np.concatenate([np.arange(0, bottom_quartile_indexes[0], 1),
+                                    np.arange(bottom_quartile_indexes[1], len(firing_rates), 1)])
+    noise_mean = np.mean(firing_rates[noise_indexes])
+
+    this_idx = (signal_mean - noise_mean) / firing_std
+    return this_idx
+
+
+def get_tuning_stats(spatial_firing_rates_dict, bin_size, tuning_threshold, active_rate_threshold):
+    tuning_idx = dict()
+    tuning_widths = dict()
+    tuning_proportions = dict()
+    for pop_name, firing_rates in spatial_firing_rates_dict.items():
+        pop_tuning_idxs = dict()
+        pop_tuning_widths = dict()
+        tuned_count = 0
+        for gid in firing_rates:
+            this_tuning_idx = spatial_tuning_index(firing_rates[gid])
+            pop_tuning_idxs[gid] = this_tuning_idx
+            if this_tuning_idx > tuning_threshold:
+                pop_tuning_widths[gid] = get_tuning_width(firing_rates[gid], bin_size, active_rate_threshold)
+                tuned_count += 1
+        tuning_idx[pop_name] = pop_tuning_idxs
+        tuning_widths[pop_name] = pop_tuning_widths
+        tuning_proportions[pop_name] = tuned_count / len(firing_rates.keys())
+    return tuning_idx, tuning_widths, tuning_proportions
+
+
 def get_bandpass_filtered_signal_stats(signal, t, sos, filter_band, bins=100, signal_label='', filter_label='',
                                        axis_label = 'Amplitude', units='a.u.', pad=True, pad_len=None, plot=False,
                                        verbose=False):
@@ -1383,8 +1442,7 @@ def visualize_connections(pop_gid_ranges, pop_cell_types, pop_syn_proportions, p
                                                                           target_pop_name, syn_type))
                     fig.show()
 
-def plot_rel_distance(pop_gid_ranges, pop_cell_types, pop_syn_proportions, pop_cell_positions, gid_connections,
-                      plot_from_hdf5=True):
+def plot_rel_distance(pop_gid_ranges, pop_cell_types, pop_syn_proportions, pop_cell_positions, gid_connections):
     """
     Generate 2D histograms of relative distances
     :param pop_cell_positions: nested dict
@@ -1395,21 +1453,18 @@ def plot_rel_distance(pop_gid_ranges, pop_cell_types, pop_syn_proportions, pop_c
             continue
         start_idx, end_idx = pop_gid_ranges[target_pop_name]
         target_gids = np.arange(start_idx, end_idx)
-        tmp_target_gid = str(target_gids[0]) if plot_from_hdf5 else target_gids[0]
-        d = len(pop_cell_positions[target_pop_name][tmp_target_gid])
+        d = len(pop_cell_positions[target_pop_name][target_gids[0]])
         if d < 2: continue
         for syn_type in pop_syn_proportions[target_pop_name]:
             for source_pop_name in pop_syn_proportions[target_pop_name][syn_type]:
                 x_dist = []
                 y_dist = []
                 for target_gid in target_gids:
-                    if plot_from_hdf5: target_gid = str(target_gid)
                     x_target = pop_cell_positions[target_pop_name][target_gid][0]
                     y_target = pop_cell_positions[target_pop_name][target_gid][1]
                     source_gids = gid_connections[target_pop_name][target_gid][source_pop_name]
                     if not len(source_gids): continue
                     for source_gid in source_gids:
-                        if plot_from_hdf5: source_gid = str(source_gid)
                         x_source = pop_cell_positions[source_pop_name][source_gid][0]
                         y_source = pop_cell_positions[source_pop_name][source_gid][1]
                         x_dist.append(x_source - x_target)
@@ -1463,10 +1518,12 @@ def load_plot_variables(file_path):
 def recursive_load(h5file, path):
     res = {}
     for key, item in h5file[path].items():
+        if key.isdigit():
+            key = int(key)
         if isinstance(item, h5py._hl.dataset.Dataset):
             res[key] = item[...]
         elif isinstance(item, h5py._hl.group.Group):
-            res[key] = recursive_load(h5file, path + key + '/')
+            res[key] = recursive_load(h5file, path + str(key) + '/')
     return res
 
 def dd():
