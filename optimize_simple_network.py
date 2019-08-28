@@ -479,6 +479,7 @@ def get_objectives(features, export=False):
                                             context.target_range[objective_name]) ** 2.
         return features, objectives
 
+
 if __name__ == '__main__':
     main(args=sys.argv[(list_find(lambda s: s.find(os.path.basename(__file__)) != -1, sys.argv) + 1):],
          standalone_mode=False)
