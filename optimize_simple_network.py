@@ -230,7 +230,7 @@ def init_context():
                     local_np_random.seed(int(context.location_seed) + gid)
                     if pop_name not in pop_cell_positions:
                         pop_cell_positions[pop_name] = dict()
-                    pop_cell_positions[pop_name][str(gid)] = local_np_random.uniform(-1., 1., size=context.spatial_dim)
+                    pop_cell_positions[pop_name][gid] = local_np_random.uniform(-1., 1., size=context.spatial_dim)
         else:
             pop_cell_positions = None
         pop_cell_positions = context.comm.bcast(pop_cell_positions, root=0)
@@ -299,18 +299,21 @@ def analyze_network_output(network, export=False, export_file_path=None, plot=Fa
     firing_rates_dict = infer_firing_rates(spikes_dict, binned_t, alpha=context.baks_alpha, beta=context.baks_beta,
                                            pad_dur=context.baks_pad_dur)
     connection_weights_dict = network.get_connection_weights()
+    gid_connections = context.network.get_gid_connections_dict()
 
     spikes_dict = context.comm.gather(spikes_dict, root=0)
     voltage_rec_dict = context.comm.gather(voltage_rec_dict, root=0)
     firing_rates_dict = context.comm.gather(firing_rates_dict, root=0)
     connection_weights_dict = context.comm.gather(connection_weights_dict, root=0)
     voltages_exceed_threshold_list = context.comm.gather(voltages_exceed_threshold, root=0)
+    gid_connections = context.comm.gather(gid_connections, root=0)
 
     if context.comm.rank == 0:
         spikes_dict = merge_list_of_dict(spikes_dict)
         voltage_rec_dict = merge_list_of_dict(voltage_rec_dict)
         firing_rates_dict = merge_list_of_dict(firing_rates_dict)
         connection_weights_dict = merge_list_of_dict(connection_weights_dict)
+        gid_connections = merge_list_of_dict(gid_connections)
         mean_rate_dict, peak_rate_dict, mean_rate_active_cells_dict, pop_fraction_active_dict, \
             binned_spike_count_dict, mean_rate_from_spike_count_dict = \
             get_pop_activity_stats(spikes_dict, firing_rates_dict, binned_t, threshold=context.active_rate_threshold,
@@ -320,7 +323,6 @@ def analyze_network_output(network, export=False, export_file_path=None, plot=Fa
             freq_tuning_index_dict = \
             get_pop_bandpass_filtered_signal_stats(mean_rate_from_spike_count_dict, binned_t, context.filter_bands,
                                                    plot=plot, verbose=context.verbose > 1)
-        gid_connections = context.network.get_gid_connections_dict()
         if plot:
             plot_inferred_spike_rates(binned_spike_count_dict, firing_rates_dict, binned_t,
                                       context.active_rate_threshold)
@@ -329,27 +331,27 @@ def analyze_network_output(network, export=False, export_file_path=None, plot=Fa
             plot_firing_rate_heatmaps(firing_rates_dict, binned_t, tuning_peak_locs=context.tuning_peak_locs)
             if context.connectivity_type == 'gaussian':
                 plot_rel_distance(context.network.pop_gid_ranges, context.pop_cell_types, context.pop_syn_proportions,
-                                  context.pop_cell_positions, gid_connections)
+                                  context.pop_cell_positions, gid_connections, plot_from_hdf5=False)
                 visualize_connections(context.network.pop_gid_ranges, context.pop_cell_types, context.pop_syn_proportions,
-                                      context.pop_cell_positions, gid_connections, n=1)
+                                      context.pop_cell_positions, gid_connections, n=1, plot_from_hdf5=False)
 
         if export:
-            varname_dict = {'binned spike count' : binned_spike_count_dict,
-                            'spikes' : spikes_dict,
-                            'firing rates' : firing_rates_dict,
-                            'binned t' : binned_t,
-                            'active rate threshold' : context.active_rate_threshold,
-                            'voltage recording' : voltage_rec_dict,
-                            'rec t' : rec_t,
-                            'filter bands' : context.filter_bands,
-                            'pop gid ranges' : context.network.pop_gid_ranges,
-                            'pop cell types' : context.pop_cell_types,
-                            'pop syn proportions' : context.pop_syn_proportions,
-                            'gid connections' : gid_connections,
-                            'mean rate from spike count' : mean_rate_from_spike_count_dict,
+            varname_dict = {'binned_spike_count_dict' : binned_spike_count_dict,
+                            'spikes_dict' : spikes_dict,
+                            'firing_rates_dict' : firing_rates_dict,
+                            'binned_t' : binned_t,
+                            'active_rate_threshold' : context.active_rate_threshold,
+                            'voltage_rec_dict' : voltage_rec_dict,
+                            'rec_t' : rec_t,
+                            'filter_bands' : context.filter_bands,
+                            'pop_gid_ranges' : context.network.pop_gid_ranges,
+                            'pop_cell_types' : context.pop_cell_types,
+                            'pop_syn_proportions' : context.pop_syn_proportions,
+                            'gid_connections' : gid_connections,
+                            'mean_rate_from_spike_count_dict' : mean_rate_from_spike_count_dict,
                             'connection weights': connection_weights_dict,
-                            'tuning peak locs': context.tuning_peak_locs,
-                            'cell positions': context.pop_cell_positions,
+                            'tuning_peak_locs': context.tuning_peak_locs,
+                            'pop_cell_positions': context.pop_cell_positions,
                             }
             export_plot_vars(export_file_path, varname_dict)
 
