@@ -4,8 +4,6 @@ from dentate.utils import baks
 from scipy.signal import butter, sosfiltfilt, sosfreqz, hilbert, periodogram
 from collections import namedtuple, defaultdict
 from dentate.stgen import get_inhom_poisson_spike_times_by_thinning
-from scipy import ndimage
-import h5py
 
 
 # Based on http://modeldb.yale.edu/39948
@@ -155,7 +153,7 @@ class SimpleNetwork(object):
         rank = int(self.pc.id())
         nhost = int(self.pc.nhost())
 
-        for pop_name, (gid_start, gid_stop) in self.pop_gid_ranges.items():
+        for pop_name, (gid_start, gid_stop) in viewitems(self.pop_gid_ranges):
             cell_type = self.pop_cell_types[pop_name]
             for i, gid in enumerate(range(gid_start, gid_stop)):
                 # round-robin distribution of cells across MPI ranks
@@ -208,8 +206,8 @@ class SimpleNetwork(object):
                     else:
                         target_izhi_celltype = izhi_cell_type_param_dict[target_cell_type].celltype
                         if target_izhi_celltype != this_cell.izh.celltype:
-                            raise RuntimeError('SimpleNetwork.verify_cell_types: %s gid: %i; should be %i '
-                                               'Izhi type, but is type %i' %
+                            raise RuntimeError('SimpleNetwork.verify_cell_types: %s gid: %i; should be '
+                                               'Izhi type %i, but is type %i' %
                                                (pop_name, gid, target_izhi_celltype, this_cell.izh.celltype))
                 else:
                     raise RuntimeError('SimpleNetwork.verify_cell_types: %s gid: %i is an unknown type: %s' %
@@ -419,7 +417,7 @@ class SimpleNetwork(object):
     # Instrumentation - stimulation and recording
     def spike_record(self):
         for pop_name in self.cells:
-            for gid, cell in self.cells[pop_name].items():
+            for gid, cell in viewitems(self.cells[pop_name]):
                 tvec = h.Vector()
                 nc = cell.spike_detector
                 nc.record(tvec)
@@ -428,7 +426,7 @@ class SimpleNetwork(object):
     def voltage_record(self):
         self.voltage_recvec = defaultdict(dict)
         for pop_name in self.cells:
-            for gid, cell in self.cells[pop_name].items():
+            for gid, cell in viewitems(self.cells[pop_name]):
                 if cell.is_art(): continue
                 rec = h.Vector()
                 rec.record(getattr(cell.sec(.5), '_ref_v'))
@@ -446,7 +444,7 @@ class SimpleNetwork(object):
         spikes_dict = dict()
         for pop_name in self.spikes_dict:
             spikes_dict[pop_name] = dict()
-            for gid, spike_train in self.spikes_dict[pop_name].items():
+            for gid, spike_train in viewitems(self.spikes_dict[pop_name]):
                 spike_train_array = np.array(spike_train, dtype='float32')
                 indexes = np.where(spike_train_array >= self.equilibrate)[0]
                 if len(indexes) > 0:
@@ -461,7 +459,7 @@ class SimpleNetwork(object):
         voltage_rec_dict = dict()
         for pop_name in self.voltage_recvec:
             voltage_rec_dict[pop_name] = dict()
-            for gid, recvec in self.voltage_recvec[pop_name].items():
+            for gid, recvec in viewitems(self.voltage_recvec[pop_name]):
                 voltage_rec_dict[pop_name][gid] = np.array(recvec)[start_index:]
         return voltage_rec_dict
 
@@ -742,7 +740,7 @@ def infer_firing_rates(spike_trains_dict, t, alpha, beta, pad_dur):
     """
     inferred_firing_rates = defaultdict(dict)
     for pop_name in spike_trains_dict:
-        for gid, spike_train in spike_trains_dict[pop_name].items():
+        for gid, spike_train in viewitems(spike_trains_dict[pop_name]):
             if len(spike_train) > 0:
                 smoothed = padded_baks(spike_train, t, alpha=alpha, beta=beta, pad_dur=pad_dur)
             else:
@@ -948,64 +946,6 @@ def PSTI(f, power, band=None, verbose=False):
     return this_PSTI
 
 
-def get_tuning_width(firing_rates, bin_size, active_rate_threshold=1.):
-    active_idx = np.where(firing_rates > active_rate_threshold)[0]
-    if len(active_idx) == 0:
-        return 0.
-    contiguous_active_areas = ndimage.find_objects(ndimage.label(active_idx)[0])
-    active_widths = [len(firing_rates[area]) for area in contiguous_active_areas]
-
-    return np.max(active_widths) * bin_size
-
-
-def spatial_tuning_index(firing_rates):
-    """
-
-    :param firing_rates: 1d arr
-    :return:
-    """
-    firing_std = np.std(firing_rates)
-    if firing_std == 0. or np.max(firing_rates) - np.min(firing_rates) == 0.:
-        return 0.
-
-    top_quartile_indexes = get_mass_index(firing_rates, 0.375), get_mass_index(firing_rates, 0.625)
-    if top_quartile_indexes[0] == top_quartile_indexes[1]:
-        signal_mean = firing_rates[top_quartile_indexes[0]]
-    else:
-        signal_indexes = np.arange(top_quartile_indexes[0], top_quartile_indexes[1], 1)
-        signal_mean = np.mean(firing_rates[signal_indexes])
-    if signal_mean == 0.:
-        return 0.
-
-    bottom_quartile_indexes = get_mass_index(firing_rates, 0.125), get_mass_index(firing_rates, 0.875)
-    noise_indexes = np.concatenate([np.arange(0, bottom_quartile_indexes[0], 1),
-                                    np.arange(bottom_quartile_indexes[1], len(firing_rates), 1)])
-    noise_mean = np.mean(firing_rates[noise_indexes])
-
-    this_idx = (signal_mean - noise_mean) / firing_std
-    return this_idx
-
-
-def get_tuning_stats(spatial_firing_rates_dict, bin_size, tuning_threshold, active_rate_threshold):
-    tuning_idx = dict()
-    tuning_widths = dict()
-    tuning_proportions = dict()
-    for pop_name, firing_rates in spatial_firing_rates_dict.items():
-        pop_tuning_idxs = dict()
-        pop_tuning_widths = dict()
-        tuned_count = 0
-        for gid in firing_rates:
-            this_tuning_idx = spatial_tuning_index(firing_rates[gid])
-            pop_tuning_idxs[gid] = this_tuning_idx
-            if this_tuning_idx > tuning_threshold:
-                pop_tuning_widths[gid] = get_tuning_width(firing_rates[gid], bin_size, active_rate_threshold)
-                tuned_count += 1
-        tuning_idx[pop_name] = pop_tuning_idxs
-        tuning_widths[pop_name] = pop_tuning_widths
-        tuning_proportions[pop_name] = tuned_count / len(firing_rates.keys())
-    return tuning_idx, tuning_widths, tuning_proportions
-
-
 def get_bandpass_filtered_signal_stats(signal, t, sos, filter_band, bins=100, signal_label='', filter_label='',
                                        axis_label = 'Amplitude', units='a.u.', pad=True, pad_len=None, plot=False,
                                        verbose=False):
@@ -1116,7 +1056,7 @@ def get_pop_bandpass_filtered_signal_stats(signal_dict, t, filter_band_dict, ord
     envelope_ratio_dict = {}
     centroid_freq_dict = {}
     freq_tuning_index_dict = {}
-    for filter_label, filter_band in filter_band_dict.items():
+    for filter_label, filter_band in viewitems(filter_band_dict):
         filtered_signal_dict[filter_label] = {}
         envelope_dict[filter_label] = {}
         envelope_ratio_dict[filter_label] = {}
@@ -1249,7 +1189,7 @@ def plot_inferred_spike_rates(binned_spikes_dict, firing_rates_dict, t, active_r
         for i in range(rows):
             axes[i][0].set_ylabel('Firing rate (Hz)')
         active_gid_range = []
-        for gid, rate in firing_rates_dict[pop_name].items():
+        for gid, rate in viewitems(firing_rates_dict[pop_name]):
             if np.max(rate) >= active_rate_threshold:
                 active_gid_range.append(gid)
         gid_sample = random.sample(active_gid_range, min(len(active_gid_range), rows * cols))
@@ -1442,7 +1382,9 @@ def visualize_connections(pop_gid_ranges, pop_cell_types, pop_syn_proportions, p
                                                                           target_pop_name, syn_type))
                     fig.show()
 
-def plot_rel_distance(pop_gid_ranges, pop_cell_types, pop_syn_proportions, pop_cell_positions, gid_connections):
+
+def plot_rel_distance(pop_gid_ranges, pop_cell_types, pop_syn_proportions, pop_cell_positions, gid_connections,
+                      plot_from_hdf5=True):
     """
     Generate 2D histograms of relative distances
     :param pop_cell_positions: nested dict
@@ -1493,6 +1435,7 @@ plot_rel_distance, visualize_connections, plot_voltage_traces, plot_weight_matri
 plot_inferred_spike_rates, get_pop_bandpass_filtered_signal_stats, get_pop_activity_stats
 """
 
+
 def export_plot_vars(export_file_path, varname_dict):
     f = h5py.File(export_file_path, "w")
     for name, var in varname_dict.items():
@@ -1501,6 +1444,7 @@ def export_plot_vars(export_file_path, varname_dict):
         else:
             f.create_dataset(name, data=var)
     f.close()
+
 
 def recursive_save(h5file, path, dic):
     for key, item in dic.items():
@@ -1511,9 +1455,11 @@ def recursive_save(h5file, path, dic):
         else:
             h5file[path + str(key)] = item
 
+
 def load_plot_variables(file_path):
     with h5py.File(file_path, 'r') as h5file:
         return recursive_load(h5file, '/')
+
 
 def recursive_load(h5file, path):
     res = {}
@@ -1525,6 +1471,7 @@ def recursive_load(h5file, path):
         elif isinstance(item, h5py._hl.group.Group):
             res[key] = recursive_load(h5file, path + str(key) + '/')
     return res
+
 
 def dd():
     # see https://stackoverflow.com/questions/16439301/cant-pickle-defaultdict
