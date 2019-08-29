@@ -133,7 +133,7 @@ class SimpleNetwork(object):
                         self.syn_mech_param_defaults[target_pop_name][source_pop_name] = \
                             default_syn_type_mech_params[syn_type]
 
-        self.spikes_dict = defaultdict(dict)
+        self.spike_times_dict = defaultdict(dict)
         self.input_pop_t = input_pop_t
         self.input_pop_firing_rates = input_pop_firing_rates
 
@@ -403,16 +403,23 @@ class SimpleNetwork(object):
                                                   syn_mech_names=self.syn_mech_names,
                                                   syn_mech_param_rules=self.syn_mech_param_rules, weight=updated_weight)
 
-    def get_gid_connections_dict(self):
-        gid_dict = defaultdict(dd)
+    def get_connectivity_dict(self):
+        connectivity_dict = dict()
         for target_pop_name in self.pop_syn_proportions:
-            target_gids = list(self.cells[target_pop_name].keys())
-            for target_gid in target_gids:
+            connectivity_dict[target_pop_name] = dict()
+            for target_gid in self.cells[target_pop_name]:
+                connectivity_dict[target_pop_name][target_gid] = dict()
                 for syn_type in self.pop_syn_proportions[target_pop_name]:
                     for source_pop_name in self.pop_syn_proportions[target_pop_name][syn_type]:
-                        source_gids = list(self.ncdict[target_pop_name][target_gid][source_pop_name].keys())
-                        gid_dict[target_pop_name][target_gid][source_pop_name] = source_gids
-        return gid_dict
+                        if source_pop_name in self.ncdict[target_pop_name][target_gid] and \
+                                len(self.ncdict[target_pop_name][target_gid][source_pop_name]) > 0:
+                            source_gids = []
+                            for source_gid in self.ncdict[target_pop_name][target_gid][source_pop_name]:
+                                source_gids.extend([source_gid] *
+                                                   len(self.ncdict[target_pop_name][target_gid][source_pop_name][
+                                                           source_gid]))
+                            connectivity_dict[target_pop_name][target_gid][source_pop_name] = source_gids
+        return connectivity_dict
 
     # Instrumentation - stimulation and recording
     def spike_record(self):
@@ -421,7 +428,7 @@ class SimpleNetwork(object):
                 tvec = h.Vector()
                 nc = cell.spike_detector
                 nc.record(tvec)
-                self.spikes_dict[pop_name][gid] = tvec
+                self.spike_times_dict[pop_name][gid] = tvec
 
     def voltage_record(self):
         self.voltage_recvec = defaultdict(dict)
@@ -440,19 +447,19 @@ class SimpleNetwork(object):
         h.finitialize(self.v_init)
         self.pc.psolve(self.tstop)
 
-    def get_spikes_dict(self):
-        spikes_dict = dict()
-        for pop_name in self.spikes_dict:
-            spikes_dict[pop_name] = dict()
-            for gid, spike_train in viewitems(self.spikes_dict[pop_name]):
+    def get_spike_times_dict(self):
+        spike_times_dict = dict()
+        for pop_name in self.spike_times_dict:
+            spike_times_dict[pop_name] = dict()
+            for gid, spike_train in viewitems(self.spike_times_dict[pop_name]):
                 spike_train_array = np.array(spike_train, dtype='float32')
                 indexes = np.where(spike_train_array >= self.equilibrate)[0]
                 if len(indexes) > 0:
                     spike_train_array = np.subtract(spike_train_array[indexes], self.equilibrate)
                 else:
                     spike_train_array = np.array([], dtype='float32')
-                spikes_dict[pop_name][gid] = spike_train_array
-        return spikes_dict
+                spike_times_dict[pop_name][gid] = spike_train_array
+        return spike_times_dict
 
     def get_voltage_rec_dict(self):
         start_index = int(self.equilibrate / self.dt)
@@ -472,7 +479,10 @@ class SimpleNetwork(object):
                 target_cell = self.cells[target_pop_name][target_gid]
                 for syn_type in self.pop_syn_proportions[target_pop_name]:
                     for source_pop_name in self.pop_syn_proportions[target_pop_name][syn_type]:
-                        this_syn = target_cell.syns[syn_type][source_pop_name]
+                        if syn_type in target_cell.syns and source_pop_name in target_cell.syns[syn_type]:
+                            this_syn = target_cell.syns[syn_type][source_pop_name]
+                        else:
+                            this_syn = None
                         weights[target_pop_name][target_gid][source_pop_name] = dict()
                         start_gid = self.pop_gid_ranges[source_pop_name][0]
                         stop_gid = self.pop_gid_ranges[source_pop_name][1]
@@ -799,10 +809,10 @@ def get_binned_spike_count(spike_times, t):
     return binned_spikes
 
 
-def get_pop_activity_stats(spikes_dict, firing_rates_dict, t, threshold=1., plot=False):
+def get_pop_activity_stats(spike_times_dict, firing_rates_dict, t, threshold=1., plot=False):
     """
     Calculate firing rate statistics for each cell population.
-    :param spikes_dict: nested dict of array
+    :param spike_times_dict: nested dict of array
     :param firing_rates_dict: nested dict of array
     :param t: array
     :param threshold: firing rate threshold for "active" cells: float (Hz)
@@ -817,14 +827,14 @@ def get_pop_activity_stats(spikes_dict, firing_rates_dict, t, threshold=1., plot
     binned_spike_count_dict = defaultdict(dict)
     mean_rate_from_spike_count_dict = dict()
 
-    for pop_name in spikes_dict:
+    for pop_name in spike_times_dict:
         this_active_cell_count = np.zeros_like(t)
         this_summed_rate_active_cells = np.zeros_like(t)
-        for gid in spikes_dict[pop_name]:
+        for gid in spike_times_dict[pop_name]:
             this_firing_rate = firing_rates_dict[pop_name][gid]
             mean_rate_dict[pop_name][gid] = np.mean(this_firing_rate)
             peak_rate_dict[pop_name][gid] = np.max(this_firing_rate)
-            binned_spike_count_dict[pop_name][gid] = get_binned_spike_count(spikes_dict[pop_name][gid], t)
+            binned_spike_count_dict[pop_name][gid] = get_binned_spike_count(spike_times_dict[pop_name][gid], t)
             active_indexes = np.where(this_firing_rate >= threshold)[0]
             if len(active_indexes) > 0:
                 this_active_cell_count[active_indexes] += 1.
@@ -837,7 +847,7 @@ def get_pop_activity_stats(spikes_dict, firing_rates_dict, t, threshold=1., plot
                 np.divide(this_summed_rate_active_cells[active_indexes], this_active_cell_count[active_indexes])
         else:
             mean_rate_active_cells_dict[pop_name] = np.zeros_like(t)
-        pop_fraction_active_dict[pop_name] = np.divide(this_active_cell_count, len(spikes_dict[pop_name]))
+        pop_fraction_active_dict[pop_name] = np.divide(this_active_cell_count, len(spike_times_dict[pop_name]))
         mean_rate_from_spike_count_dict[pop_name] = \
             np.divide(np.mean(list(binned_spike_count_dict[pop_name].values()), axis=0), dt / 1000.)
 
@@ -1209,12 +1219,12 @@ def plot_inferred_spike_rates(binned_spikes_dict, firing_rates_dict, t, active_r
         fig.show()
 
 
-def plot_voltage_traces(voltage_rec_dict, rec_t, spikes_dict=None, rows=3, cols=4, pop_names=None):
+def plot_voltage_traces(voltage_rec_dict, rec_t, spike_times_dict=None, rows=3, cols=4, pop_names=None):
     """
 
     :param voltage_rec_dict: dict of array
     :param rec_t: array
-    :param spikes_dict: nested dict of array
+    :param spike_times_dict: nested dict of array
     :param cells_per_pop: int
     :param pop_names: list of str
     """
@@ -1233,8 +1243,8 @@ def plot_voltage_traces(voltage_rec_dict, rec_t, spikes_dict=None, rows=3, cols=
             row = i // cols
             col = i % cols
             axes[row][col].plot(rec_t, rec, label='Vm', c='grey')
-            if spikes_dict is not None and pop_name in spikes_dict and gid in spikes_dict[pop_name]:
-                binned_spike_indexes = find_nearest(spikes_dict[pop_name][gid], rec_t)
+            if spike_times_dict is not None and pop_name in spike_times_dict and gid in spike_times_dict[pop_name]:
+                binned_spike_indexes = find_nearest(spike_times_dict[pop_name][gid], rec_t)
                 axes[row][col].plot(rec_t[binned_spike_indexes], rec[binned_spike_indexes], 'k.', label='Spikes')
             axes[row][col].set_title('gid: {}'.format(gid))
         axes[0][cols-1].legend(loc='center left', frameon=False, framealpha=0.5, bbox_to_anchor=(1., 0.5))
@@ -1260,7 +1270,7 @@ def plot_weight_matrix(connection_weights_dict, tuning_peak_locs=None, pop_names
     sorted_populations = []
     for target_pop_name in pop_names:
         if target_pop_name not in sorted_gids:
-            if target_pop_name in tuning_peak_locs:
+            if target_pop_name in tuning_peak_locs and len(tuning_peak_locs[target_pop_name]) > 0:
                 sorted_indexes = np.argsort(list(tuning_peak_locs[target_pop_name].values()))
                 sorted_gids[target_pop_name] = np.array(list(tuning_peak_locs[target_pop_name].keys()))[sorted_indexes]
                 sorted_populations.append(target_pop_name)
@@ -1280,7 +1290,7 @@ def plot_weight_matrix(connection_weights_dict, tuning_peak_locs=None, pop_names
             ylabels = np.array(sorted_gids[target_pop_name])[yticks]
         for col, source_pop_name in enumerate(source_pop_list):
             if source_pop_name not in sorted_gids:
-                if source_pop_name in tuning_peak_locs:
+                if source_pop_name in tuning_peak_locs  and len(tuning_peak_locs[source_pop_name]) > 0:
                     sorted_indexes = np.argsort(list(tuning_peak_locs[source_pop_name].values()))
                     sorted_gids[source_pop_name] = \
                         np.array(list(tuning_peak_locs[source_pop_name].keys()))[sorted_indexes]
@@ -1288,7 +1298,8 @@ def plot_weight_matrix(connection_weights_dict, tuning_peak_locs=None, pop_names
                 else:
                     sorted_gids[source_pop_name] = sorted(list(
                         connection_weights_dict[target_pop_name][first_target_gid][source_pop_name].keys()))
-            weight_matrix = np.empty((len(sorted_gids[target_pop_name]), len(sorted_gids[source_pop_name])), dtype='float32')
+            weight_matrix = np.empty((len(sorted_gids[target_pop_name]), len(sorted_gids[source_pop_name])),
+                                     dtype='float32')
             for i, target_gid in enumerate(sorted_gids[target_pop_name]):
                 for j, source_gid in enumerate(sorted_gids[source_pop_name]):
                     weight_matrix[i][j] = \
@@ -1320,7 +1331,7 @@ def plot_firing_rate_heatmaps(firing_rates_dict, t, pop_names=None, tuning_peak_
     if pop_names is None:
         pop_names = list(firing_rates_dict.keys())
     for pop_name in pop_names:
-        sort = pop_name in tuning_peak_locs
+        sort = pop_name in tuning_peak_locs and len(tuning_peak_locs[pop_name]) > 0
         if sort:
             sorted_indexes = np.argsort(list(tuning_peak_locs[pop_name].values()))
             sorted_gids = np.array(list(tuning_peak_locs[pop_name].keys()))[sorted_indexes]
@@ -1349,11 +1360,12 @@ def plot_firing_rate_heatmaps(firing_rates_dict, t, pop_names=None, tuning_peak_
         fig.tight_layout()
         fig.show()
 
-def visualize_connections(pop_gid_ranges, pop_cell_types, pop_syn_proportions, pop_cell_positions, gid_connections, n=1,
+
+def visualize_connections(pop_gid_ranges, pop_cell_types, pop_syn_proportions, pop_cell_positions, connectivity_dict, n=1,
                           plot_from_hdf5=True):
     """
     :param pop_cell_positions: nested dict
-    :param gid_connections: nested dict
+    :param connectivity_dict: nested dict
     :param n: int
     """
     for target_pop_name in pop_syn_proportions:
@@ -1366,7 +1378,7 @@ def visualize_connections(pop_gid_ranges, pop_cell_types, pop_syn_proportions, p
             target_loc = pop_cell_positions[target_pop_name][target_gid]
             for syn_type in pop_syn_proportions[target_pop_name]:
                 for source_pop_name in pop_syn_proportions[target_pop_name][syn_type]:
-                    source_gids = gid_connections[target_pop_name][target_gid][source_pop_name]
+                    source_gids = connectivity_dict[target_pop_name][target_gid][source_pop_name]
                     if not len(source_gids):  # if the list is empty
                         continue
                     xs = []
@@ -1383,37 +1395,31 @@ def visualize_connections(pop_gid_ranges, pop_cell_types, pop_syn_proportions, p
                     fig.show()
 
 
-def plot_rel_distance(pop_gid_ranges, pop_cell_types, pop_syn_proportions, pop_cell_positions, gid_connections,
-                      plot_from_hdf5=True):
+def plot_2D_connection_distance(pop_syn_proportions, pop_cell_positions, connectivity_dict):
     """
     Generate 2D histograms of relative distances
+    :param pop_syn_proportions: nested dict
     :param pop_cell_positions: nested dict
-    :param gid_connections: nested dict
+    :param connectivity_dict: nested dict
     """
     for target_pop_name in pop_syn_proportions:
-        if pop_cell_types[target_pop_name] == 'input':
+        if len(pop_cell_positions) == 0 or len(next(iter(viewvalues(pop_cell_positions[target_pop_name])))) < 2:
+            print('plot_2D_connection_distance: cell position data is absent or spatial dimension < 2')
+            sys.stdout.fluish()
             continue
-        start_idx, end_idx = pop_gid_ranges[target_pop_name]
-        target_gids = np.arange(start_idx, end_idx)
-        tmp_target_gid = str(target_gids[0]) if plot_from_hdf5 else target_gids[0]
-        d = len(pop_cell_positions[target_pop_name][tmp_target_gid])
-        if d < 2: continue
         for syn_type in pop_syn_proportions[target_pop_name]:
             for source_pop_name in pop_syn_proportions[target_pop_name][syn_type]:
                 x_dist = []
                 y_dist = []
-                for target_gid in target_gids:
-                    if plot_from_hdf5: target_gid = str(target_gid)
+                for target_gid in connectivity_dict[target_pop_name]:
                     x_target = pop_cell_positions[target_pop_name][target_gid][0]
                     y_target = pop_cell_positions[target_pop_name][target_gid][1]
-                    source_gids = gid_connections[target_pop_name][target_gid][source_pop_name]
-                    if not len(source_gids): continue
-                    for source_gid in source_gids:
-                        if plot_from_hdf5: source_gid = str(source_gid)
-                        x_source = pop_cell_positions[source_pop_name][source_gid][0]
-                        y_source = pop_cell_positions[source_pop_name][source_gid][1]
-                        x_dist.append(x_source - x_target)
-                        y_dist.append(y_source - y_target)
+                    if source_pop_name in connectivity_dict[target_pop_name][target_gid]:
+                        for source_gid in connectivity_dict[target_pop_name][target_gid][source_pop_name]:
+                            x_source = pop_cell_positions[source_pop_name][source_gid][0]
+                            y_source = pop_cell_positions[source_pop_name][source_gid][1]
+                            x_dist.append(x_source - x_target)
+                            y_dist.append(y_source - y_target)
                 fig = plt.figure()
                 plt.hist2d(x_dist, y_dist)
                 plt.colorbar().set_label("Count")
@@ -1472,8 +1478,3 @@ def recursive_load(h5file, path):
         elif isinstance(item, h5py._hl.group.Group):
             res[key] = recursive_load(h5file, path + key + '/')
     return res
-
-
-def dd():
-    # see https://stackoverflow.com/questions/16439301/cant-pickle-defaultdict
-    return defaultdict(dict)

@@ -2,7 +2,6 @@ from nested.parallel import *
 from nested.optimize_utils import *
 from simple_network_utils import *
 import click
-import time
 
 context = Context()
 
@@ -92,7 +91,7 @@ def config_worker():
 
 def init_context():
     start_time = time.time()
-    pop_sizes = {'FF': 100, 'E': 100, 'I': 20}
+    pop_sizes = {'FF': 500, 'E': 500, 'I': 100}
     pop_syn_counts = {'E': 100, 'I': 100}  # {'target_pop_name': int}
     pop_gid_ranges = get_pop_gid_ranges(pop_sizes)
     pop_cell_types = {'FF': 'input', 'E': 'IB', 'I': 'FS'}
@@ -234,6 +233,8 @@ def init_context():
         else:
             pop_cell_positions = None
         pop_cell_positions = context.comm.bcast(pop_cell_positions, root=0)
+    else:
+        pop_cell_positions = dict()
 
     context.update(locals())
     if int(context.pc.id()) == 0 and context.verbose > 0:
@@ -293,31 +294,31 @@ def analyze_network_output(network, export=False, export_file_path=None, plot=Fa
     """
     rec_t = np.arange(0., context.tstop + context.dt - context.equilibrate, context.dt)
     binned_t = np.arange(0., context.tstop + context.binned_dt - context.equilibrate, context.binned_dt)
-    spikes_dict = network.get_spikes_dict()
+    spike_times_dict = network.get_spike_times_dict()
     voltage_rec_dict = network.get_voltage_rec_dict()
     voltages_exceed_threshold = check_voltages_exceed_threshold(voltage_rec_dict, context.pop_cell_types)
-    firing_rates_dict = infer_firing_rates(spikes_dict, binned_t, alpha=context.baks_alpha, beta=context.baks_beta,
+    firing_rates_dict = infer_firing_rates(spike_times_dict, binned_t, alpha=context.baks_alpha, beta=context.baks_beta,
                                            pad_dur=context.baks_pad_dur)
     connection_weights_dict = network.get_connection_weights()
-    gid_connections = context.network.get_gid_connections_dict()
+    connectivity_dict = context.network.get_connectivity_dict()
 
-    spikes_dict = context.comm.gather(spikes_dict, root=0)
+    spike_times_dict = context.comm.gather(spike_times_dict, root=0)
     voltage_rec_dict = context.comm.gather(voltage_rec_dict, root=0)
     firing_rates_dict = context.comm.gather(firing_rates_dict, root=0)
     connection_weights_dict = context.comm.gather(connection_weights_dict, root=0)
     voltages_exceed_threshold_list = context.comm.gather(voltages_exceed_threshold, root=0)
-    gid_connections = context.comm.gather(gid_connections, root=0)
+    connectivity_dict = context.comm.gather(connectivity_dict, root=0)
 
     if context.comm.rank == 0:
-        spikes_dict = merge_list_of_dict(spikes_dict)
+        spike_times_dict = merge_list_of_dict(spike_times_dict)
         voltage_rec_dict = merge_list_of_dict(voltage_rec_dict)
         firing_rates_dict = merge_list_of_dict(firing_rates_dict)
         connection_weights_dict = merge_list_of_dict(connection_weights_dict)
-        gid_connections = merge_list_of_dict(gid_connections)
+        connectivity_dict = merge_list_of_dict(connectivity_dict)
         mean_rate_dict, peak_rate_dict, mean_rate_active_cells_dict, pop_fraction_active_dict, \
             binned_spike_count_dict, mean_rate_from_spike_count_dict = \
-            get_pop_activity_stats(spikes_dict, firing_rates_dict, binned_t, threshold=context.active_rate_threshold,
-                                   plot=plot)
+            get_pop_activity_stats(spike_times_dict, firing_rates_dict, binned_t,
+                                   threshold=context.active_rate_threshold, plot=plot)
 
         filtered_mean_rate_dict, filter_envelope_dict, filter_envelope_ratio_dict, centroid_freq_dict, \
             freq_tuning_index_dict = \
@@ -326,34 +327,95 @@ def analyze_network_output(network, export=False, export_file_path=None, plot=Fa
         if plot:
             plot_inferred_spike_rates(binned_spike_count_dict, firing_rates_dict, binned_t,
                                       context.active_rate_threshold)
-            plot_voltage_traces(voltage_rec_dict, rec_t, spikes_dict)
+            plot_voltage_traces(voltage_rec_dict, rec_t, spike_times_dict)
             plot_weight_matrix(connection_weights_dict, tuning_peak_locs=context.tuning_peak_locs)
             plot_firing_rate_heatmaps(firing_rates_dict, binned_t, tuning_peak_locs=context.tuning_peak_locs)
             if context.connectivity_type == 'gaussian':
-                plot_rel_distance(context.network.pop_gid_ranges, context.pop_cell_types, context.pop_syn_proportions,
-                                  context.pop_cell_positions, gid_connections, plot_from_hdf5=False)
-                visualize_connections(context.network.pop_gid_ranges, context.pop_cell_types, context.pop_syn_proportions,
-                                      context.pop_cell_positions, gid_connections, n=1, plot_from_hdf5=False)
+                plot_2D_connection_distance(context.pop_syn_proportions, context.pop_cell_positions, connectivity_dict)
 
         if export:
-            varname_dict = {'binned_spike_count_dict' : binned_spike_count_dict,
-                            'spikes_dict' : spikes_dict,
-                            'firing_rates_dict' : firing_rates_dict,
-                            'binned_t' : binned_t,
-                            'active_rate_threshold' : context.active_rate_threshold,
-                            'voltage_rec_dict' : voltage_rec_dict,
-                            'rec_t' : rec_t,
-                            'filter_bands' : context.filter_bands,
-                            'pop_gid_ranges' : context.network.pop_gid_ranges,
-                            'pop_cell_types' : context.pop_cell_types,
-                            'pop_syn_proportions' : context.pop_syn_proportions,
-                            'gid_connections' : gid_connections,
-                            'mean_rate_from_spike_count_dict' : mean_rate_from_spike_count_dict,
-                            'connection weights': connection_weights_dict,
-                            'tuning_peak_locs': context.tuning_peak_locs,
-                            'pop_cell_positions': context.pop_cell_positions,
-                            }
-            export_plot_vars(export_file_path, varname_dict)
+            with h5py.File(context.export_file_path, 'a') as f:
+                exported_data_key = 'simple_network_exported_data'
+                if exported_data_key in f:
+                    raise RuntimeError('optimize_simple_network: data has already been exported to export_file_path: '
+                                       '%s' % context.export_file_path)
+                group = f.create_group(exported_data_key)
+                group.attrs['enumerated'] = False
+                set_h5py_attr(group.attrs, 'connectivity_type', context.connectivity_type)
+                group.attrs['active_rate_threshold'] = context.active_rate_threshold
+                subgroup = group.create_group('spike_times')
+                for pop_name in spike_times_dict:
+                    subgroup.create_group(pop_name)
+                    for gid in spike_times_dict[pop_name]:
+                        subgroup[pop_name].create_dataset(
+                            str(gid), data=spike_times_dict[pop_name][gid], compression='gzip')
+                subgroup = group.create_group('firing_rates')
+                for pop_name in firing_rates_dict:
+                    subgroup.create_group(pop_name)
+                    for gid in firing_rates_dict[pop_name]:
+                        subgroup[pop_name].create_dataset(
+                            str(gid), data=firing_rates_dict[pop_name][gid], compression='gzip')
+                group.create_dataset('binned_t', data=binned_t, compression='gzip')
+                subgroup = group.create_group('filter_bands')
+                for filter, band in viewitems(context.filter_bands):
+                    subgroup.create_dataset(filter, data=band)
+                subgroup = group.create_group('voltage_recs')
+                for pop_name in voltage_rec_dict:
+                    subgroup.create_group(pop_name)
+                    for gid in voltage_rec_dict[pop_name]:
+                        subgroup[pop_name].create_dataset(
+                            str(gid), data=voltage_rec_dict[pop_name][gid], compression='gzip')
+                group.create_dataset('rec_t', data=rec_t, compression='gzip')
+                subgroup = group.create_group('connection_weights')
+                for target_pop_name in connection_weights_dict:
+                    subgroup.create_group(target_pop_name)
+                    for target_gid in connection_weights_dict[target_pop_name]:
+                        subgroup[target_pop_name].create_group(str(target_gid))
+                        for source_pop_name in connection_weights_dict[target_pop_name][target_gid]:
+                            data_group = subgroup[target_pop_name][str(target_gid)].create_group(source_pop_name)
+                            source_gids = np.array(list(connection_weights_dict[target_pop_name][target_gid][
+                                                            source_pop_name].keys()))
+                            weights = np.array(list(connection_weights_dict[target_pop_name][target_gid][
+                                                            source_pop_name].values()))
+                            data_group.create_dataset('source_gids', data=source_gids, compression='gzip')
+                            data_group.create_dataset('weights', data=weights, compression='gzip')
+                if len(context.tuning_peak_locs) > 0:
+                    subgroup = group.create_group('tuning_peak_locs')
+                    for pop_name in context.tuning_peak_locs:
+                        data_group = subgroup.create_group(pop_name)
+                        target_gids = np.array(list(context.tuning_peak_locs[pop_name].keys()))
+                        peak_locs = np.array(list(context.tuning_peak_locs[pop_name].values()))
+                        data_group.create_dataset('target_gids', data=target_gids, compression='gzip')
+                        data_group.create_dataset('peak_locs', data=peak_locs, compression='gzip')
+                subgroup = group.create_group('connectivity')
+                for target_pop_name in connectivity_dict:
+                    subgroup.create_group(target_pop_name)
+                    for target_gid in connectivity_dict[target_pop_name]:
+                        data_group = subgroup[target_pop_name].create_group(str(target_gid))
+                        for source_pop_name in connectivity_dict[target_pop_name][target_gid]:
+                            data_group.create_dataset(source_pop_name,
+                                                      data=connectivity_dict[target_pop_name][target_gid][
+                                                          source_pop_name])
+                subgroup = group.create_group('pop_syn_proportions')
+                for target_pop_name in context.pop_syn_proportions:
+                    subgroup.create_group(target_pop_name)
+                    for syn_type in context.pop_syn_proportions[target_pop_name]:
+                        data_group = subgroup[target_pop_name].create_group(syn_type)
+                        source_pop_names = \
+                            np.array(list(context.pop_syn_proportions[target_pop_name][syn_type].keys()), dtype='S')
+                        syn_proportions = \
+                            np.array(list(context.pop_syn_proportions[target_pop_name][syn_type].values()))
+                        data_group.create_dataset('source_pop_names', data=source_pop_names)
+                        data_group.create_dataset('syn_proportions', data=syn_proportions)
+                subgroup = group.create_group('pop_cell_positions')
+                for pop_name in context.pop_cell_positions:
+                    data_group = subgroup.create_group(pop_name)
+                    gids = np.array(list(context.pop_cell_positions[pop_name].keys()))
+                    positions = np.array(list(context.pop_cell_positions[pop_name].values()))
+                    data_group.create_dataset('gids', data=gids, compression='gzip')
+                    data_group.create_dataset('positions', data=positions, compression='gzip')
+            print('optimize_simple_network: exported data to %s' % export_file_path)
+            sys.stdout.flush()
 
         """
         if context.debug:
