@@ -1428,55 +1428,104 @@ def plot_2D_connection_distance(pop_syn_proportions, pop_cell_positions, connect
                 plt.title("{} to {} distances".format(source_pop_name, target_pop_name))
                 fig.show()
 
-#---------------------------------------save/load functions
-"""
-run sim with --export flag
 
-ipython
-from optimize_cells.simple_network_utils import *
-data = load_plot_variables("path/to/export.hdf5")
-data.keys()
-e.g. plot_rel_distance(data['pop_gid_ranges'], data['pop_cell_types'], data['pop_syn_proportions'], 
-    data['pop_cell_positions'], data['gid_connections'])
+def plot_simple_network_results_from_file(data_file_path, verbose=False):
+    """
 
-plot functions:
-plot_rel_distance, visualize_connections, plot_voltage_traces, plot_weight_matrix, plot_firing_rate_heatmaps,
-plot_inferred_spike_rates, get_pop_bandpass_filtered_signal_stats, get_pop_activity_stats
-"""
+    :param data_file_path: str (path)
+    :param verbose: bool
+    """
+    if not os.path.isfile(data_file_path):
+        raise IOError('plot_simple_network_results_from_file: invalid data file path: %s' % data_file_path)
 
+    spike_times_dict = defaultdict(dict)
+    firing_rates_dict = defaultdict(dict)
+    filter_bands = dict()
+    voltage_rec_dict = defaultdict(dict)
+    connection_weights_dict = dict()
+    tuning_peak_locs = dict()
+    connectivity_dict = dict()
+    pop_syn_proportions = dict()
+    pop_cell_positions = dict()
 
-def export_plot_vars(export_file_path, varname_dict):
-    f = h5py.File(export_file_path, "w")
-    for name, var in varname_dict.items():
-        if isinstance(var, dict):
-            recursive_save(f, name + '/', var)
-        else:
-            f.create_dataset(name, data=var)
-    f.close()
+    exported_data_key = 'simple_network_exported_data'
+    with h5py.File(data_file_path, 'r') as f:
+        if exported_data_key not in f:
+            raise RuntimeError('plot_simple_network_results_from_file: provided file is missing required data')
+        group = f[exported_data_key]
+        connectivity_type = get_h5py_attr(group.attrs, 'connectivity_type')
+        active_rate_threshold = group.attrs['active_rate_threshold']
+        subgroup = group['spike_times']
+        for pop_name in subgroup:
+            for gid_key in subgroup[pop_name]:
+                spike_times_dict[pop_name][int(gid_key)] = subgroup[pop_name][gid_key][:]
+        subgroup = group['firing_rates']
+        for pop_name in subgroup:
+            for gid_key in subgroup[pop_name]:
+                firing_rates_dict[pop_name][int(gid_key)] = subgroup[pop_name][gid_key][:]
+        binned_t = group['binned_t'][:]
+        subgroup = group['filter_bands']
+        for filter in subgroup:
+            filter_bands[filter] = subgroup[filter][:]
+        subgroup = group['voltage_recs']
+        for pop_name in subgroup:
+            for gid_key in subgroup[pop_name]:
+                voltage_rec_dict[pop_name][int(gid_key)] = subgroup[pop_name][gid_key][:]
+        rec_t = group['rec_t'][:]
+        subgroup = group['connection_weights']
+        for target_pop_name in subgroup:
+            connection_weights_dict[target_pop_name] = dict()
+            for target_gid_key in subgroup[target_pop_name]:
+                target_gid = int(target_gid_key)
+                connection_weights_dict[target_pop_name][target_gid] = dict()
+                for source_pop_name in subgroup[target_pop_name][target_gid_key]:
+                    connection_weights_dict[target_pop_name][target_gid][source_pop_name] = dict()
+                    data_group = subgroup[target_pop_name][target_gid_key][source_pop_name]
+                    for source_gid, weight in zip(data_group['source_gids'], data_group['weights']):
+                        connection_weights_dict[target_pop_name][target_gid][source_pop_name][source_gid] = weight
+        if 'tuning_peak_locs' in group and len(group['tuning_peak_locs']) > 0:
+            subgroup = group['tuning_peak_locs']
+            for pop_name in subgroup:
+                tuning_peak_locs[pop_name] = dict()
+                for target_gid, peak_loc in zip(subgroup[pop_name]['target_gids'], subgroup[pop_name]['peak_locs']):
+                    tuning_peak_locs[pop_name][target_gid] = peak_loc
+        subgroup = group['connectivity']
+        for target_pop_name in subgroup:
+            connectivity_dict[target_pop_name] = dict()
+            for target_gid_key in subgroup[target_pop_name]:
+                target_gid = int(target_gid_key)
+                connectivity_dict[target_pop_name][target_gid] = dict()
+                for source_pop_name in subgroup[target_pop_name][target_gid_key]:
+                    connectivity_dict[target_pop_name][target_gid][source_pop_name] = \
+                        subgroup[target_pop_name][target_gid_key][source_pop_name][:]
+        subgroup = group['pop_syn_proportions']
+        for target_pop_name in subgroup:
+            pop_syn_proportions[target_pop_name] = dict()
+            for syn_type in subgroup[target_pop_name]:
+                pop_syn_proportions[target_pop_name][syn_type] = dict()
+                source_pop_names = subgroup[target_pop_name][syn_type]['source_pop_names'][:].astype('str')
+                for source_pop_name, syn_proportion in zip(source_pop_names,
+                                                           subgroup[target_pop_name][syn_type]['syn_proportions']):
+                    pop_syn_proportions[target_pop_name][syn_type][source_pop_name] = syn_proportion
+        subgroup = group['pop_cell_positions']
+        for pop_name in subgroup:
+            pop_cell_positions[pop_name] = dict()
+            for gid, position in zip(subgroup[pop_name]['gids'], subgroup[pop_name]['positions']):
+                pop_cell_positions[pop_name][gid] = position
 
+    mean_rate_dict, peak_rate_dict, mean_rate_active_cells_dict, pop_fraction_active_dict, \
+        binned_spike_count_dict, mean_rate_from_spike_count_dict = \
+        get_pop_activity_stats(spike_times_dict, firing_rates_dict, binned_t,
+                               threshold=active_rate_threshold, plot=True)
 
-def recursive_save(h5file, path, dic):
-    for key, item in dic.items():
-        if isinstance(item, dict):
-            recursive_save(h5file, path + str(key) + '/', item)
-        elif isinstance(item, np.ndarray) and not len(item):
-            pass
-        else:
-            h5file[path + str(key)] = item
+    filtered_mean_rate_dict, filter_envelope_dict, filter_envelope_ratio_dict, centroid_freq_dict, \
+        freq_tuning_index_dict = \
+        get_pop_bandpass_filtered_signal_stats(mean_rate_from_spike_count_dict, binned_t, filter_bands,
+                                               plot=True, verbose=verbose)
 
-
-def load_plot_variables(file_path):
-    with h5py.File(file_path, 'r') as h5file:
-        return recursive_load(h5file, '/')
-
-
-def recursive_load(h5file, path):
-    res = {}
-    for key, item in h5file[path].items():
-        if key.isdigit():
-            key = int(key)
-        if isinstance(item, h5py._hl.dataset.Dataset):
-            res[key] = item[...]
-        elif isinstance(item, h5py._hl.group.Group):
-            res[key] = recursive_load(h5file, path + str(key) + '/')
-    return res
+    plot_inferred_spike_rates(binned_spike_count_dict, firing_rates_dict, binned_t, active_rate_threshold)
+    plot_voltage_traces(voltage_rec_dict, rec_t, spike_times_dict)
+    plot_weight_matrix(connection_weights_dict, tuning_peak_locs=tuning_peak_locs)
+    plot_firing_rate_heatmaps(firing_rates_dict, binned_t, tuning_peak_locs=tuning_peak_locs)
+    if connectivity_type == 'gaussian':
+        plot_2D_connection_distance(pop_syn_proportions, pop_cell_positions, connectivity_dict)

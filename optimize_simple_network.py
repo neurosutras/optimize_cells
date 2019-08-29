@@ -382,11 +382,12 @@ def analyze_network_output(network, export=False, export_file_path=None, plot=Fa
                 if len(context.tuning_peak_locs) > 0:
                     subgroup = group.create_group('tuning_peak_locs')
                     for pop_name in context.tuning_peak_locs:
-                        data_group = subgroup.create_group(pop_name)
-                        target_gids = np.array(list(context.tuning_peak_locs[pop_name].keys()))
-                        peak_locs = np.array(list(context.tuning_peak_locs[pop_name].values()))
-                        data_group.create_dataset('target_gids', data=target_gids, compression='gzip')
-                        data_group.create_dataset('peak_locs', data=peak_locs, compression='gzip')
+                        if len(context.tuning_peak_locs[pop_name]) > 0:
+                            data_group = subgroup.create_group(pop_name)
+                            target_gids = np.array(list(context.tuning_peak_locs[pop_name].keys()))
+                            peak_locs = np.array(list(context.tuning_peak_locs[pop_name].values()))
+                            data_group.create_dataset('target_gids', data=target_gids, compression='gzip')
+                            data_group.create_dataset('peak_locs', data=peak_locs, compression='gzip')
                 subgroup = group.create_group('connectivity')
                 for target_pop_name in connectivity_dict:
                     subgroup.create_group(target_pop_name)
