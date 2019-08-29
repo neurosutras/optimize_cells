@@ -1473,8 +1473,10 @@ def load_plot_variables(file_path):
 def recursive_load(h5file, path):
     res = {}
     for key, item in h5file[path].items():
+        if key.isdigit():
+            key = int(key)
         if isinstance(item, h5py._hl.dataset.Dataset):
             res[key] = item[...]
         elif isinstance(item, h5py._hl.group.Group):
-            res[key] = recursive_load(h5file, path + key + '/')
+            res[key] = recursive_load(h5file, path + str(key) + '/')
     return res
