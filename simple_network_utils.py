@@ -67,8 +67,8 @@ class SimpleNetwork(object):
     def __init__(self, pc, pop_sizes, pop_gid_ranges, pop_cell_types, pop_syn_counts, pop_syn_proportions,
                  connection_weights_mean, connection_weights_norm_sigma, syn_mech_params, syn_mech_names=None,
                  syn_mech_param_rules=None, syn_mech_param_defaults=None, input_pop_t=None,
-                 input_pop_firing_rates=None, tstop=1000., equilibrate=250., dt=0.025, delay=1., spikes_seed=100000000,
-                 v_init=-65., verbose=1, debug=False):
+                 input_pop_firing_rates=None, input_pop_spike_times=None, tstop=1000., equilibrate=250., dt=0.025,
+                 delay=1., spikes_seed=100000000, v_init=-65., verbose=1, debug=False):
         """
 
         :param pc: ParallelContext object
@@ -88,6 +88,7 @@ class SimpleNetwork(object):
         :param syn_mech_param_defaults: nested dict
         :param input_pop_t: nested dict: {pop_name: array of times (float)}}
         :param input_pop_firing_rates: nested dict: {pop_name: {gid: array of spike times (ms) (float)}}
+        :param input_pop_spike_times: nested dict: {pop_name : {gid: 1d array of spike times loaded from file}}
         :param tstop: int: simulation duration (ms)
         :param equilibrate: float: simulation equilibration duration (ms)
         :param dt: float: simulation timestep (ms)
@@ -136,6 +137,7 @@ class SimpleNetwork(object):
         self.spike_times_dict = defaultdict(dict)
         self.input_pop_t = input_pop_t
         self.input_pop_firing_rates = input_pop_firing_rates
+        self.input_pop_spike_times = input_pop_spike_times
 
         self.local_random = random.Random()
         self.local_np_random = np.random.RandomState()
@@ -163,7 +165,9 @@ class SimpleNetwork(object):
                         sys.stdout.flush()
                     if cell_type == 'input':
                         cell = FFCell(pop_name, gid)
-                        if self.input_pop_firing_rates is not None and pop_name in self.input_pop_firing_rates and \
+                        if pop_name in self.input_pop_spike_times:
+                            cell.load_vecstim(self.input_pop_spike_times[pop_name][gid])
+                        elif self.input_pop_firing_rates is not None and pop_name in self.input_pop_firing_rates and \
                                 gid in self.input_pop_firing_rates[pop_name]:
                             if self.input_pop_t is None or pop_name not in self.input_pop_t:
                                 raise RuntimeError('mkcells: time base not specified; cannot generate spikes for input '
@@ -174,6 +178,7 @@ class SimpleNetwork(object):
                                                                           self.input_pop_t[pop_name], dt=self.dt,
                                                                           generator=self.local_random)
                             cell.load_vecstim(this_spike_train)
+
                     elif cell_type == 'minimal':
                         cell = MinimalCell(pop_name, gid)
                     elif cell_type in izhi_cell_type_param_dict:

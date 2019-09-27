@@ -137,7 +137,17 @@ def init_context():
     if context.comm.rank == 0:
         input_pop_t = dict()
         input_pop_firing_rates = dict()
+        input_pop_spike_times = dict()
         tuning_peak_locs = dict()  # {'pop_name': {'gid': float} }
+        input_pop_name_to_pre_array = dict()  # {'pop_name' : 2d array}
+        if 'load_input_spike_times_path' in context():
+            with h5py.File(context.load_input_spike_times_path, 'r') as f:
+                for pop_name in context.input_types:
+                    if pop_name in f:
+                        if len(f[pop_name][:].shape) == 1:
+                            input_pop_name_to_pre_array[pop_name] = f[pop_name][:].reshape(1, -1)
+                        else:
+                            input_pop_name_to_pre_array[pop_name] = f[pop_name][:]
 
         for pop_name in context.input_types:
             if pop_name not in pop_cell_types or pop_cell_types[pop_name] != 'input':
@@ -193,6 +203,17 @@ def init_context():
                     clean_axes(axes)
                     fig.show()
 
+            if 'load_input_spike_times_path' in context():
+                # expected format: root -> pop_name (string) -> 2d array. the elements in the rows must be sorted!
+                # read from rows sequentially. if num rows < pop_size, keep reading again from the top
+                input_pop_spike_times[pop_name] = dict()
+                row = 0
+                num_rows = input_pop_name_to_pre_array[pop_name].shape[0]
+                for gid in range(pop_gid_ranges[pop_name][0], pop_gid_ranges[pop_name][1]):
+                    input_pop_spike_times[pop_name][gid] = input_pop_name_to_pre_array[pop_name][row]
+                    row = row + 1 if row < num_rows - 1 else 0
+
+
         for target_pop_name in context.structured_weight_params:
             if target_pop_name not in tuning_peak_locs:
                 tuning_peak_locs[target_pop_name] = dict()
@@ -211,9 +232,12 @@ def init_context():
         input_pop_t = None
         input_pop_firing_rates = None
         tuning_peak_locs = None
+        input_pop_spike_times = None
     input_pop_t = context.comm.bcast(input_pop_t, root=0)
     input_pop_firing_rates = context.comm.bcast(input_pop_firing_rates, root=0)
+    input_pop_spike_times = context.comm.bcast(input_pop_spike_times, root=0)
     tuning_peak_locs = context.comm.bcast(tuning_peak_locs, root=0)
+
 
     if context.connectivity_type == 'gaussian':
         pop_axon_extents = {'FF': 1., 'E': 1., 'I': 1.}
@@ -457,7 +481,6 @@ def analyze_network_output(network, export=False, export_file_path=None, plot=Fa
 
         if context.interactive:
             context.update(locals())
-
         return result
 
 
@@ -477,9 +500,9 @@ def compute_features(x, export=False):
         pop_syn_proportions=context.pop_syn_proportions, connection_weights_mean=context.connection_weights_mean,
         connection_weights_norm_sigma=context.connection_weights_norm_sigma,
         syn_mech_params=context.syn_mech_params, input_pop_t=context.input_pop_t,
-        input_pop_firing_rates=context.input_pop_firing_rates, tstop=context.tstop, equilibrate=context.equilibrate,
-        dt=context.dt, delay=context.delay, spikes_seed=context.spikes_seed, verbose=context.verbose,
-        debug=context.debug)
+        input_pop_spike_times=context.input_pop_spike_times, input_pop_firing_rates=context.input_pop_firing_rates,
+        tstop=context.tstop, equilibrate=context.equilibrate, dt=context.dt, delay=context.delay,
+        spikes_seed=context.spikes_seed, verbose=context.verbose, debug=context.debug)
 
     if context.connectivity_type == 'uniform':
         context.network.connect_cells(connectivity_type=context.connectivity_type,
