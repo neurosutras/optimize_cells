@@ -214,7 +214,6 @@ def init_context():
                     input_pop_spike_times[pop_name][gid] = input_pop_name_to_pre_array[pop_name][row]
                     row = row + 1 if row < num_rows - 1 else 0
 
-
         for target_pop_name in context.structured_weight_params:
             if target_pop_name not in tuning_peak_locs:
                 tuning_peak_locs[target_pop_name] = dict()
@@ -238,7 +237,6 @@ def init_context():
     input_pop_firing_rates = context.comm.bcast(input_pop_firing_rates, root=0)
     input_pop_spike_times = context.comm.bcast(input_pop_spike_times, root=0)
     tuning_peak_locs = context.comm.bcast(tuning_peak_locs, root=0)
-
 
     if context.connectivity_type == 'gaussian':
         pop_axon_extents = {'FF': 1., 'E': 1., 'I': 1.}
@@ -327,16 +325,20 @@ def analyze_network_output(network, export=False, export_file_path=None, plot=Fa
     connection_weights_dict = network.get_connection_weights()
     connectivity_dict = network.get_connectivity_dict()
 
+    if context.debug:
+        context.update(locals())
+        print('global_rank/local_rank/local_size: %i/%i/%i; type(len) spike_times_dict: %s(%i)' %
+              (context.global_comm.rank, context.comm.rank, context.comm.size, type(spike_times_dict),
+               len(spike_times_dict)))
+        sys.stdout.flush()
+        return dict()
+
     spike_times_dict = context.comm.gather(spike_times_dict, root=0)
     voltage_rec_dict = context.comm.gather(voltage_rec_dict, root=0)
     firing_rates_dict = context.comm.gather(firing_rates_dict, root=0)
     connection_weights_dict = context.comm.gather(connection_weights_dict, root=0)
     voltages_exceed_threshold_list = context.comm.gather(voltages_exceed_threshold, root=0)
     connectivity_dict = context.comm.gather(connectivity_dict, root=0)
-
-    if context.debug:
-        context.update(locals())
-        return dict()
 
     if context.comm.rank == 0:
         spike_times_dict = merge_list_of_dict(spike_times_dict)
