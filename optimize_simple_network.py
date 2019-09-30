@@ -5,6 +5,7 @@ import click
 
 context = Context()
 
+
 @click.command(context_settings=dict(ignore_unknown_options=True, allow_extra_args=True, ))
 @click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
               default='config/optimize_simple_network_gaussian_connections_lognormal_weights_gaussian_inputs_'
@@ -324,7 +325,7 @@ def analyze_network_output(network, export=False, export_file_path=None, plot=Fa
     firing_rates_dict = infer_firing_rates(spike_times_dict, binned_t, alpha=context.baks_alpha, beta=context.baks_beta,
                                            pad_dur=context.baks_pad_dur)
     connection_weights_dict = network.get_connection_weights()
-    connectivity_dict = context.network.get_connectivity_dict()
+    connectivity_dict = network.get_connectivity_dict()
 
     spike_times_dict = context.comm.gather(spike_times_dict, root=0)
     voltage_rec_dict = context.comm.gather(voltage_rec_dict, root=0)
@@ -332,6 +333,10 @@ def analyze_network_output(network, export=False, export_file_path=None, plot=Fa
     connection_weights_dict = context.comm.gather(connection_weights_dict, root=0)
     voltages_exceed_threshold_list = context.comm.gather(voltages_exceed_threshold, root=0)
     connectivity_dict = context.comm.gather(connectivity_dict, root=0)
+
+    if context.debug:
+        context.update(locals())
+        return dict()
 
     if context.comm.rank == 0:
         spike_times_dict = merge_list_of_dict(spike_times_dict)
