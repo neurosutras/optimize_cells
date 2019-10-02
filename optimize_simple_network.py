@@ -325,17 +325,6 @@ def analyze_network_output(network, export=False, export_file_path=None, plot=Fa
     connection_weights_dict = network.get_connection_weights()
     connectivity_dict = network.get_connectivity_dict()
 
-    if context.debug:
-        context.update(locals())
-        print('global_rank/local_rank/local_size: %i/%i/%i; type(len) spike_times_dict: %s(%i)' %
-              (context.global_comm.rank, context.comm.rank, context.comm.size, type(spike_times_dict),
-               len(spike_times_dict)))
-        sys.stdout.flush()
-        time.sleep(1)
-        test = context.comm.gather(len(spike_times_dict), root=0)
-        return dict()
-
-    context.pc.barrier()
     spike_times_dict = context.comm.gather(spike_times_dict, root=0)
     voltage_rec_dict = context.comm.gather(voltage_rec_dict, root=0)
     firing_rates_dict = context.comm.gather(firing_rates_dict, root=0)
