@@ -25,6 +25,8 @@ def config_worker():
         context.debug = False
     if 'limited_branches' not in context():
         context.limited_branches = False
+    if 'verbose' in context():
+        context.verbose = int(context.verbose)
     if not context_has_sim_env(context):
         build_sim_env(context, **context.kwargs)
 
@@ -79,50 +81,54 @@ def main(cli, config_file_path, output_dir, export, export_file_path, label, ver
                                              from_mech_attrs=True, from_target_attrs=True, show=True)
 
     if not debug:
-        features = dict()
-
-        # Stage 0:
-        args = context.interface.execute(get_args_dynamic_unitary_EPSP_amp, context.x0_array, features)
-        group_size = len(args[0])
-        sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
-                    [[context.plot] * group_size]
-        primitives = context.interface.map(compute_features_unitary_EPSP_amp, *sequences)
-        this_features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
-        features.update(this_features)
-        context.update(locals())
-        context.interface.apply(export_unitary_EPSP_traces)
-
-        # Stage 1:
-        args = context.interface.execute(get_args_dynamic_compound_EPSP_amp, context.x0_array, features)
-        group_size = len(args[0])
-        sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
-                    [[context.plot] * group_size]
-        primitives = context.interface.map(compute_features_compound_EPSP_amp, *sequences)
-        this_features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
-        features.update(this_features)
-        context.update(locals())
-        context.interface.apply(export_compound_EPSP_traces)
-
-        features, objectives = context.interface.execute(get_objectives_synaptic_integration, features, context.export)
-        if export:
-            collect_and_merge_temp_output(context.interface, context.export_file_path, verbose=context.disp)
-        sys.stdout.flush()
-        time.sleep(1.)
-        context.interface.apply(shutdown_worker)
-        print('params:')
-        pprint.pprint(context.x0_dict)
-        print('features:')
-        pprint.pprint(features)
-        print('objectives:')
-        pprint.pprint(objectives)
-        sys.stdout.flush()
-        time.sleep(1.)
-        if context.plot:
-            context.interface.apply(plt.show)
-    context.update(locals())
+        run_tests()
 
     if not interactive:
         context.interface.stop()
+
+
+def run_tests():
+    features = dict()
+
+    # Stage 0:
+    args = context.interface.execute(get_args_dynamic_unitary_EPSP_amp, context.x0_array, features)
+    group_size = len(args[0])
+    sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
+                [[context.plot] * group_size]
+    primitives = context.interface.map(compute_features_unitary_EPSP_amp, *sequences)
+    this_features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
+    features.update(this_features)
+    context.update(locals())
+    context.interface.apply(export_unitary_EPSP_traces)
+
+    # Stage 1:
+    args = context.interface.execute(get_args_dynamic_compound_EPSP_amp, context.x0_array, features)
+    group_size = len(args[0])
+    sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
+                [[context.plot] * group_size]
+    primitives = context.interface.map(compute_features_compound_EPSP_amp, *sequences)
+    this_features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
+    features.update(this_features)
+    context.update(locals())
+    context.interface.apply(export_compound_EPSP_traces)
+
+    features, objectives = context.interface.execute(get_objectives_synaptic_integration, features, context.export)
+    if context.export:
+        collect_and_merge_temp_output(context.interface, context.export_file_path, verbose=context.disp)
+    sys.stdout.flush()
+    time.sleep(1.)
+    context.interface.apply(shutdown_worker)
+    print('params:')
+    pprint.pprint(context.x0_dict)
+    print('features:')
+    pprint.pprint(features)
+    print('objectives:')
+    pprint.pprint(objectives)
+    sys.stdout.flush()
+    time.sleep(1.)
+    if context.plot:
+        context.interface.apply(plt.show)
+    context.update(locals())
 
 
 def context_has_sim_env(context):
@@ -716,8 +722,6 @@ def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, mode
         context.sim.plot()
 
     if export:
-        print('debug: pid: %i; temp_output_path: %s' % (os.getpid(), context.temp_output_path))
-        sys.stdout.flush()
         context.sim.export_to_file(context.temp_output_path)
 
     sim.restore_state()

@@ -54,37 +54,43 @@ def main(cli, config_file_path, output_dir, export, export_file_path, label, ver
                                 debug=debug, **kwargs)
 
     if not debug:
-        args = context.interface.execute(get_args_static_leak)
-        group_size = len(args[0])
-        sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
-                    [[context.plot] * group_size]
-        primitives = context.interface.map(compute_features_leak, *sequences)
-        features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
-        features, objectives = context.interface.execute(get_objectives_leak, features, context.export)
-        if export:
-            collect_and_merge_temp_output(context.interface, context.export_file_path, verbose=context.disp)
-        sys.stdout.flush()
-        time.sleep(1.)
-        print('params:')
-        pprint.pprint(context.x0_dict)
-        print('features:')
-        pprint.pprint(features)
-        print('objectives:')
-        pprint.pprint(objectives)
-        sys.stdout.flush()
-        time.sleep(1.)
-        if context.plot:
-            context.interface.apply(plt.show)
-    context.update(locals())
+        run_tests()
 
     if not interactive:
         context.interface.stop()
+
+
+def run_tests():
+    args = context.interface.execute(get_args_static_leak)
+    group_size = len(args[0])
+    sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
+                [[context.plot] * group_size]
+    primitives = context.interface.map(compute_features_leak, *sequences)
+    features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
+    features, objectives = context.interface.execute(get_objectives_leak, features, context.export)
+    if context.export:
+        collect_and_merge_temp_output(context.interface, context.export_file_path, verbose=context.disp)
+    sys.stdout.flush()
+    time.sleep(1.)
+    print('params:')
+    pprint.pprint(context.x0_dict)
+    print('features:')
+    pprint.pprint(features)
+    print('objectives:')
+    pprint.pprint(objectives)
+    sys.stdout.flush()
+    time.sleep(1.)
+    if context.plot:
+        context.interface.apply(plt.show)
+    context.update(locals())
 
 
 def config_worker():
     """
 
     """
+    if 'verbose' in context():
+        context.verbose = int(context.verbose)
     if not context_has_sim_env(context):
         build_sim_env(context, **context.kwargs)
 

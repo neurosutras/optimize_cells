@@ -60,73 +60,79 @@ def main(cli, config_file_path, output_dir, export, export_file_path, label, ver
         add_diagnostic_recordings()
 
     if not debug:
-        features = dict()
-        # Stage 0: Get shape of single spike at rheobase in soma and axon
-        # Get value of holding current required to maintain target baseline membrane potential
-        args = context.interface.execute(get_args_dynamic_i_holding, context.x0_array, features)
-        group_size = len(args[0])
-        sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
-                    [[context.plot] * group_size]
-        primitives = context.interface.map(compute_features_spike_shape, *sequences)
-        features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
-        context.update(locals())
-
-        # Stage 1: Run simulations with a range of amplitudes of step current injections to the soma
-        args = context.interface.execute(get_args_dynamic_fI, context.x0_array, features)
-        group_size = len(args[0])
-        sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
-                    [[context.plot] * group_size]
-        primitives = context.interface.map(compute_features_fI, *sequences)
-        this_features = context.interface.execute(filter_features_fI, primitives, features, context.export)
-        features.update(this_features)
-        context.update(locals())
-
-        # Stage 2: Vary the amplitude of step current injection to the soma to compute inter-spike-intervals
-        # for a target number of spikes
-        args = context.interface.execute(get_args_dynamic_spike_adaptation, context.x0_array, features)
-        group_size = len(args[0])
-        sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
-                    [[context.plot] * group_size]
-        primitives = context.interface.map(compute_features_spike_adaptation, *sequences)
-        this_features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
-        features.update(this_features)
-        context.update(locals())
-
-        # Stage 3: Run simulations with a range of amplitudes of step current injections to the dendrite
-        args = context.interface.execute(get_args_dynamic_dend_spike, context.x0_array, features)
-        group_size = len(args[0])
-        sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
-                    [[context.plot] * group_size]
-        primitives = context.interface.map(compute_features_dend_spike, *sequences)
-        this_features = context.interface.execute(filter_features_dend_spike, primitives, features, context.export)
-        features.update(this_features)
-        context.update(locals())
-
-        features, objectives = context.interface.execute(get_objectives_spiking, features, context.export)
-        if export:
-            collect_and_merge_temp_output(context.interface, context.export_file_path, verbose=context.disp)
-        sys.stdout.flush()
-        time.sleep(1.)
-        print('params:')
-        pprint.pprint(context.x0_dict)
-        print('features:')
-        pprint.pprint(features)
-        print('objectives:')
-        pprint.pprint(objectives)
-        sys.stdout.flush()
-        time.sleep(1.)
-        if context.plot:
-            context.interface.apply(plt.show)
-    context.update(locals())
+        run_tests()
 
     if not interactive:
         context.interface.stop()
+
+
+def run_tests():
+    features = dict()
+    # Stage 0: Get shape of single spike at rheobase in soma and axon
+    # Get value of holding current required to maintain target baseline membrane potential
+    args = context.interface.execute(get_args_dynamic_i_holding, context.x0_array, features)
+    group_size = len(args[0])
+    sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
+                [[context.plot] * group_size]
+    primitives = context.interface.map(compute_features_spike_shape, *sequences)
+    features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
+    context.update(locals())
+
+    # Stage 1: Run simulations with a range of amplitudes of step current injections to the soma
+    args = context.interface.execute(get_args_dynamic_fI, context.x0_array, features)
+    group_size = len(args[0])
+    sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
+                [[context.plot] * group_size]
+    primitives = context.interface.map(compute_features_fI, *sequences)
+    this_features = context.interface.execute(filter_features_fI, primitives, features, context.export)
+    features.update(this_features)
+    context.update(locals())
+
+    # Stage 2: Vary the amplitude of step current injection to the soma to compute inter-spike-intervals
+    # for a target number of spikes
+    args = context.interface.execute(get_args_dynamic_spike_adaptation, context.x0_array, features)
+    group_size = len(args[0])
+    sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
+                [[context.plot] * group_size]
+    primitives = context.interface.map(compute_features_spike_adaptation, *sequences)
+    this_features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
+    features.update(this_features)
+    context.update(locals())
+
+    # Stage 3: Run simulations with a range of amplitudes of step current injections to the dendrite
+    args = context.interface.execute(get_args_dynamic_dend_spike, context.x0_array, features)
+    group_size = len(args[0])
+    sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
+                [[context.plot] * group_size]
+    primitives = context.interface.map(compute_features_dend_spike, *sequences)
+    this_features = context.interface.execute(filter_features_dend_spike, primitives, features, context.export)
+    features.update(this_features)
+    context.update(locals())
+
+    features, objectives = context.interface.execute(get_objectives_spiking, features, context.export)
+    if context.export:
+        collect_and_merge_temp_output(context.interface, context.export_file_path, verbose=context.disp)
+    sys.stdout.flush()
+    time.sleep(1.)
+    print('params:')
+    pprint.pprint(context.x0_dict)
+    print('features:')
+    pprint.pprint(features)
+    print('objectives:')
+    pprint.pprint(objectives)
+    sys.stdout.flush()
+    time.sleep(1.)
+    if context.plot:
+        context.interface.apply(plt.show)
+    context.update(locals())
 
 
 def config_worker():
     """
 
     """
+    if 'verbose' in context():
+        context.verbose = int(context.verbose)
     if not context_has_sim_env(context):
         build_sim_env(context, **context.kwargs)
 

@@ -741,21 +741,25 @@ def plot_sim_from_file(file_path, group_name='sim_output'):
         for trial in viewvalues(f[group_name]):
             fig, axes = plt.subplots()
             for name, rec in viewitems(trial['recs']):
-                description = str(rec.attrs['description'])
-                node_name = '%s%i' % (rec.attrs['type'], rec.attrs['index'])
+                description = get_h5py_attr(rec.attrs, 'description')
+                sec_type = get_h5py_attr(rec.attrs, 'type')
+                node_name = '%s%i' % (sec_type, rec.attrs['index'])
                 label = '%s: %s(%.2f) %s' % (name, node_name, rec.attrs['loc'], description)
                 axes.plot(trial['time'], rec, label=label)
                 axes.set_xlabel('Time (ms)')
-                axes.set_ylabel('%s (%s)' % (rec.attrs['ylabel'], rec.attrs['units']))
+                ylabel = get_h5py_attr(rec.attrs, 'ylabel')
+                units = get_h5py_attr(rec.attrs, 'units')
+                axes.set_ylabel('%s (%s)' % (ylabel, units))
             axes.legend(loc='best', frameon=False, framealpha=0.5)
             title = None
             if 'title' in trial.attrs:
-                title = trial.attrs['title']
+                title = get_h5py_attr(trial.attrs, 'title')
             if 'description' in trial.attrs:
+                description = get_h5py_attr(trial.attrs, 'description')
                 if title is not None:
-                    title = title + '; ' + trial.attrs['description']
+                    title = title + '; ' + description
                 else:
-                    title = trial.attrs['description']
+                    title = description
             if title is not None:
                 axes.set_title(title, fontsize=mpl.rcParams['font.size'])
             clean_axes(axes)
