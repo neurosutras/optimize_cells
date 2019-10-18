@@ -6,6 +6,7 @@ import scipy.stats as stats
 import matplotlib.gridspec as gridspec
 from matplotlib import cm
 from dentate.synapses import get_syn_mech_param, get_syn_filter_dict
+from datetime import date
 
 mpl.rcParams['svg.fonttype'] = 'none'
 mpl.rcParams['font.size'] = 12.
@@ -622,20 +623,21 @@ def plot_exported_DG_MC_spiking_features(file_path):
     mpl.rcParams['font.size'] = orig_fontsize
 
 
-def plot_exported_DG_GC_synaptic_integration_features(file_path):
+def plot_exported_DG_GC_synaptic_integration_features(file_path, saveplot=True, save_format='svg'):
+#def plot_exported_DG_GC_synaptic_integration_features(file_path):
     """
 
     :param file_path: str (path)
     """
     orig_fontsize = mpl.rcParams['font.size']
     if not os.path.isfile(file_path):
-        raise IOError('plot_exported_DG_GC_synaptic_integration_features: invalid file path: %s' % file_path)
+        raise IOError('plot_exported_DG_GC_synaptic_integration_features: invalid file path: {!s}'.format(file_path))
     from matplotlib import cm
     with h5py.File(file_path, 'r') as f:
         group_name = 'mean_unitary_EPSP_traces'
         if group_name not in f:
-            raise AttributeError('plot_exported_DG_GC_synaptic_integration_features: provided file path: %s does not '
-                                 'contain a required group: %s' % (file_path, group_name))
+            raise AttributeError('plot_exported_DG_GC_synaptic_integration_features: provided file path: {!s} does not '
+                                 'contain a required group: {!s}'.format(file_path, group_name))
         t = f[group_name]['time'][:]
         data_group = f[group_name]['data']
 
@@ -665,7 +667,10 @@ def plot_exported_DG_GC_synaptic_integration_features(file_path):
             fig.suptitle('Branch: %s' % syn_group, fontsize=mpl.rcParams['font.size'])
             fig.tight_layout()
             fig.subplots_adjust(top=0.875)
-            fig.show()
+            if saveplot:
+                fig.savefig('plots/{!s}_{!s}_{:03d}.{!s}'.format(group_name, date.today().strftime("%Y%m%d"), plt.gcf().number, save_format), transparent=True)
+            else:
+                fig.show()
 
         group_name = 'compound_EPSP_summary'
         if group_name not in f:
@@ -693,7 +698,10 @@ def plot_exported_DG_GC_synaptic_integration_features(file_path):
                 clean_axes(axes)
                 fig.tight_layout()
                 fig.subplots_adjust(top=0.85)
-                fig.show()
+                if saveplot:
+                    fig.savefig('plots/{!s}_{!s}_{:03d}.{!s}'.format(group_name, date.today().strftime("%Y%m%d"), plt.gcf().number, save_format), transparent=True)
+                else:
+                    fig.show()
 
         data_group = group['soma_compound_EPSP_amp']
         branch_names = list(data_group.keys())
@@ -721,11 +729,17 @@ def plot_exported_DG_GC_synaptic_integration_features(file_path):
         axes[0].legend(loc='best', frameon=False, framealpha=0.5)
         clean_axes(axes)
         fig.tight_layout()
-        fig.show()
+        if saveplot:
+            title='soma_compound_EPSP_amp'
+            fig.savefig('plots/{!s}_{!s}_{:03d}.{!s}'.format(title, date.today().strftime("%Y%m%d"), plt.gcf().number, save_format), transparent=True)
+        else:
+            fig.show()    
+
     mpl.rcParams['font.size'] = orig_fontsize
 
 
-def plot_sim_from_file(file_path, group_name='sim_output'):
+def plot_sim_from_file(file_path, group_name='sim_output', saveplot=True, save_format='svg'):
+# def plot_sim_from_file(file_path, group_name='sim_output'):
     """
 
     :param file_path: str (path)
@@ -736,8 +750,8 @@ def plot_sim_from_file(file_path, group_name='sim_output'):
         raise IOError('plot_sim_from_file: invalid file path: %s' % file_path)
     with h5py.File(file_path, 'r') as f:
         if group_name not in f:
-            raise AttributeError('plot_sim_from_file: provided file path: %s does not contain required top-level group '
-                                 'with name: %s' % (file_path, group_name))
+            raise AttributeError('plot_sim_from_file: provided file path: {!s} does not contain required top-level group '
+                                 'with name: {!s}'.format(file_path, group_name))
         for trial in viewvalues(f[group_name]):
             fig, axes = plt.subplots()
             for name, rec in viewitems(trial['recs']):
@@ -764,7 +778,12 @@ def plot_sim_from_file(file_path, group_name='sim_output'):
                 axes.set_title(title, fontsize=mpl.rcParams['font.size'])
             clean_axes(axes)
             fig.tight_layout()
-            fig.show()
+            print(description)
+            print(title)
+            if saveplot:
+                fig.savefig('plots/{!s}_{!s}_{:03d}.{!s}'.format('popo', date.today().strftime("%Y%m%d"), plt.gcf().number, save_format), transparent=True)
+            else:
+                fig.show()
     mpl.rcParams['font.size'] = orig_fontsize
 
 
