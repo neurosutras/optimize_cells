@@ -357,11 +357,12 @@ class SimpleNetwork(object):
                                                   syn_mech_param_rules=self.syn_mech_param_rules,
                                                   weight=this_weight)
 
-    def structure_connection_weights(self, structured_weight_params, tuning_peak_locs):
+    def structure_connection_weights(self, structured_weight_params, tuning_peak_locs, wrap_around=True):
         """
 
         :param structured_weight_params: nested dict
         :param tuning_peak_locs: nested dict: {'pop_name': {'gid': float} }
+        :param wrap_around: bool
         """
         duration = self.tstop - self.equilibrate
         for target_pop_name in (target_pop_name for target_pop_name in structured_weight_params
@@ -389,7 +390,12 @@ class SimpleNetwork(object):
                         this_syn = target_cell.syns[syn_type][source_pop_name]
                         this_target_loc = tuning_peak_locs[target_pop_name][target_gid]
                         for source_gid in self.ncdict[target_pop_name][target_gid][source_pop_name]:
-                            this_delta_loc = tuning_peak_locs[source_pop_name][source_gid] - this_target_loc
+                            this_delta_loc = abs(tuning_peak_locs[source_pop_name][source_gid] - this_target_loc)
+                            if wrap_around:
+                                if this_delta_loc > duration / 2.:
+                                    this_delta_loc -=- duration
+                                elif this_delta_loc < -duration / 2.:
+                                    this_delta_loc += duration
                             this_delta_weight = this_tuning_f(this_delta_loc)
                             for this_nc in self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid]:
                                 initial_weight = get_connection_param(syn_type, 'weight', syn=this_syn, nc=this_nc,
@@ -714,17 +720,33 @@ def check_voltages_exceed_threshold(voltage_rec_dict, pop_cell_types):
     return False
 
 
-def get_gaussian_rate(t, peak_loc, sigma, min_rate, max_rate):
+def get_gaussian_rate(duration, peak_loc, sigma, min_rate, max_rate, dt, wrap_around=True, equilibrate=None):
     """
 
-    :param t: array
+    :param duration: float
     :param peak_loc: float
     :param sigma: float
     :param min_rate: float
     :param max_rate: float
+    :param dt: float
+    :param wrap_around: bool
+    :param equilibrate: float
     :return: array
     """
-    rate = (max_rate - min_rate) * np.exp(-((t - peak_loc) / sigma) ** 2.) + min_rate
+    t = np.arange(0., duration + dt / 2., dt)
+    if wrap_around:
+        extended_t = np.concatenate([t - duration, t, t + duration])
+        rate = (max_rate - min_rate) * np.exp(-((extended_t - peak_loc) / sigma) ** 2.) + min_rate
+        before = np.array(rate[:len(t)])
+        after = np.array(rate[2 * len(t):])
+        within = np.array(rate[len(t):2 * len(t)])
+        rate = within[:len(t)] + before[:len(t)] + after[:len(t)]
+        if equilibrate is not None:
+            equilibrate_len = int(equilibrate / dt)
+            if equilibrate_len > 0:
+                rate = np.append(rate[-equilibrate_len:], rate)
+    else:
+        rate = (max_rate - min_rate) * np.exp(-((t - peak_loc) / sigma) ** 2.) + min_rate
     return rate
 
 
@@ -743,7 +765,7 @@ def get_pop_gid_ranges(pop_sizes):
     return pop_gid_ranges
 
 
-def infer_firing_rates(spike_trains_dict, t, alpha, beta, pad_dur):
+def infer_firing_rates(spike_trains_dict, t, alpha, beta, pad_dur, wrap_around=False):
     """
 
     :param spike_trains_dict: nested dict: {pop_name: {gid: array} }
@@ -751,13 +773,14 @@ def infer_firing_rates(spike_trains_dict, t, alpha, beta, pad_dur):
     :param alpha: float
     :param beta: float
     :param pad_dur: float
+    :param wrap_around: bool
     :return: dict of array
     """
     inferred_firing_rates = defaultdict(dict)
     for pop_name in spike_trains_dict:
         for gid, spike_train in viewitems(spike_trains_dict[pop_name]):
             if len(spike_train) > 0:
-                smoothed = padded_baks(spike_train, t, alpha=alpha, beta=beta, pad_dur=pad_dur)
+                smoothed = padded_baks(spike_train, t, alpha=alpha, beta=beta, pad_dur=pad_dur, wrap_around=wrap_around)
             else:
                 smoothed = np.zeros_like(t)
             inferred_firing_rates[pop_name][gid] = smoothed
@@ -771,7 +794,7 @@ def find_nearest(arr, tt):
     return np.searchsorted(tt, arr)
 
 
-def padded_baks(spike_times, t, alpha, beta, pad_dur=500.):
+def padded_baks(spike_times, t, alpha, beta, pad_dur=500., wrap_around=False):
     """
     Expects spike times in ms. Uses mirroring to pad the edges to avoid edge artifacts. Converts ms to sec for baks
     filtering, then returns the properly truncated estimated firing rate.
@@ -780,24 +803,37 @@ def padded_baks(spike_times, t, alpha, beta, pad_dur=500.):
     :param alpha: float
     :param beta: float
     :param pad_dur: float (ms)
+    :param wrap_around: bool
     :return: array
     """
     dt = t[1] - t[0]
     pad_dur = min(pad_dur, len(t)*dt)
     pad_len = int(pad_dur/dt)
-    padded_spike_times = np.array(spike_times)
-    r_pad_indexes = np.where((spike_times > t[0]) & (spike_times <= t[pad_len]))[0]
-    if len(r_pad_indexes) > 0:
-        r_pad_spike_times = np.add(t[0], np.subtract(t[0], spike_times[r_pad_indexes])[::-1])
-        padded_spike_times = np.append(r_pad_spike_times, padded_spike_times)
-    l_pad_indexes = np.where((spike_times >= t[-pad_len]) & (spike_times < t[-1]))[0]
-    if len(l_pad_indexes) > 0:
-        l_pad_spike_times = np.add(t[-1]+dt, np.subtract(t[-1]+dt, spike_times[l_pad_indexes])[::-1])
-        padded_spike_times = np.append(padded_spike_times, l_pad_spike_times)
-    padded_t = np.concatenate((np.arange(-pad_dur, 0., dt), t, np.arange(t[-1] + dt, t[-1] + pad_dur + dt / 2., dt)))
-    padded_rate, h = baks(padded_spike_times/1000., padded_t/1000., alpha, beta)
-
-    return padded_rate[pad_len:-pad_len]
+    if pad_len > 0:
+        padded_spike_times = np.array(spike_times)
+        r_pad_indexes = np.where((spike_times > t[0]) & (spike_times <= t[pad_len]))[0]
+        l_pad_indexes = np.where((spike_times >= t[-pad_len]) & (spike_times < t[-1]))[0]
+        if wrap_around:
+            if len(r_pad_indexes) > 0:
+                r_pad_spike_times = np.add(t[-1]+dt, np.subtract(spike_times[r_pad_indexes], t[0]))
+                padded_spike_times = np.append(padded_spike_times, r_pad_spike_times)
+            if len(l_pad_indexes) > 0:
+                l_pad_spike_times = np.add(t[0], np.subtract(spike_times[l_pad_indexes], t[-1]+dt))
+                padded_spike_times = np.append(l_pad_spike_times, padded_spike_times)
+        else:
+            if len(r_pad_indexes) > 0:
+                r_pad_spike_times = np.add(t[0], np.subtract(t[0], spike_times[r_pad_indexes])[::-1])
+                padded_spike_times = np.append(r_pad_spike_times, padded_spike_times)
+            if len(l_pad_indexes) > 0:
+                l_pad_spike_times = np.add(t[-1]+dt, np.subtract(t[-1]+dt, spike_times[l_pad_indexes])[::-1])
+                padded_spike_times = np.append(padded_spike_times, l_pad_spike_times)
+        padded_t = \
+            np.concatenate((np.arange(-pad_dur, 0., dt), t, np.arange(t[-1] + dt, t[-1] + pad_dur + dt / 2., dt)))
+        padded_rate, h = baks(padded_spike_times/1000., padded_t/1000., alpha, beta)
+        rate = padded_rate[pad_len:-pad_len]
+    else:
+        rate, h = baks(spike_times/1000., t/1000., alpha, beta)
+    return rate
 
 
 def get_binned_spike_count(spike_times, t):

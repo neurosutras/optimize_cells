@@ -18,8 +18,10 @@ context = Context()
 @click.option("--verbose", type=int, default=2)
 @click.option("--plot", is_flag=True)
 @click.option("--debug", is_flag=True)
+@click.option("--simulate", type=bool, default=True)
 @click.pass_context
-def main(cli, config_file_path, export, output_dir, export_file_path, label, interactive, verbose, plot, debug):
+def main(cli, config_file_path, export, output_dir, export_file_path, label, interactive, verbose, plot, debug,
+         simulate):
     """
 
     :param cli: contains unrecognized args as list of str
@@ -32,6 +34,7 @@ def main(cli, config_file_path, export, output_dir, export_file_path, label, int
     :param verbose: int
     :param plot: bool
     :param debug: bool
+    :param simulate: bool
     """
     # requires a global variable context: :class:'Context'
     context.update(locals())
@@ -48,7 +51,17 @@ def main(cli, config_file_path, export, output_dir, export_file_path, label, int
                                 export=export, export_file_path=export_file_path, label=label,
                                 disp=context.disp, interface=context.interface, verbose=verbose, plot=plot,
                                 debug=debug, **kwargs)
+    if simulate:
+        run_tests()
 
+    if context.plot:
+        context.interface.apply(plt.show)
+
+    if not interactive:
+        context.interface.stop()
+
+
+def run_tests():
     features = context.interface.execute(compute_features, context.x0_array, context.export)
     sys.stdout.flush()
     time.sleep(1.)
@@ -66,12 +79,7 @@ def main(cli, config_file_path, export, output_dir, export_file_path, label, int
     pprint.pprint(objectives)
     sys.stdout.flush()
     time.sleep(1.)
-    if context.plot:
-        context.interface.apply(plt.show)
     context.update(locals())
-
-    if not interactive:
-        context.interface.stop()
 
 
 def config_worker():
@@ -183,14 +191,15 @@ def init_context():
                 this_tuning_width = duration * this_norm_tuning_width
                 this_sigma = this_tuning_width / 3. / np.sqrt(2.)
                 peak_locs_array = \
-                    np.linspace(-0.75 * this_tuning_width, tstop + 0.75 * this_tuning_width, pop_sizes[pop_name])
+                    np.linspace(0., duration, pop_sizes[pop_name], endpoint=False)
                 local_np_random.shuffle(peak_locs_array)
                 for peak_loc, gid in zip(peak_locs_array, range(pop_gid_ranges[pop_name][0],
                                                                 pop_gid_ranges[pop_name][1])):
                     tuning_peak_locs[pop_name][gid] = peak_loc
                     input_pop_firing_rates[pop_name][gid] = \
-                        get_gaussian_rate(t=this_stim_t, peak_loc=peak_loc, sigma=this_sigma, min_rate=this_min_rate,
-                                          max_rate=this_max_rate)
+                        get_gaussian_rate(duration=duration, peak_loc=peak_loc, sigma=this_sigma,
+                                          min_rate=this_min_rate, max_rate=this_max_rate, dt=dt, wrap_around=True,
+                                          equilibrate=equilibrate)
 
                 if context.debug and context.plot:
                     fig, axes = plt.subplots()
@@ -222,7 +231,7 @@ def init_context():
             this_tuning_width = duration * this_norm_tuning_width
             this_sigma = this_tuning_width / 3. / np.sqrt(2.)
             peak_locs_array = \
-                np.linspace(-0.75 * this_tuning_width, tstop + 0.75 * this_tuning_width, pop_sizes[target_pop_name])
+                np.linspace(0., duration, pop_sizes[target_pop_name], endpoint=False)
             local_np_random.shuffle(peak_locs_array)
             for peak_loc, target_gid in zip(peak_locs_array,
                                             range(pop_gid_ranges[target_pop_name][0],
@@ -321,7 +330,7 @@ def analyze_network_output(network, export=False, export_file_path=None, plot=Fa
     voltage_rec_dict = network.get_voltage_rec_dict()
     voltages_exceed_threshold = check_voltages_exceed_threshold(voltage_rec_dict, context.pop_cell_types)
     firing_rates_dict = infer_firing_rates(spike_times_dict, binned_t, alpha=context.baks_alpha, beta=context.baks_beta,
-                                           pad_dur=context.baks_pad_dur)
+                                           pad_dur=context.baks_pad_dur, wrap_around=True)
     connection_weights_dict = network.get_connection_weights()
     connectivity_dict = network.get_connectivity_dict()
 
