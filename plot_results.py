@@ -2,6 +2,7 @@ __author__ = 'milsteina'
 from cell_utils import *
 import matplotlib as mpl
 import matplotlib.lines as mlines
+import numpy as np
 import scipy.stats as stats
 import matplotlib.gridspec as gridspec
 from matplotlib import cm
@@ -623,12 +624,13 @@ def plot_exported_DG_MC_spiking_features(file_path):
     mpl.rcParams['font.size'] = orig_fontsize
 
 
-def plot_exported_DG_GC_synaptic_integration_features(file_path, saveplot=True, save_format='svg'):
-#def plot_exported_DG_GC_synaptic_integration_features(file_path):
+def plot_exported_DG_GC_synaptic_integration_features(file_path, **kw):
     """
 
     :param file_path: str (path)
     """
+    figdict = kw['figdict'] if 'figdict' in kw.keys() else {}
+
     orig_fontsize = mpl.rcParams['font.size']
     if not os.path.isfile(file_path):
         raise IOError('plot_exported_DG_GC_synaptic_integration_features: invalid file path: {!s}'.format(file_path))
@@ -667,15 +669,13 @@ def plot_exported_DG_GC_synaptic_integration_features(file_path, saveplot=True, 
             fig.suptitle('Branch: %s' % syn_group, fontsize=mpl.rcParams['font.size'])
             fig.tight_layout()
             fig.subplots_adjust(top=0.875)
-            if saveplot:
-                fig.savefig('plots/{!s}_{!s}_{:03d}.{!s}'.format(group_name, date.today().strftime("%Y%m%d"), plt.gcf().number, save_format), transparent=True)
-            else:
-                fig.show()
+            filename = '{!s}_{!s}_{:03d}'.format(group_name, date.today().strftime("%Y%m%d"), plt.gcf().number)
+            fig_func(fig, filename, **figdict)
 
         group_name = 'compound_EPSP_summary'
         if group_name not in f:
-            raise AttributeError('plot_exported_DG_GC_synaptic_integration_features: provided file path: %s does not '
-                                 'contain a required group: %s' % (file_path, group_name))
+            raise AttributeError('plot_exported_DG_GC_synaptic_integration_features: provided file path: {!s} does not '
+                                 'contain a required group: {!s}'.format(file_path, group_name))
         group = f[group_name]
         t = group['time'][:]
         syn_conditions = list(next(iter(viewvalues(group['traces']))).keys())
@@ -698,10 +698,9 @@ def plot_exported_DG_GC_synaptic_integration_features(file_path, saveplot=True, 
                 clean_axes(axes)
                 fig.tight_layout()
                 fig.subplots_adjust(top=0.85)
-                if saveplot:
-                    fig.savefig('plots/{!s}_{!s}_{:03d}.{!s}'.format(group_name, date.today().strftime("%Y%m%d"), plt.gcf().number, save_format), transparent=True)
-                else:
-                    fig.show()
+                filename = '{!s}_{!s}_{:03d}'.format(group_name, date.today().strftime("%Y%m%d"), plt.gcf().number)
+                fig_func(fig, filename, **figdict)
+
 
         data_group = group['soma_compound_EPSP_amp']
         branch_names = list(data_group.keys())
@@ -729,22 +728,19 @@ def plot_exported_DG_GC_synaptic_integration_features(file_path, saveplot=True, 
         axes[0].legend(loc='best', frameon=False, framealpha=0.5)
         clean_axes(axes)
         fig.tight_layout()
-        if saveplot:
-            title='soma_compound_EPSP_amp'
-            fig.savefig('plots/{!s}_{!s}_{:03d}.{!s}'.format(title, date.today().strftime("%Y%m%d"), plt.gcf().number, save_format), transparent=True)
-        else:
-            fig.show()    
+        filename = '{!s}_{!s}_{:03d}'.format('soma_compound_EPSP_amp', date.today().strftime("%Y%m%d"), plt.gcf().number)
+        fig_func(fig, filename, **figdict)
 
     mpl.rcParams['font.size'] = orig_fontsize
 
 
-def plot_sim_from_file(file_path, group_name='sim_output', saveplot=True, save_format='svg'):
-# def plot_sim_from_file(file_path, group_name='sim_output'):
+def plot_sim_from_file(file_path, group_name='sim_output', **kw):
     """
 
     :param file_path: str (path)
     :param group_name: str
-    """
+    """ 
+    figdict = kw['figdict'] if 'figdict' in kw.keys() else {}
     orig_fontsize = mpl.rcParams['font.size']
     if not os.path.isfile(file_path):
         raise IOError('plot_sim_from_file: invalid file path: %s' % file_path)
@@ -778,12 +774,11 @@ def plot_sim_from_file(file_path, group_name='sim_output', saveplot=True, save_f
                 axes.set_title(title, fontsize=mpl.rcParams['font.size'])
             clean_axes(axes)
             fig.tight_layout()
-            print(description)
-            print(title)
-            if saveplot:
-                fig.savefig('plots/{!s}_{!s}_{:03d}.{!s}'.format('popo', date.today().strftime("%Y%m%d"), plt.gcf().number, save_format), transparent=True)
-            else:
-                fig.show()
+            s_tit = title.split(';')
+            ss_tit = s_tit[1].replace(',', '').replace(':','').split(' ')
+            filnam_tit = '{!s}_{!s}_{!s}_{!s}_{:03d}_{!s}_{:04d}'.format(s_tit[0], ss_tit[2], ss_tit[4], ss_tit[5], int(ss_tit[6]), ss_tit[8], int(ss_tit[9]))
+            filename = '{!s}_{!s}_{:03d}'.format(filnam_tit, date.today().strftime("%Y%m%d"), plt.gcf().number)
+            fig_func(fig, filename, **figdict)
     mpl.rcParams['font.size'] = orig_fontsize
 
 
@@ -839,3 +834,28 @@ def plot_NMDAR_g_V(Kd=9.98, gamma=0.101, mg=1., vshift=0., label='original', axe
         plt.show()
     else:
         return axes
+
+def fig_func(fig, filename, **kw):
+    """
+
+    """
+    figdict = {
+        'figplot': True,
+        'figdir' : 'plots',
+        'figformat': ['svg'],
+        'figaddformat': [],
+        'figshow': True,
+    }
+    figdict.update(kw) 
+    if figdict['figshow']:
+        plt.show()
+
+    if figdict['figplot']:
+        if filename: 
+            figformats = np.union1d(figdict['figformat'], figdict['figaddformat'])
+            for ext in figformats:
+                plt.savefig('{!s}/{!s}.{!s}'.format(figdict['figdir'], filename, ext), format=ext, transparent=True)
+        else:
+            print('Invalid filename')
+
+
