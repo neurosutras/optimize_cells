@@ -335,6 +335,13 @@ def update_context(x, local_context=None):
                                                        (1. - x_dict['I_E_FF_syn_proportion'])
     local_context.pop_syn_proportions['I']['I']['I'] = 1. - x_dict['I_E_syn_proportion']
 
+    if local_context.structured_weights:
+        for target_pop_name in local_context.structured_weight_params:
+            peak_delta_weight_param_name = '%s_peak_delta_weight' % target_pop_name
+            if peak_delta_weight_param_name in x_dict:
+                local_context.structured_weight_params[target_pop_name]['peak_delta_weight'] = \
+                    x_dict[peak_delta_weight_param_name]
+
 
 def analyze_network_output(network, export=False, export_file_path=None, plot=False):
     """

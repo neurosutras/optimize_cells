@@ -59,6 +59,9 @@ bounds:
   I_E_FF_syn_proportion: !!python/tuple
     - 0.01
     - 0.99
+  E_peak_delta_weight: !!python/tuple
+    - 1.5
+    - 4.0
 rel_bounds:
 - - E_FF_mean_weight
   - '<'
@@ -135,6 +138,32 @@ kwargs:
       tuning_type: additive
       peak_delta_weight: 1.5
       norm_tuning_width: 0.5
+  pop_cell_types:
+    FF: input
+    E: IB
+    I: FS
+  pop_sizes:
+    FF: 1000
+    E: 1000
+    I: 200
+  pop_syn_counts:
+    E: 100
+    I: 100
+  default_syn_mech_params:
+    I:
+      FF:
+        g_unit: 0.0001925
+      E:
+        g_unit: 0.0001925
+      I:
+        g_unit: 0.0001925
+    E:
+      FF:
+        g_unit: 0.0005275
+      E:
+        g_unit: 0.0005275
+      I:
+        g_unit: 0.0005275
 objective_names:
 - E_peak_rate
 - I_peak_rate
@@ -177,6 +206,7 @@ param_names:
 - E_E_FF_syn_proportion
 - I_E_syn_proportion
 - I_E_FF_syn_proportion
+- E_peak_delta_weight
 target_range:
   E_peak_rate: 0.1
   I_peak_rate: 0.1
@@ -236,3 +266,4 @@ x0:
   E_FF_mean_weight: 1.543887E+00
   I_E_mean_weight: 5.667242E-01
   I_I_tau_offset: 1.132949E+01
+  E_peak_delta_weight: 2.
