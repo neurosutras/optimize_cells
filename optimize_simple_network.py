@@ -100,13 +100,27 @@ def config_worker():
 
 def init_context():
     start_time = time.time()
-    pop_sizes = {'FF': 500, 'E': 500, 'I': 100}
-    pop_syn_counts = {'E': 100, 'I': 100}  # {'target_pop_name': int}
-    pop_gid_ranges = get_pop_gid_ranges(pop_sizes)
-    pop_cell_types = {'FF': 'input', 'E': 'IB', 'I': 'FS'}
+    # {'pop_name': str}
+    if 'pop_cell_types' not in context() or context.pop_cell_types is None:
+        context.pop_cell_types = {'FF': 'input', 'E': 'IB', 'I': 'FS'}
+
+    # {'pop_name': int}
+    if 'pop_sizes' not in context() or context.pop_sizes is None:
+        context.pop_sizes = {'FF': 500, 'E': 500, 'I': 100}
+    for pop_name in context.pop_sizes:
+        context.pop_sizes[pop_name] = int(context.pop_sizes[pop_name])
+
+    # {'pop_name': int}
+    if 'pop_syn_counts' not in context() or context.pop_syn_counts is None:
+        context.pop_syn_counts = {'E': 100, 'I': 100}
+    for pop_name in context.pop_syn_counts:
+        context.pop_syn_counts[pop_name] = int(context.pop_syn_counts[pop_name])
+
+    pop_gid_ranges = get_pop_gid_ranges(context.pop_sizes)
 
     # {'target_pop_name': {'syn_type: {'source_pop_name': float} } }
     pop_syn_proportions = defaultdict(lambda: defaultdict(dict))
+
     connection_weights_mean = defaultdict(dict)  # {'target_pop_name': {'source_pop_name': float} }
     connection_weights_norm_sigma = defaultdict(dict)  # {'target_pop_name': {'source_pop_name': float} }
     if 'connection_weight_distribution_types' not in context() or context.connection_weight_distribution_types is None:
@@ -123,12 +137,19 @@ def init_context():
         local_np_random.seed(int(context.tuning_seed))
 
     syn_mech_params = defaultdict(lambda: defaultdict(dict))
-    syn_mech_params['I']['FF']['g_unit'] = 0.0001925
-    syn_mech_params['I']['E']['g_unit'] = 0.0001925
-    syn_mech_params['I']['I']['g_unit'] = 0.0001925
-    syn_mech_params['E']['FF']['g_unit'] = 0.0005275
-    syn_mech_params['E']['E']['g_unit'] = 0.0005275
-    syn_mech_params['E']['I']['g_unit'] = 0.0005275
+    if 'default_syn_mech_params' not in context() or context.default_syn_mech_params is None:
+        syn_mech_params['I']['FF']['g_unit'] = 0.0001925
+        syn_mech_params['I']['E']['g_unit'] = 0.0001925
+        syn_mech_params['I']['I']['g_unit'] = 0.0001925
+        syn_mech_params['E']['FF']['g_unit'] = 0.0005275
+        syn_mech_params['E']['E']['g_unit'] = 0.0005275
+        syn_mech_params['E']['I']['g_unit'] = 0.0005275
+    else:
+        for target_pop_name in context.default_syn_mech_params:
+            for source_pop_name in context.default_syn_mech_params[target_pop_name]:
+                for param_name in context.default_syn_mech_params[target_pop_name][source_pop_name]:
+                    syn_mech_params[target_pop_name][source_pop_name][param_name] = \
+                        context.default_syn_mech_params[target_pop_name][source_pop_name][param_name]
 
     delay = 1.  # ms
     equilibrate = 250.  # ms
@@ -159,7 +180,7 @@ def init_context():
                             input_pop_name_to_pre_array[pop_name] = f[pop_name][:]
 
         for pop_name in context.input_types:
-            if pop_name not in pop_cell_types or pop_cell_types[pop_name] != 'input':
+            if pop_name not in context.pop_cell_types or context.pop_cell_types[pop_name] != 'input':
                 raise RuntimeError('optimize_simple_network: %s not specified as an input population' % pop_name)
             if pop_name not in input_pop_firing_rates:
                 input_pop_firing_rates[pop_name] = dict()
@@ -191,7 +212,7 @@ def init_context():
                 this_tuning_width = duration * this_norm_tuning_width
                 this_sigma = this_tuning_width / 3. / np.sqrt(2.)
                 peak_locs_array = \
-                    np.linspace(0., duration, pop_sizes[pop_name], endpoint=False)
+                    np.linspace(0., duration, context.pop_sizes[pop_name], endpoint=False)
                 local_np_random.shuffle(peak_locs_array)
                 for peak_loc, gid in zip(peak_locs_array, range(pop_gid_ranges[pop_name][0],
                                                                 pop_gid_ranges[pop_name][1])):
@@ -204,7 +225,7 @@ def init_context():
                 if context.debug and context.plot:
                     fig, axes = plt.subplots()
                     for gid in range(pop_gid_ranges[pop_name][0],
-                                     pop_gid_ranges[pop_name][1])[::int(pop_sizes[pop_name] / 25)]:
+                                     pop_gid_ranges[pop_name][1])[::int(context.pop_sizes[pop_name] / 25)]:
                         axes.plot(this_stim_t - equilibrate, input_pop_firing_rates[pop_name][gid])
                     mean_input = np.mean(list(input_pop_firing_rates[pop_name].values()), axis=0)
                     axes.plot(this_stim_t - equilibrate, mean_input, c='k', linewidth=2.)
@@ -231,7 +252,7 @@ def init_context():
             this_tuning_width = duration * this_norm_tuning_width
             this_sigma = this_tuning_width / 3. / np.sqrt(2.)
             peak_locs_array = \
-                np.linspace(0., duration, pop_sizes[target_pop_name], endpoint=False)
+                np.linspace(0., duration, context.pop_sizes[target_pop_name], endpoint=False)
             local_np_random.shuffle(peak_locs_array)
             for peak_loc, target_gid in zip(peak_locs_array,
                                             range(pop_gid_ranges[target_pop_name][0],

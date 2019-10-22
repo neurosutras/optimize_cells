@@ -122,6 +122,32 @@ kwargs:
     FF: 0.
   input_norm_tuning_widths:
     FF: 0.5
+  pop_cell_types:
+    FF: input
+    E: IB
+    I: FS
+  pop_sizes:
+    FF: 1000
+    E: 1000
+    I: 200
+  pop_syn_counts:
+    E: 100
+    I: 100
+  default_syn_mech_params:
+    I:
+      FF:
+        g_unit: 0.0001925
+      E:
+        g_unit: 0.0001925
+      I:
+        g_unit: 0.0001925
+    E:
+      FF:
+        g_unit: 0.0005275
+      E:
+        g_unit: 0.0005275
+      I:
+        g_unit: 0.0005275
 objective_names:
 - E_peak_rate
 - I_peak_rate
