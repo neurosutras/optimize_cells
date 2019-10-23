@@ -624,13 +624,11 @@ def plot_exported_DG_MC_spiking_features(file_path):
     mpl.rcParams['font.size'] = orig_fontsize
 
 
-def plot_exported_DG_GC_synaptic_integration_features(file_path, **kw):
+def plot_exported_DG_GC_synaptic_integration_features(file_path, **kwargs):
     """
 
     :param file_path: str (path)
     """
-    figdict = kw['figdict'] if 'figdict' in kw.keys() else {}
-
     orig_fontsize = mpl.rcParams['font.size']
     if not os.path.isfile(file_path):
         raise IOError('plot_exported_DG_GC_synaptic_integration_features: invalid file path: {!s}'.format(file_path))
@@ -669,8 +667,7 @@ def plot_exported_DG_GC_synaptic_integration_features(file_path, **kw):
             fig.suptitle('Branch: %s' % syn_group, fontsize=mpl.rcParams['font.size'])
             fig.tight_layout()
             fig.subplots_adjust(top=0.875)
-            filename = '{!s}_{!s}_{:03d}'.format(group_name, date.today().strftime("%Y%m%d"), plt.gcf().number)
-            fig_func(fig, filename, **figdict)
+            plot_helper(fig, filename_suffix='{!s}_{!s}'.format(group_name, syn_group), **kwargs)
 
         group_name = 'compound_EPSP_summary'
         if group_name not in f:
@@ -698,11 +695,10 @@ def plot_exported_DG_GC_synaptic_integration_features(file_path, **kw):
                 clean_axes(axes)
                 fig.tight_layout()
                 fig.subplots_adjust(top=0.85)
-                filename = '{!s}_{!s}_{:03d}'.format(group_name, date.today().strftime("%Y%m%d"), plt.gcf().number)
-                fig_func(fig, filename, **figdict)
+                plot_helper(fig, filename_suffix='{!s}_{!s}_{!s}'.format(group_name, branch_name, rec_name), **kwargs)
 
-
-        data_group = group['soma_compound_EPSP_amp']
+        group_name = 'soma_compound_EPSP_amp'
+        data_group = group[group_name]
         branch_names = list(data_group.keys())
         fig, axes = plt.subplots(1, len(branch_names), sharey=True, sharex=True)
         if len(branch_names) == 1:
@@ -728,27 +724,25 @@ def plot_exported_DG_GC_synaptic_integration_features(file_path, **kw):
         axes[0].legend(loc='best', frameon=False, framealpha=0.5)
         clean_axes(axes)
         fig.tight_layout()
-        filename = '{!s}_{!s}_{:03d}'.format('soma_compound_EPSP_amp', date.today().strftime("%Y%m%d"), plt.gcf().number)
-        fig_func(fig, filename, **figdict)
+        plot_helper(fig, filename_suffix=group_name, **kwargs)
 
     mpl.rcParams['font.size'] = orig_fontsize
 
 
-def plot_sim_from_file(file_path, group_name='sim_output', **kw):
+def plot_sim_from_file(file_path, group_name='sim_output', **kwargs):
     """
 
     :param file_path: str (path)
     :param group_name: str
-    """ 
-    figdict = kw['figdict'] if 'figdict' in kw.keys() else {}
+    """
     orig_fontsize = mpl.rcParams['font.size']
     if not os.path.isfile(file_path):
         raise IOError('plot_sim_from_file: invalid file path: %s' % file_path)
     with h5py.File(file_path, 'r') as f:
         if group_name not in f:
-            raise AttributeError('plot_sim_from_file: provided file path: {!s} does not contain required top-level group '
-                                 'with name: {!s}'.format(file_path, group_name))
-        for trial in viewvalues(f[group_name]):
+            raise AttributeError('plot_sim_from_file: provided file path: {!s} does not contain required top-level '
+                                 'group with name: {!s}'.format(file_path, group_name))
+        for trial_key, trial in viewitems(f[group_name]):
             fig, axes = plt.subplots()
             for name, rec in viewitems(trial['recs']):
                 description = get_h5py_attr(rec.attrs, 'description')
@@ -774,11 +768,7 @@ def plot_sim_from_file(file_path, group_name='sim_output', **kw):
                 axes.set_title(title, fontsize=mpl.rcParams['font.size'])
             clean_axes(axes)
             fig.tight_layout()
-            s_tit = title.split(';')
-            ss_tit = s_tit[1].replace(',', '').replace(':','').split(' ')
-            filnam_tit = '{!s}_{!s}_{!s}_{!s}_{:03d}_{!s}_{:04d}'.format(s_tit[0], ss_tit[2], ss_tit[4], ss_tit[5], int(ss_tit[6]), ss_tit[8], int(ss_tit[9]))
-            filename = '{!s}_{!s}_{:03d}'.format(filnam_tit, date.today().strftime("%Y%m%d"), plt.gcf().number)
-            fig_func(fig, filename, **figdict)
+            plot_helper(fig, filename_suffix=trial_key, **kwargs)
     mpl.rcParams['font.size'] = orig_fontsize
 
 
@@ -835,27 +825,35 @@ def plot_NMDAR_g_V(Kd=9.98, gamma=0.101, mg=1., vshift=0., label='original', axe
     else:
         return axes
 
-def fig_func(fig, filename, **kw):
-    """
 
+def plot_helper(fig, show=True, filename_prefix=None, filename_suffix=None, save_fig=False, fig_format='svg',
+                output_dir=None, transparent=True, replace=False, **kwargs):
     """
-    figdict = {
-        'figplot': True,
-        'figdir' : 'plots',
-        'figformat': ['svg'],
-        'figaddformat': [],
-        'figshow': True,
-    }
-    figdict.update(kw) 
-    if figdict['figshow']:
-        plt.show()
-
-    if figdict['figplot']:
-        if filename: 
-            figformats = np.union1d(figdict['figformat'], figdict['figaddformat'])
-            for ext in figformats:
-                plt.savefig('{!s}/{!s}.{!s}'.format(figdict['figdir'], filename, ext), format=ext, transparent=True)
+    Parses standard set of keyword arguments to optionally show and/or save pyplots to file.
+    :param fig: :class:'matplotlib.pyplot.Figure'
+    :param show: bool
+    :param filename_prefix: str
+    :param filename_suffix: str
+    :param save_fig: bool
+    :param fig_format: str
+    :param output_dir: str; path to dir
+    :param transparent: bool
+    """
+    if show:
+        fig.show()
+    if save_fig:
+        this_date = date.today().strftime("%Y%m%d")
+        if filename_prefix is None:
+            filename_prefix = this_date
         else:
-            print('Invalid filename')
-
-
+            filename_prefix = '{!s}_{!s}'.format(this_date, filename_prefix)
+        if filename_suffix is not None:
+            filename_prefix = '{!s}_{!s}'.format(filename_prefix, filename_suffix)
+        filename = '{!s}.{!s}'.format(filename_prefix, fig_format)
+        if output_dir is not None:
+            if not os.path.isdir(output_dir):
+                raise IOError('Invalid output_dir: {!s}'.format(output_dir))
+            filename = '{!s}/{!s}'.format(output_dir, filename)
+        if not replace and os.path.isfile(filename):
+            raise IOError('File already exists: {!s}'.format(filename))
+        fig.savefig(filename, format=fig_format, transparent=transparent)
