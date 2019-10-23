@@ -518,7 +518,7 @@ def plot_best_norm_features_scatter(storage, target_val, target_range):
     mpl.rcParams['font.size'] = orig_fontsize
 
 
-def plot_exported_DG_GC_spiking_features(file_path):
+def plot_exported_DG_GC_spiking_features(file_path, **kwargs):
     """
     
     :param file_path: str (path)
@@ -548,7 +548,7 @@ def plot_exported_DG_GC_spiking_features(file_path):
         axes1.set_title('f-I', fontsize=mpl.rcParams['font.size'])
         clean_axes(axes1)
         fig1.tight_layout()
-        fig1.show()
+        plot_helper(fig1, filename_suffix='DG_GC_{!s}'.format(group_name), **kwargs)
 
         group_name = 'spike_adaptation'
         if group_name not in f:
@@ -570,11 +570,11 @@ def plot_exported_DG_GC_spiking_features(file_path):
         axes2.set_title('Spike rate adaptation', fontsize=mpl.rcParams['font.size'])
         clean_axes(axes2)
         fig2.tight_layout()
-        fig2.show()
+        plot_helper(fig2, filename_suffix='DG_GC_{!s}'.format(group_name), **kwargs)
     mpl.rcParams['font.size'] = orig_fontsize
 
 
-def plot_exported_DG_MC_spiking_features(file_path):
+def plot_exported_DG_MC_spiking_features(file_path, **kwargs):
     """
 
     :param file_path: str (path)
@@ -604,7 +604,7 @@ def plot_exported_DG_MC_spiking_features(file_path):
         axes1.set_title('f-I', fontsize=mpl.rcParams['font.size'])
         clean_axes(axes1)
         fig1.tight_layout()
-        fig1.show()
+        plot_helper(fig1, filename_suffix='DG_MC_{!s}'.format(group_name), **kwargs)
 
         fig2, axes2 = plt.subplots()
         model_adi_array = group['adi'][:]
@@ -614,13 +614,13 @@ def plot_exported_DG_MC_spiking_features(file_path):
         axes2.scatter(i_relative_amp, exp_adi_array, label='Experiment', c='k', linewidth=0, alpha=0.5)
         axes2.plot(i_relative_amp, exp_adi_array, c='k', alpha=0.5)
         axes2.legend(loc='best', frameon=False, framealpha=0.5)
-        axes1.set_xlabel('Amplitude of current injection\nrelative to rheobase (nA)')
+        axes2.set_xlabel('Amplitude of current injection\nrelative to rheobase (nA)')
         axes2.set_ylabel('Spike adaptation (%)\n(Last ISI/First ISI)')
         axes2.set_ylim(0., axes2.get_ylim()[1])
         axes2.set_title('Spike rate adaptation', fontsize=mpl.rcParams['font.size'])
         clean_axes(axes2)
         fig2.tight_layout()
-        fig2.show()
+        plot_helper(fig2, filename_suffix='DG_MC_{!s}'.format(group_name), **kwargs)
     mpl.rcParams['font.size'] = orig_fontsize
 
 
@@ -667,7 +667,7 @@ def plot_exported_DG_GC_synaptic_integration_features(file_path, **kwargs):
             fig.suptitle('Branch: %s' % syn_group, fontsize=mpl.rcParams['font.size'])
             fig.tight_layout()
             fig.subplots_adjust(top=0.875)
-            plot_helper(fig, filename_suffix='{!s}_{!s}'.format(group_name, syn_group), **kwargs)
+            plot_helper(fig, filename_suffix='DG_GC_{!s}_{!s}'.format(group_name, syn_group), **kwargs)
 
         group_name = 'compound_EPSP_summary'
         if group_name not in f:
@@ -695,7 +695,8 @@ def plot_exported_DG_GC_synaptic_integration_features(file_path, **kwargs):
                 clean_axes(axes)
                 fig.tight_layout()
                 fig.subplots_adjust(top=0.85)
-                plot_helper(fig, filename_suffix='{!s}_{!s}_{!s}'.format(group_name, branch_name, rec_name), **kwargs)
+                plot_helper(fig, filename_suffix='DG_GC_{!s}_{!s}_{!s}'.format(group_name,
+                                                                               branch_name, rec_name), **kwargs)
 
         group_name = 'soma_compound_EPSP_amp'
         data_group = group[group_name]
@@ -724,7 +725,7 @@ def plot_exported_DG_GC_synaptic_integration_features(file_path, **kwargs):
         axes[0].legend(loc='best', frameon=False, framealpha=0.5)
         clean_axes(axes)
         fig.tight_layout()
-        plot_helper(fig, filename_suffix=group_name, **kwargs)
+        plot_helper(fig, filename_suffix='DG_GC_{!s}'.format(group_name), **kwargs)
 
     mpl.rcParams['font.size'] = orig_fontsize
 
