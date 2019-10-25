@@ -794,7 +794,7 @@ def find_nearest(arr, tt):
     return np.searchsorted(tt, arr)
 
 
-def padded_baks(spike_times, t, alpha, beta, pad_dur=500., wrap_around=False):
+def padded_baks(spike_times, t, alpha, beta, pad_dur=500., wrap_around=False, plot=False):
     """
     Expects spike times in ms. Uses mirroring to pad the edges to avoid edge artifacts. Converts ms to sec for baks
     filtering, then returns the properly truncated estimated firing rate.
@@ -804,6 +804,7 @@ def padded_baks(spike_times, t, alpha, beta, pad_dur=500., wrap_around=False):
     :param beta: float
     :param pad_dur: float (ms)
     :param wrap_around: bool
+    :param plot: bool
     :return: array
     """
     dt = t[1] - t[0]
@@ -830,6 +831,10 @@ def padded_baks(spike_times, t, alpha, beta, pad_dur=500., wrap_around=False):
         padded_t = \
             np.concatenate((np.arange(-pad_dur, 0., dt), t, np.arange(t[-1] + dt, t[-1] + pad_dur + dt / 2., dt)))
         padded_rate, h = baks(padded_spike_times/1000., padded_t/1000., alpha, beta)
+        if plot:
+            fig = plt.figure()
+            plt.plot(padded_t, padded_rate)
+            fig.show()
         rate = padded_rate[pad_len:-pad_len]
     else:
         rate, h = baks(spike_times/1000., t/1000., alpha, beta)
@@ -1522,7 +1527,7 @@ def plot_simple_network_results_from_file(data_file_path, verbose=False):
                 for source_pop_name in subgroup[target_pop_name][target_gid_key]:
                     connection_weights_dict[target_pop_name][target_gid][source_pop_name] = dict()
                     data_group = subgroup[target_pop_name][target_gid_key][source_pop_name]
-                    for source_gid, weight in zip(data_group['source_gids'], data_group['weights']):
+                    for source_gid, weight in zip(data_group['source_gids'][:], data_group['weights'][:]):
                         connection_weights_dict[target_pop_name][target_gid][source_pop_name][source_gid] = weight
         if 'tuning_peak_locs' in group and len(group['tuning_peak_locs']) > 0:
             subgroup = group['tuning_peak_locs']
@@ -1546,12 +1551,12 @@ def plot_simple_network_results_from_file(data_file_path, verbose=False):
                 pop_syn_proportions[target_pop_name][syn_type] = dict()
                 source_pop_names = subgroup[target_pop_name][syn_type]['source_pop_names'][:].astype('str')
                 for source_pop_name, syn_proportion in zip(source_pop_names,
-                                                           subgroup[target_pop_name][syn_type]['syn_proportions']):
+                                                           subgroup[target_pop_name][syn_type]['syn_proportions'][:]):
                     pop_syn_proportions[target_pop_name][syn_type][source_pop_name] = syn_proportion
         subgroup = group['pop_cell_positions']
         for pop_name in subgroup:
             pop_cell_positions[pop_name] = dict()
-            for gid, position in zip(subgroup[pop_name]['gids'], subgroup[pop_name]['positions']):
+            for gid, position in zip(subgroup[pop_name]['gids'][:], subgroup[pop_name]['positions'][:]):
                 pop_cell_positions[pop_name][gid] = position
 
     mean_rate_dict, peak_rate_dict, mean_rate_active_cells_dict, pop_fraction_active_dict, \
