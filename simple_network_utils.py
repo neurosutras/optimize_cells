@@ -67,8 +67,8 @@ class SimpleNetwork(object):
     def __init__(self, pc, pop_sizes, pop_gid_ranges, pop_cell_types, pop_syn_counts, pop_syn_proportions,
                  connection_weights_mean, connection_weights_norm_sigma, syn_mech_params, syn_mech_names=None,
                  syn_mech_param_rules=None, syn_mech_param_defaults=None, input_pop_t=None,
-                 input_pop_firing_rates=None, input_pop_spike_times=None, tstop=1000., equilibrate=250., dt=0.025,
-                 delay=1., spikes_seed=100000000, v_init=-65., verbose=1, debug=False):
+                 input_pop_firing_rates=None, input_pop_spike_times=None, tstop=2000, duration=1000.,
+                 buffer=500., dt=0.025, delay=1., spikes_seed=100000000, v_init=-65., verbose=1, debug=False):
         """
 
         :param pc: ParallelContext object
@@ -89,8 +89,9 @@ class SimpleNetwork(object):
         :param input_pop_t: nested dict: {pop_name: array of times (float)}}
         :param input_pop_firing_rates: nested dict: {pop_name: {gid: array of spike times (ms) (float)}}
         :param input_pop_spike_times: nested dict: {pop_name : {gid: 1d array of spike times loaded from file}}
-        :param tstop: int: simulation duration (ms)
-        :param equilibrate: float: simulation equilibration duration (ms)
+        :param tstop: int: full buffered simulation duration (ms)
+        :param duration: float: simulation duration (ms)
+        :param buffer: float: duration of simulation buffer at start and end (ms)
         :param dt: float: simulation timestep (ms)
         :param delay: float: netcon synaptic delay (ms)
         :param spikes_seed: int: random seed for reproducible input spike trains
@@ -100,8 +101,9 @@ class SimpleNetwork(object):
         """
         self.pc = pc
         self.delay = delay
-        self.tstop = tstop
-        self.equilibrate = equilibrate
+        self.tstop = int(tstop)
+        self.duration = duration
+        self.buffer = buffer
         if dt is None:
             dt = h.dt
         self.dt = dt
@@ -364,7 +366,6 @@ class SimpleNetwork(object):
         :param tuning_peak_locs: nested dict: {'pop_name': {'gid': float} }
         :param wrap_around: bool
         """
-        duration = self.tstop - self.equilibrate
         for target_pop_name in (target_pop_name for target_pop_name in structured_weight_params
                                 if target_pop_name in self.ncdict):
             if target_pop_name not in tuning_peak_locs:
@@ -373,7 +374,7 @@ class SimpleNetwork(object):
             this_tuning_type = structured_weight_params[target_pop_name]['tuning_type']
             this_peak_delta_weight = structured_weight_params[target_pop_name]['peak_delta_weight']
             this_norm_tuning_width = structured_weight_params[target_pop_name]['norm_tuning_width']
-            this_tuning_width = duration * this_norm_tuning_width
+            this_tuning_width = self.duration * this_norm_tuning_width
             this_sigma = this_tuning_width / 3. / np.sqrt(2.)
             this_tuning_f = lambda delta_loc: this_peak_delta_weight * np.exp(-(delta_loc / this_sigma) ** 2.)
             for syn_type in self.pop_syn_proportions[target_pop_name]:
@@ -392,10 +393,10 @@ class SimpleNetwork(object):
                         for source_gid in self.ncdict[target_pop_name][target_gid][source_pop_name]:
                             this_delta_loc = abs(tuning_peak_locs[source_pop_name][source_gid] - this_target_loc)
                             if wrap_around:
-                                if this_delta_loc > duration / 2.:
-                                    this_delta_loc -=- duration
-                                elif this_delta_loc < -duration / 2.:
-                                    this_delta_loc += duration
+                                if this_delta_loc > self.duration / 2.:
+                                    this_delta_loc -=- self.duration
+                                elif this_delta_loc < -self.duration / 2.:
+                                    this_delta_loc += self.duration
                             this_delta_weight = this_tuning_f(this_delta_loc)
                             for this_nc in self.ncdict[target_pop_name][target_gid][source_pop_name][source_gid]:
                                 initial_weight = get_connection_param(syn_type, 'weight', syn=this_syn, nc=this_nc,
@@ -453,33 +454,43 @@ class SimpleNetwork(object):
     def run(self):
         h.celsius = 35.  # degrees C
         self.pc.set_maxstep(10.)
-        # h.stdinit()
         h.dt = self.dt
         h.finitialize(self.v_init)
         self.pc.psolve(self.tstop)
 
     def get_spike_times_dict(self):
+        full_spike_times_dict = dict()
         spike_times_dict = dict()
         for pop_name in self.spike_times_dict:
+            full_spike_times_dict[pop_name] = dict()
             spike_times_dict[pop_name] = dict()
             for gid, spike_train in viewitems(self.spike_times_dict[pop_name]):
-                spike_train_array = np.array(spike_train, dtype='float32')
-                indexes = np.where(spike_train_array >= self.equilibrate)[0]
+                if len(spike_train) > 0:
+                    spike_train_array = np.subtract(np.array(spike_train, dtype='float32'), self.buffer)
+                else:
+                    spike_train_array = np.array([], dtype='float32')
+                full_spike_times_dict[pop_name][gid] = spike_train_array
+                indexes = np.where((spike_train_array >= 0.) & (spike_train_array <= self.duration))[0]
                 if len(indexes) > 0:
-                    spike_train_array = np.subtract(spike_train_array[indexes], self.equilibrate)
+                    spike_train_array = spike_train_array[indexes]
                 else:
                     spike_train_array = np.array([], dtype='float32')
                 spike_times_dict[pop_name][gid] = spike_train_array
-        return spike_times_dict
+        return full_spike_times_dict, spike_times_dict
 
     def get_voltage_rec_dict(self):
-        start_index = int(self.equilibrate / self.dt)
+        start_index = int(self.buffer / self.dt)
+        end_index = start_index + int(self.duration / self.dt)
+        full_voltage_rec_dict = dict()
         voltage_rec_dict = dict()
         for pop_name in self.voltage_recvec:
+            full_voltage_rec_dict[pop_name] = dict()
             voltage_rec_dict[pop_name] = dict()
             for gid, recvec in viewitems(self.voltage_recvec[pop_name]):
-                voltage_rec_dict[pop_name][gid] = np.array(recvec)[start_index:]
-        return voltage_rec_dict
+                rec_array = np.array(recvec)
+                full_voltage_rec_dict[pop_name][gid] = rec_array
+                voltage_rec_dict[pop_name][gid] = rec_array[start_index:end_index]
+        return full_voltage_rec_dict, voltage_rec_dict
 
     def get_connection_weights(self):
         weights = dict()
@@ -720,7 +731,7 @@ def check_voltages_exceed_threshold(voltage_rec_dict, pop_cell_types):
     return False
 
 
-def get_gaussian_rate(duration, peak_loc, sigma, min_rate, max_rate, dt, wrap_around=True, equilibrate=None):
+def get_gaussian_rate(duration, peak_loc, sigma, min_rate, max_rate, dt, wrap_around=True, buffer=0.):
     """
 
     :param duration: float
@@ -730,22 +741,22 @@ def get_gaussian_rate(duration, peak_loc, sigma, min_rate, max_rate, dt, wrap_ar
     :param max_rate: float
     :param dt: float
     :param wrap_around: bool
-    :param equilibrate: float
+    :param buffer: float
     :return: array
     """
-    t = np.arange(0., duration + dt / 2., dt)
     if wrap_around:
+        t = np.arange(0., duration + dt / 2., dt)
         extended_t = np.concatenate([t - duration, t, t + duration])
         rate = (max_rate - min_rate) * np.exp(-((extended_t - peak_loc) / sigma) ** 2.) + min_rate
         before = np.array(rate[:len(t)])
         after = np.array(rate[2 * len(t):])
         within = np.array(rate[len(t):2 * len(t)])
         rate = within[:len(t)] + before[:len(t)] + after[:len(t)]
-        if equilibrate is not None:
-            equilibrate_len = int(equilibrate / dt)
-            if equilibrate_len > 0:
-                rate = np.append(rate[-equilibrate_len:], rate)
+        buffer_len = int(buffer / dt)
+        if buffer_len > 0:
+            rate = np.concatenate([rate[-buffer_len:], rate, rate[:buffer_len]])
     else:
+        t = np.arange(-buffer, duration + buffer + dt / 2., dt)
         rate = (max_rate - min_rate) * np.exp(-((t - peak_loc) / sigma) ** 2.) + min_rate
     return rate
 
@@ -765,14 +776,15 @@ def get_pop_gid_ranges(pop_sizes):
     return pop_gid_ranges
 
 
-def infer_firing_rates(spike_trains_dict, t, alpha, beta, pad_dur, wrap_around=False):
+def infer_firing_rates(spike_trains_dict, input_t, alpha, beta, pad_dur=0., output_t=None, wrap_around=False):
     """
 
     :param spike_trains_dict: nested dict: {pop_name: {gid: array} }
-    :param t: array
+    :param input_t: array
     :param alpha: float
     :param beta: float
     :param pad_dur: float
+    :param output_t: array
     :param wrap_around: bool
     :return: dict of array
     """
@@ -780,10 +792,14 @@ def infer_firing_rates(spike_trains_dict, t, alpha, beta, pad_dur, wrap_around=F
     for pop_name in spike_trains_dict:
         for gid, spike_train in viewitems(spike_trains_dict[pop_name]):
             if len(spike_train) > 0:
-                smoothed = padded_baks(spike_train, t, alpha=alpha, beta=beta, pad_dur=pad_dur, wrap_around=wrap_around)
+                smoothed = padded_baks(spike_train, input_t, alpha=alpha, beta=beta, pad_dur=pad_dur,
+                                       wrap_around=wrap_around)
             else:
-                smoothed = np.zeros_like(t)
-            inferred_firing_rates[pop_name][gid] = smoothed
+                smoothed = np.zeros_like(input_t)
+            if output_t is not None:
+                inferred_firing_rates[pop_name][gid] = np.interp(output_t, input_t, smoothed)
+            else:
+                inferred_firing_rates[pop_name][gid] = smoothed
 
     return inferred_firing_rates
 
@@ -834,10 +850,16 @@ def padded_baks(spike_times, t, alpha, beta, pad_dur=500., wrap_around=False, pl
         if plot:
             fig = plt.figure()
             plt.plot(padded_t, padded_rate)
+            plt.scatter(padded_spike_times, [0] * len(padded_spike_times), marker='.', color='k')
             fig.show()
         rate = padded_rate[pad_len:-pad_len]
     else:
         rate, h = baks(spike_times/1000., t/1000., alpha, beta)
+        if plot:
+            fig = plt.figure()
+            plt.plot(t, rate)
+            plt.scatter(spike_times, [0] * len(spike_times), marker='.', color='k')
+            fig.show()
     return rate
 
 
@@ -850,37 +872,59 @@ def get_binned_spike_count(spike_times, t):
     """
     binned_spikes = np.zeros_like(t)
     if len(spike_times) > 0:
-        spike_indexes = [np.where(t >= spike_time)[0][0] for spike_time in spike_times]
+        try:
+            spike_indexes = [np.where(t >= spike_time)[0][0] for spike_time in spike_times]
+        except Exception as e:
+            print(spike_times)
+            print(t)
+            sys.stdout.flush()
+            time.sleep(1.)
+            raise(e)
         binned_spikes[spike_indexes] = 1.
     return binned_spikes
 
 
-def get_pop_activity_stats(spike_times_dict, firing_rates_dict, t, threshold=1., plot=False):
+def get_mean_rate_from_spike_count(spike_times_dict, binned_t):
     """
     Calculate firing rate statistics for each cell population.
     :param spike_times_dict: nested dict of array
+    :param binned_t: array
+    :return: dict of array
+    """
+    dt = binned_t[1] - binned_t[0]
+    binned_spike_count_dict = defaultdict(dict)
+    mean_rate_from_spike_count_dict = dict()
+
+    for pop_name in spike_times_dict:
+        for gid in spike_times_dict[pop_name]:
+            binned_spike_count_dict[pop_name][gid] = get_binned_spike_count(spike_times_dict[pop_name][gid], binned_t)
+        mean_rate_from_spike_count_dict[pop_name] = \
+            np.divide(np.mean(list(binned_spike_count_dict[pop_name].values()), axis=0), dt / 1000.)
+
+    return mean_rate_from_spike_count_dict
+
+
+def get_pop_activity_stats(firing_rates_dict, t, threshold=2., plot=False):
+    """
+    Calculate firing rate statistics for each cell population.
     :param firing_rates_dict: nested dict of array
     :param t: array
     :param threshold: firing rate threshold for "active" cells: float (Hz)
     :param plot: bool
     :return: tuple of dict
     """
-    dt = t[1] - t[0]
     mean_rate_dict = defaultdict(dict)
     peak_rate_dict = defaultdict(dict)
     mean_rate_active_cells_dict = dict()
     pop_fraction_active_dict = dict()
-    binned_spike_count_dict = defaultdict(dict)
-    mean_rate_from_spike_count_dict = dict()
 
-    for pop_name in spike_times_dict:
+    for pop_name in firing_rates_dict:
         this_active_cell_count = np.zeros_like(t)
         this_summed_rate_active_cells = np.zeros_like(t)
-        for gid in spike_times_dict[pop_name]:
+        for gid in firing_rates_dict[pop_name]:
             this_firing_rate = firing_rates_dict[pop_name][gid]
             mean_rate_dict[pop_name][gid] = np.mean(this_firing_rate)
             peak_rate_dict[pop_name][gid] = np.max(this_firing_rate)
-            binned_spike_count_dict[pop_name][gid] = get_binned_spike_count(spike_times_dict[pop_name][gid], t)
             active_indexes = np.where(this_firing_rate >= threshold)[0]
             if len(active_indexes) > 0:
                 this_active_cell_count[active_indexes] += 1.
@@ -893,9 +937,7 @@ def get_pop_activity_stats(spike_times_dict, firing_rates_dict, t, threshold=1.,
                 np.divide(this_summed_rate_active_cells[active_indexes], this_active_cell_count[active_indexes])
         else:
             mean_rate_active_cells_dict[pop_name] = np.zeros_like(t)
-        pop_fraction_active_dict[pop_name] = np.divide(this_active_cell_count, len(spike_times_dict[pop_name]))
-        mean_rate_from_spike_count_dict[pop_name] = \
-            np.divide(np.mean(list(binned_spike_count_dict[pop_name].values()), axis=0), dt / 1000.)
+        pop_fraction_active_dict[pop_name] = np.divide(this_active_cell_count, len(firing_rates_dict[pop_name]))
 
     if plot:
         fig, axes = plt.subplots(1, 2)
@@ -911,8 +953,7 @@ def get_pop_activity_stats(spike_times_dict, firing_rates_dict, t, threshold=1.,
         fig.tight_layout()
         fig.show()
 
-    return mean_rate_dict, peak_rate_dict, mean_rate_active_cells_dict, pop_fraction_active_dict, \
-           binned_spike_count_dict, mean_rate_from_spike_count_dict
+    return mean_rate_dict, peak_rate_dict, mean_rate_active_cells_dict, pop_fraction_active_dict
 
 
 def get_butter_bandpass_filter(filter_band, sampling_rate, order, filter_label='', plot=False):
@@ -936,7 +977,8 @@ def get_butter_bandpass_filter(filter_band, sampling_rate, order, filter_label='
         plt.title('%s bandpass filter (%.1f:%.1f Hz), Order: %i' %
                   (filter_label, min(filter_band), max(filter_band), order))
         plt.xlabel('Frequency (Hz)')
-        plt.xlim(0., min(nyq, 2. * max(filter_band)))
+        bandwidth = max(filter_band) - min(filter_band)
+        plt.xlim(max(0., min(filter_band) - bandwidth / 2.), min(nyq, max(filter_band) + bandwidth / 2.))
         plt.ylabel('Gain')
         plt.grid(True)
         fig.show()
@@ -1002,15 +1044,19 @@ def PSTI(f, power, band=None, verbose=False):
     return this_PSTI
 
 
-def get_bandpass_filtered_signal_stats(signal, t, sos, filter_band, bins=100, signal_label='', filter_label='',
-                                       axis_label = 'Amplitude', units='a.u.', pad=True, pad_len=None, plot=False,
+def get_bandpass_filtered_signal_stats(signal, input_t, sos, filter_band, buffered_sos=None, buffered_filter_band=None,
+                                       output_t=None, bins=100, signal_label='', filter_label='',
+                                       axis_label='Amplitude', units='a.u.', pad=True, pad_len=None, plot=False,
                                        verbose=False):
     """
 
     :param signal: array
-    :param t: array (ms)
+    :param input_t: array (ms)
     :param sos: array
     :param filter_band: list of float (Hz)
+    :param buffered_sos: array
+    :param buffered_filter_band: list of float (Hz)
+    :param output_t: array (ms)
     :param bins: number of frequency bins to compute in band
     :param signal_label: str
     :param filter_label: str
@@ -1028,29 +1074,62 @@ def get_bandpass_filtered_signal_stats(signal, t, sos, filter_band, bins=100, si
                   (signal_label, filter_label, min(filter_band), max(filter_band)))
             sys.stdout.flush()
         return signal, np.zeros_like(signal), 0., 0., 0.
-    dt = t[1] - t[0]  # ms
+    dt = input_t[1] - input_t[0]  # ms
+    fs = 1000. / dt
+
+    if buffered_filter_band is not None:
+        if buffered_sos is None:
+            raise RuntimeError('get_bandpass_filtered_signal_stats: when specifying a buffered_filter_band, a'
+                               'buffered filter must also be provided')
+        bandwidth = buffered_filter_band[1] - buffered_filter_band[0]
+    else:
+        bandwidth = filter_band[1] - filter_band[0]
+    nfft = int(fs * bins / bandwidth)
+
     if pad and pad_len is None:
-        pad_dur = min(10. * 1000. / np.min(filter_band), len(t) * dt)  # ms
-        pad_len = min(int(pad_dur / dt), len(t) - 1)
+        pad_dur = min(10. * 1000. / np.min(filter_band), len(input_t) * dt)  # ms
+        pad_len = min(int(pad_dur / dt), len(input_t) - 1)
     if pad:
         padded_signal = get_mirror_padded_signal(signal, pad_len)
     else:
         padded_signal = np.array(signal)
+
     filtered_padded_signal = sosfiltfilt(sos, padded_signal)
     filtered_signal = filtered_padded_signal[pad_len:-pad_len]
     padded_envelope = np.abs(hilbert(filtered_padded_signal))
     envelope = padded_envelope[pad_len:-pad_len]
-    bandwidth = filter_band[1] - filter_band[0]
-    fs = 1000./dt
-    nfft = int(fs * bins / bandwidth)
-    f, power = periodogram(filtered_signal, fs=fs, nfft=nfft)
+
+
+    if buffered_sos is not None:
+        if buffered_filter_band is None:
+            raise RuntimeError('get_bandpass_filtered_signal_stats: when specifying a buffered filter, a'
+                               'buffered_filter_band must also be provided')
+        buffered_filtered_padded_signal = sosfiltfilt(buffered_sos, padded_signal)
+        buffered_filtered_signal = buffered_filtered_padded_signal[pad_len:-pad_len]
+        f, power = periodogram(buffered_filtered_signal, fs=fs, nfft=nfft)
+    else:
+        f, power = periodogram(filtered_signal, fs=fs, nfft=nfft)
+
     com_index = get_mass_index(power, 0.5)
     if com_index is None:
         centroid_freq = 0.
-        freq_tuning_index = 0.
     else:
         centroid_freq = f[com_index]
-        freq_tuning_index = PSTI(f, power, band=filter_band, verbose=verbose)
+    if centroid_freq == 0. or centroid_freq < filter_band[0] or centroid_freq > filter_band[1]:
+        freq_tuning_index = 0.
+    else:
+        if buffered_filter_band is not None:
+            freq_tuning_index = PSTI(f, power, band=buffered_filter_band, verbose=verbose)
+        else:
+            freq_tuning_index = PSTI(f, power, band=filter_band, verbose=verbose)
+
+    if output_t is None:
+        t = input_t
+    else:
+        t = output_t
+        signal = np.interp(output_t, input_t, signal)
+        filtered_signal = np.interp(output_t, input_t, filtered_signal)
+        envelope = np.interp(output_t, input_t, envelope)
 
     mean_envelope = np.mean(envelope)
     mean_signal = np.mean(signal)
@@ -1081,7 +1160,10 @@ def get_bandpass_filtered_signal_stats(signal, t, sos, filter_band, bins=100, si
         axes[1][0].plot(f, power, c='k')
         axes[1][0].set_xlabel('Frequency (Hz)')
         axes[1][0].set_ylabel('Spectral density (units$^{2}$/Hz)')
-        axes[1][0].set_xlim(min(filter_band)/2., max(filter_band) * 1.5)
+        if buffered_filter_band is not None:
+            axes[1][0].set_xlim(min(buffered_filter_band), max(buffered_filter_band))
+        else:
+            axes[1][0].set_xlim(min(filter_band), max(filter_band))
 
         clean_axes(axes)
         fig.suptitle('%s: %s bandpass filter (%.1f:%.1f Hz)\nEnvelope ratio: %.3f; Centroid freq: %.3f Hz\n'
@@ -1094,18 +1176,20 @@ def get_bandpass_filtered_signal_stats(signal, t, sos, filter_band, bins=100, si
     return filtered_signal, envelope, envelope_ratio, centroid_freq, freq_tuning_index
 
 
-def get_pop_bandpass_filtered_signal_stats(signal_dict, t, filter_band_dict, order=15, plot=False, verbose=False):
+def get_pop_bandpass_filtered_signal_stats(signal_dict, filter_band_dict, input_t, output_t=None, order=15, plot=False,
+                                           verbose=False):
     """
 
     :param signal_dict: array
-    :param t: array (ms)
     :param filter_band_dict: dict: {filter_label (str): list of float (Hz) }
+    :param input_t: array (ms)
+    :param output_t: array (ms)
     :param order: int
     :param plot: bool
     :param verbose: bool
-    :return: array
+    :return: tuple of dict
     """
-    dt = t[1] - t[0]  # ms
+    dt = input_t[1] - input_t[0]  # ms
     sampling_rate = 1000. / dt  # Hz
     filtered_signal_dict = {}
     envelope_dict = {}
@@ -1119,12 +1203,16 @@ def get_pop_bandpass_filtered_signal_stats(signal_dict, t, filter_band_dict, ord
         centroid_freq_dict[filter_label] = {}
         freq_tuning_index_dict[filter_label] = {}
         sos = get_butter_bandpass_filter(filter_band, sampling_rate, filter_label=filter_label, order=order, plot=plot)
+        buffered_filter_band = [filter_band[0] / 2., 2. * filter_band[1]]
+        buffered_sos = get_butter_bandpass_filter(buffered_filter_band, sampling_rate, filter_label=filter_label,
+                                                  order=order, plot=False)
         for pop_name in signal_dict:
             signal = signal_dict[pop_name]
             filtered_signal_dict[filter_label][pop_name], envelope_dict[filter_label][pop_name], \
             envelope_ratio_dict[filter_label][pop_name], centroid_freq_dict[filter_label][pop_name], \
             freq_tuning_index_dict[filter_label][pop_name] = \
-                get_bandpass_filtered_signal_stats(signal, t, sos, filter_band,
+                get_bandpass_filtered_signal_stats(signal, input_t, sos, filter_band, buffered_sos=buffered_sos,
+                                                   buffered_filter_band=buffered_filter_band, output_t=output_t,
                                                    signal_label='Population: %s' % pop_name, filter_label=filter_label,
                                                    axis_label='Firing rate', units='Hz', plot=plot, verbose=verbose)
 
@@ -1224,11 +1312,11 @@ def get_mirror_padded_time_series(t, pad_len):
     return padded_t
 
 
-def plot_inferred_spike_rates(binned_spikes_dict, firing_rates_dict, t, active_rate_threshold=1., rows=3, cols=4,
+def plot_inferred_spike_rates(spike_times_dict, firing_rates_dict, t, active_rate_threshold=1., rows=3, cols=4,
                               pop_names=None):
     """
 
-    :param binned_spikes_dict: dict of array
+    :param spike_times_dict: dict of array
     :param firing_rates_dict: dict of array
     :param t: array
     :param active_rate_threshold: float
@@ -1237,32 +1325,36 @@ def plot_inferred_spike_rates(binned_spikes_dict, firing_rates_dict, t, active_r
     :param pop_names: list of str
     """
     if pop_names is None:
-        pop_names = list(binned_spikes_dict.keys())
+        pop_names = list(spike_times_dict.keys())
     for pop_name in pop_names:
-        fig, axes = plt.subplots(rows, cols, sharex=True, sharey=True, figsize=(cols*3, rows*3))
-        for j in range(cols):
-            axes[rows-1][j].set_xlabel('Time (ms)')
-        for i in range(rows):
-            axes[i][0].set_ylabel('Firing rate (Hz)')
         active_gid_range = []
         for gid, rate in viewitems(firing_rates_dict[pop_name]):
             if np.max(rate) >= active_rate_threshold:
                 active_gid_range.append(gid)
-        gid_sample = random.sample(active_gid_range, min(len(active_gid_range), rows * cols))
-        for i, gid in enumerate(gid_sample):
-            inferred_rate = firing_rates_dict[pop_name][gid]
-            binned_spike_indexes = np.where(binned_spikes_dict[pop_name][gid] > 0.)[0]
-            row = i // cols
-            col = i % cols
-            axes[row][col].plot(t, inferred_rate, label='Rate')
-            axes[row][col].plot(t[binned_spike_indexes], np.ones(len(binned_spike_indexes)), 'k.', label='Spikes')
-            axes[row][col].set_title('gid: {}'.format(gid))
-        axes[0][cols-1].legend(loc='center left', frameon=False, framealpha=0.5, bbox_to_anchor=(1., 0.5))
-        clean_axes(axes)
-        fig.suptitle('Inferred spike rates: %s population' % pop_name)
-        fig.tight_layout()
-        fig.subplots_adjust(top=0.9, right=0.9)
-        fig.show()
+        if len(active_gid_range) > 0:
+            fig, axes = plt.subplots(rows, cols, sharex=True, sharey=True, figsize=(cols*3, rows*3))
+            for j in range(cols):
+                axes[rows-1][j].set_xlabel('Time (ms)')
+            for i in range(rows):
+                axes[i][0].set_ylabel('Firing rate (Hz)')
+            gid_sample = random.sample(active_gid_range, min(len(active_gid_range), rows * cols))
+            for i, gid in enumerate(gid_sample):
+                this_spike_times = spike_times_dict[pop_name][gid]
+                inferred_rate = firing_rates_dict[pop_name][gid]
+                row = i // cols
+                col = i % cols
+                axes[row][col].plot(t, inferred_rate, label='Rate')
+                axes[row][col].scatter(this_spike_times, [1.] * len(this_spike_times), marker='.', color='k',
+                                       label='Spikes')
+                axes[row][col].set_title('gid: {}'.format(gid))
+            axes[0][cols-1].legend(loc='center left', frameon=False, framealpha=0.5, bbox_to_anchor=(1., 0.5))
+            clean_axes(axes)
+            fig.suptitle('Inferred spike rates: %s population' % pop_name)
+            fig.tight_layout()
+            fig.subplots_adjust(top=0.9, right=0.9)
+            fig.show()
+        else:
+            print('plot_inferred_spike_rates: no active cells for population: %s' % pop_name)
 
 
 def plot_voltage_traces(voltage_rec_dict, rec_t, spike_times_dict=None, rows=3, cols=4, pop_names=None):
@@ -1484,6 +1576,7 @@ def plot_simple_network_results_from_file(data_file_path, verbose=False):
     if not os.path.isfile(data_file_path):
         raise IOError('plot_simple_network_results_from_file: invalid data file path: %s' % data_file_path)
 
+    full_spike_times_dict = defaultdict(dict)
     spike_times_dict = defaultdict(dict)
     firing_rates_dict = defaultdict(dict)
     filter_bands = dict()
@@ -1501,6 +1594,10 @@ def plot_simple_network_results_from_file(data_file_path, verbose=False):
         group = f[exported_data_key]
         connectivity_type = get_h5py_attr(group.attrs, 'connectivity_type')
         active_rate_threshold = group.attrs['active_rate_threshold']
+        subgroup = group['full_spike_times']
+        for pop_name in subgroup:
+            for gid_key in subgroup[pop_name]:
+                full_spike_times_dict[pop_name][int(gid_key)] = subgroup[pop_name][gid_key][:]
         subgroup = group['spike_times']
         for pop_name in subgroup:
             for gid_key in subgroup[pop_name]:
@@ -1510,6 +1607,7 @@ def plot_simple_network_results_from_file(data_file_path, verbose=False):
             for gid_key in subgroup[pop_name]:
                 firing_rates_dict[pop_name][int(gid_key)] = subgroup[pop_name][gid_key][:]
         binned_t = group['binned_t'][:]
+        full_binned_t = group['full_binned_t'][:]
         subgroup = group['filter_bands']
         for filter in subgroup:
             filter_bands[filter] = subgroup[filter][:]
@@ -1559,17 +1657,17 @@ def plot_simple_network_results_from_file(data_file_path, verbose=False):
             for gid, position in zip(subgroup[pop_name]['gids'][:], subgroup[pop_name]['positions'][:]):
                 pop_cell_positions[pop_name][gid] = position
 
-    mean_rate_dict, peak_rate_dict, mean_rate_active_cells_dict, pop_fraction_active_dict, \
-        binned_spike_count_dict, mean_rate_from_spike_count_dict = \
-        get_pop_activity_stats(spike_times_dict, firing_rates_dict, binned_t,
-                               threshold=active_rate_threshold, plot=True)
+    full_mean_rate_from_spike_count_dict = get_mean_rate_from_spike_count(full_spike_times_dict, full_binned_t)
+    mean_rate_dict, peak_rate_dict, mean_rate_active_cells_dict, pop_fraction_active_dict = \
+        get_pop_activity_stats(firing_rates_dict, binned_t, threshold=active_rate_threshold, plot=True)
 
     filtered_mean_rate_dict, filter_envelope_dict, filter_envelope_ratio_dict, centroid_freq_dict, \
-        freq_tuning_index_dict = \
-        get_pop_bandpass_filtered_signal_stats(mean_rate_from_spike_count_dict, binned_t, filter_bands,
-                                               plot=True, verbose=verbose)
+    freq_tuning_index_dict = \
+        get_pop_bandpass_filtered_signal_stats(full_mean_rate_from_spike_count_dict, filter_bands,
+                                               input_t=full_binned_t, output_t=binned_t, plot=True,
+                                               verbose=verbose)
 
-    plot_inferred_spike_rates(binned_spike_count_dict, firing_rates_dict, binned_t, active_rate_threshold)
+    plot_inferred_spike_rates(spike_times_dict, firing_rates_dict, binned_t, active_rate_threshold)
     plot_voltage_traces(voltage_rec_dict, rec_t, spike_times_dict)
     plot_weight_matrix(connection_weights_dict, tuning_peak_locs=tuning_peak_locs)
     plot_firing_rate_heatmaps(firing_rates_dict, binned_t, tuning_peak_locs=tuning_peak_locs)

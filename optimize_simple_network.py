@@ -71,6 +71,10 @@ def run_tests():
         objectives = dict()
     sys.stdout.flush()
     time.sleep(1.)
+    if context.export:
+        collect_and_merge_temp_output(context.interface, context.export_file_path, verbose=context.disp)
+    sys.stdout.flush()
+    time.sleep(1.)
     print('params:')
     pprint.pprint(context.x0_dict)
     print('features:')
@@ -152,9 +156,9 @@ def init_context():
                         context.default_syn_mech_params[target_pop_name][source_pop_name][param_name]
 
     delay = 1.  # ms
-    equilibrate = 250.  # ms
+    buffer = 500.  # ms
     duration = 3000. # ms
-    tstop = duration + equilibrate  # ms
+    tstop = int(duration + 2. * buffer)  # ms
     dt = 0.025
     binned_dt = 1.  # ms
     filter_dt = 1.  # ms
@@ -162,6 +166,8 @@ def init_context():
     baks_alpha = 4.7725100028345535
     baks_beta = 0.41969058927343522
     baks_pad_dur = 1000.  # ms
+    baks_wrap_around = False
+    track_wrap_around = True
     filter_bands = {'Theta': [4., 10.], 'Gamma': [30., 100.]}
 
     if context.comm.rank == 0:
@@ -219,16 +225,16 @@ def init_context():
                     tuning_peak_locs[pop_name][gid] = peak_loc
                     input_pop_firing_rates[pop_name][gid] = \
                         get_gaussian_rate(duration=duration, peak_loc=peak_loc, sigma=this_sigma,
-                                          min_rate=this_min_rate, max_rate=this_max_rate, dt=dt, wrap_around=True,
-                                          equilibrate=equilibrate)
+                                          min_rate=this_min_rate, max_rate=this_max_rate, dt=dt,
+                                          wrap_around=track_wrap_around, buffer=buffer)
 
                 if context.debug and context.plot:
                     fig, axes = plt.subplots()
                     for gid in range(pop_gid_ranges[pop_name][0],
                                      pop_gid_ranges[pop_name][1])[::int(context.pop_sizes[pop_name] / 25)]:
-                        axes.plot(this_stim_t - equilibrate, input_pop_firing_rates[pop_name][gid])
+                        axes.plot(this_stim_t - buffer, input_pop_firing_rates[pop_name][gid])
                     mean_input = np.mean(list(input_pop_firing_rates[pop_name].values()), axis=0)
-                    axes.plot(this_stim_t - equilibrate, mean_input, c='k', linewidth=2.)
+                    axes.plot(this_stim_t - buffer, mean_input, c='k', linewidth=2.)
                     axes.set_ylabel('Firing rate (Hz)')
                     axes.set_xlabel('Time (ms)')
                     clean_axes(axes)
@@ -343,27 +349,32 @@ def update_context(x, local_context=None):
                     x_dict[peak_delta_weight_param_name]
 
 
-def analyze_network_output(network, export=False, export_file_path=None, plot=False):
+def analyze_network_output(network, export=False, plot=False):
     """
 
     :param network: :class:'SimpleNetwork'
     :param export: bool
-    :param export_file_path: str
     :param plot: bool
     :return: dict
     """
-    rec_t = np.arange(0., context.tstop + context.dt - context.equilibrate, context.dt)
-    binned_t = np.arange(0., context.tstop + context.binned_dt - context.equilibrate, context.binned_dt)
-    spike_times_dict = network.get_spike_times_dict()
-    voltage_rec_dict = network.get_voltage_rec_dict()
+    full_rec_t = np.arange(-context.buffer, context.duration + context.buffer + context.dt / 2., context.dt)
+    rec_t = np.arange(0., context.duration, context.dt)
+    full_binned_t = np.arange(-context.buffer, context.duration + context.buffer + context.binned_dt / 2.,
+                              context.binned_dt)
+    binned_t = np.arange(0., context.duration + context.binned_dt / 2., context.binned_dt)
+    full_spike_times_dict, spike_times_dict = network.get_spike_times_dict()
+    full_voltage_rec_dict, voltage_rec_dict = network.get_voltage_rec_dict()
     voltages_exceed_threshold = check_voltages_exceed_threshold(voltage_rec_dict, context.pop_cell_types)
-    firing_rates_dict = infer_firing_rates(spike_times_dict, binned_t, alpha=context.baks_alpha, beta=context.baks_beta,
-                                           pad_dur=context.baks_pad_dur, wrap_around=True)
+    firing_rates_dict = infer_firing_rates(full_spike_times_dict, input_t=full_binned_t, output_t=binned_t,
+                                           alpha=context.baks_alpha, beta=context.baks_beta,
+                                           pad_dur=context.baks_pad_dur, wrap_around=context.baks_wrap_around)
     connection_weights_dict = network.get_connection_weights()
     connectivity_dict = network.get_connectivity_dict()
 
-    spike_times_dict = context.comm.gather(spike_times_dict, root=0)
+    # full_voltage_rec_dict = context.comm.gather(full_voltage_rec_dict, root=0)
     voltage_rec_dict = context.comm.gather(voltage_rec_dict, root=0)
+    full_spike_times_dict = context.comm.gather(full_spike_times_dict, root=0)
+    spike_times_dict = context.comm.gather(spike_times_dict, root=0)
     firing_rates_dict = context.comm.gather(firing_rates_dict, root=0)
     connection_weights_dict = context.comm.gather(connection_weights_dict, root=0)
     voltages_exceed_threshold_list = context.comm.gather(voltages_exceed_threshold, root=0)
@@ -371,22 +382,23 @@ def analyze_network_output(network, export=False, export_file_path=None, plot=Fa
 
     if context.comm.rank == 0:
         spike_times_dict = merge_list_of_dict(spike_times_dict)
+        full_spike_times_dict = merge_list_of_dict(full_spike_times_dict)
+        # full_voltage_rec_dict = merge_list_of_dict(full_voltage_rec_dict)
         voltage_rec_dict = merge_list_of_dict(voltage_rec_dict)
         firing_rates_dict = merge_list_of_dict(firing_rates_dict)
         connection_weights_dict = merge_list_of_dict(connection_weights_dict)
         connectivity_dict = merge_list_of_dict(connectivity_dict)
-        mean_rate_dict, peak_rate_dict, mean_rate_active_cells_dict, pop_fraction_active_dict, \
-            binned_spike_count_dict, mean_rate_from_spike_count_dict = \
-            get_pop_activity_stats(spike_times_dict, firing_rates_dict, binned_t,
-                                   threshold=context.active_rate_threshold, plot=plot)
+        full_mean_rate_from_spike_count_dict = get_mean_rate_from_spike_count(full_spike_times_dict, full_binned_t)
+        mean_rate_dict, peak_rate_dict, mean_rate_active_cells_dict, pop_fraction_active_dict = \
+            get_pop_activity_stats(firing_rates_dict, binned_t, threshold=context.active_rate_threshold, plot=plot)
 
         filtered_mean_rate_dict, filter_envelope_dict, filter_envelope_ratio_dict, centroid_freq_dict, \
             freq_tuning_index_dict = \
-            get_pop_bandpass_filtered_signal_stats(mean_rate_from_spike_count_dict, binned_t, context.filter_bands,
-                                                   plot=plot, verbose=context.verbose > 1)
+            get_pop_bandpass_filtered_signal_stats(full_mean_rate_from_spike_count_dict, context.filter_bands,
+                                                   input_t=full_binned_t, output_t=binned_t, plot=plot,
+                                                   verbose=context.verbose > 1)
         if plot:
-            plot_inferred_spike_rates(binned_spike_count_dict, firing_rates_dict, binned_t,
-                                      context.active_rate_threshold)
+            plot_inferred_spike_rates(spike_times_dict, firing_rates_dict, binned_t, context.active_rate_threshold)
             plot_voltage_traces(voltage_rec_dict, rec_t, spike_times_dict)
             plot_weight_matrix(connection_weights_dict, tuning_peak_locs=context.tuning_peak_locs)
             plot_firing_rate_heatmaps(firing_rates_dict, binned_t, tuning_peak_locs=context.tuning_peak_locs)
@@ -394,15 +406,21 @@ def analyze_network_output(network, export=False, export_file_path=None, plot=Fa
                 plot_2D_connection_distance(context.pop_syn_proportions, context.pop_cell_positions, connectivity_dict)
 
         if export:
-            with h5py.File(context.export_file_path, 'a') as f:
+            with h5py.File(context.temp_output_path, 'a') as f:
                 exported_data_key = 'simple_network_exported_data'
                 if exported_data_key in f:
-                    raise RuntimeError('optimize_simple_network: data has already been exported to export_file_path: '
-                                       '%s' % context.export_file_path)
+                    raise RuntimeError('optimize_simple_network: data has already been exported to file at path: '
+                                       '%s' % context.temp_output_path)
                 group = f.create_group(exported_data_key)
                 group.attrs['enumerated'] = False
                 set_h5py_attr(group.attrs, 'connectivity_type', context.connectivity_type)
                 group.attrs['active_rate_threshold'] = context.active_rate_threshold
+                subgroup = group.create_group('full_spike_times')
+                for pop_name in full_spike_times_dict:
+                    subgroup.create_group(pop_name)
+                    for gid in full_spike_times_dict[pop_name]:
+                        subgroup[pop_name].create_dataset(
+                            str(gid), data=full_spike_times_dict[pop_name][gid], compression='gzip')
                 subgroup = group.create_group('spike_times')
                 for pop_name in spike_times_dict:
                     subgroup.create_group(pop_name)
@@ -416,6 +434,7 @@ def analyze_network_output(network, export=False, export_file_path=None, plot=Fa
                         subgroup[pop_name].create_dataset(
                             str(gid), data=firing_rates_dict[pop_name][gid], compression='gzip')
                 group.create_dataset('binned_t', data=binned_t, compression='gzip')
+                group.create_dataset('full_binned_t', data=full_binned_t, compression='gzip')
                 subgroup = group.create_group('filter_bands')
                 for filter, band in viewitems(context.filter_bands):
                     subgroup.create_dataset(filter, data=band)
@@ -475,7 +494,7 @@ def analyze_network_output(network, export=False, export_file_path=None, plot=Fa
                     positions = np.array(list(context.pop_cell_positions[pop_name].values()))
                     data_group.create_dataset('gids', data=gids, compression='gzip')
                     data_group.create_dataset('positions', data=positions, compression='gzip')
-            print('optimize_simple_network: exported data to %s' % export_file_path)
+            print('optimize_simple_network: exported data to %s' % context.temp_output_path)
             sys.stdout.flush()
 
         """
@@ -537,7 +556,7 @@ def compute_features(x, export=False):
         connection_weights_norm_sigma=context.connection_weights_norm_sigma,
         syn_mech_params=context.syn_mech_params, input_pop_t=context.input_pop_t,
         input_pop_spike_times=context.input_pop_spike_times, input_pop_firing_rates=context.input_pop_firing_rates,
-        tstop=context.tstop, equilibrate=context.equilibrate, dt=context.dt, delay=context.delay,
+        tstop=context.tstop,  duration=context.duration, buffer=context.buffer, dt=context.dt, delay=context.delay,
         spikes_seed=context.spikes_seed, verbose=context.verbose, debug=context.debug)
 
     if context.connectivity_type == 'uniform':
@@ -556,7 +575,8 @@ def compute_features(x, export=False):
 
     if context.structured_weights:
         context.network.structure_connection_weights(structured_weight_params=context.structured_weight_params,
-                                                     tuning_peak_locs=context.tuning_peak_locs)
+                                                     tuning_peak_locs=context.tuning_peak_locs,
+                                                     wrap_around=context.track_wrap_around)
     """
     if context.debug:
         context.update(locals())
@@ -574,8 +594,7 @@ def compute_features(x, export=False):
         sys.stdout.flush()
     current_time = time.time()
 
-    results = analyze_network_output(context.network, export=export, export_file_path=context.export_file_path,
-                                     plot=context.plot)
+    results = analyze_network_output(context.network, export=export, plot=context.plot)
     if int(context.pc.id()) == 0:
         if context.verbose > 0:
             print('NETWORK ANALYSIS RUNTIME: %.2f s' % (time.time() - current_time))

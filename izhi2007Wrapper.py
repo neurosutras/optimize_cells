@@ -54,7 +54,7 @@ class IzhiCell(object):
             self.cellid = cellid
         if celltype not in type2007.keys():
             raise KeyError('izhi2007 cell type not recognized: %s' % str(celltype))
-        self.sec = h.Section(name='izhi2007' + celltype + str(self.cellid))
+        self.sec = h.Section(name='izhi2007' + celltype + str(self.cellid), cell=self)
         self.sec.L, self.sec.diam, self.sec.cm = 10, 10, 31.831  # empirically tuned
         self.izh = h.Izhi2007bS(0.5, sec=self.sec)
         self.reparam(celltype=celltype, cellid=self.cellid)
