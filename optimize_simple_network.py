@@ -104,6 +104,7 @@ def config_worker():
 
 def init_context():
     start_time = time.time()
+
     # {'pop_name': str}
     if 'pop_cell_types' not in context() or context.pop_cell_types is None:
         context.pop_cell_types = {'FF': 'input', 'E': 'IB', 'I': 'FS'}
@@ -114,12 +115,7 @@ def init_context():
     for pop_name in context.pop_sizes:
         context.pop_sizes[pop_name] = int(context.pop_sizes[pop_name])
 
-    # {'pop_name': int}
-    if 'pop_syn_counts' not in context() or context.pop_syn_counts is None:
-        context.pop_syn_counts = {'E': 100, 'I': 100}
-    for pop_name in context.pop_syn_counts:
-        context.pop_syn_counts[pop_name] = int(context.pop_syn_counts[pop_name])
-
+    pop_syn_factor = defaultdict(float)
     pop_gid_ranges = get_pop_gid_ranges(context.pop_sizes)
 
     # {'target_pop_name': {'syn_type: {'source_pop_name': float} } }
@@ -341,6 +337,9 @@ def update_context(x, local_context=None):
                                                        (1. - x_dict['I_E_FF_syn_proportion'])
     local_context.pop_syn_proportions['I']['I']['I'] = 1. - x_dict['I_E_syn_proportion']
 
+    local_context.pop_syn_factor['E'] = x_dict['E_syn_factor']
+    local_context.pop_syn_factor['I'] = x_dict['I_syn_factor']
+
     if local_context.structured_weights:
         for target_pop_name in local_context.structured_weight_params:
             peak_delta_weight_param_name = '%s_peak_delta_weight' % target_pop_name
@@ -551,7 +550,7 @@ def compute_features(x, export=False):
     start_time = time.time()
     context.network = SimpleNetwork(
         pc=context.pc, pop_sizes=context.pop_sizes, pop_gid_ranges=context.pop_gid_ranges,
-        pop_cell_types=context.pop_cell_types, pop_syn_counts=context.pop_syn_counts,
+        pop_cell_types=context.pop_cell_types, pop_syn_factor=context.pop_syn_factor,
         pop_syn_proportions=context.pop_syn_proportions, connection_weights_mean=context.connection_weights_mean,
         connection_weights_norm_sigma=context.connection_weights_norm_sigma,
         syn_mech_params=context.syn_mech_params, input_pop_t=context.input_pop_t,

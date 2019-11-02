@@ -64,7 +64,7 @@ default_syn_type_mech_params = \
 
 class SimpleNetwork(object):
 
-    def __init__(self, pc, pop_sizes, pop_gid_ranges, pop_cell_types, pop_syn_counts, pop_syn_proportions,
+    def __init__(self, pc, pop_sizes, pop_gid_ranges, pop_cell_types, pop_syn_factor, pop_syn_proportions,
                  connection_weights_mean, connection_weights_norm_sigma, syn_mech_params, syn_mech_names=None,
                  syn_mech_param_rules=None, syn_mech_param_defaults=None, input_pop_t=None,
                  input_pop_firing_rates=None, input_pop_spike_times=None, tstop=2000, duration=1000.,
@@ -75,7 +75,7 @@ class SimpleNetwork(object):
         :param pop_sizes: dict of int: cell population sizes
         :param pop_gid_ranges: dict of tuple of int: start and stop indexes; gid range of each cell population
         :param pop_cell_types: dict of str: cell_type of each cell population
-        :param pop_syn_counts: dict of int: number of synapses onto each cell population
+        :param pop_syn_factor: dict of floats: proportion of synapses onto each cell population
         :param pop_syn_proportions: nested dict of float:
                     {target_pop_name (str): {syn_type (str): {source_pop_name (str): proportion of synapses from
                         source_pop_name population } } }
@@ -116,7 +116,7 @@ class SimpleNetwork(object):
 
         self.pop_gid_ranges = pop_gid_ranges
         self.pop_cell_types = pop_cell_types
-        self.pop_syn_counts = pop_syn_counts
+        self.pop_syn_factor = pop_syn_factor
         self.pop_syn_proportions = pop_syn_proportions
         self.connection_weights_mean = connection_weights_mean
         self.connection_weights_norm_sigma = connection_weights_norm_sigma
@@ -267,7 +267,7 @@ class SimpleNetwork(object):
         connection_seed = int(connection_seed)
         rank = int(self.pc.id())
         for target_pop_name in self.pop_syn_proportions:
-            total_syn_count = self.pop_syn_counts[target_pop_name]
+            total_syn_count = int(self.pop_syn_factor[target_pop_name] * self.total_cells)
             for target_gid in self.cells[target_pop_name]:
                 self.local_np_random.seed(connection_seed + target_gid)
                 target_cell = self.cells[target_pop_name][target_gid]

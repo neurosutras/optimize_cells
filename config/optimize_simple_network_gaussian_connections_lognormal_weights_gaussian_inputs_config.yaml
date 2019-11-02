@@ -59,6 +59,12 @@ bounds:
   I_E_FF_syn_proportion: !!python/tuple
     - 0.01
     - 0.99
+  E_syn_factor: !!python/tuple
+    - 0.00
+    - 1.00
+  I_syn_factor: !!python/tuple
+    - 0.00
+    - 1.00
 rel_bounds:
 - - E_FF_mean_weight
   - '<'
@@ -136,9 +142,6 @@ kwargs:
     FF: 1000
     E: 1000
     I: 200
-  pop_syn_counts:
-    E: 100
-    I: 100
   default_syn_mech_params:
     I:
       FF:
@@ -196,6 +199,8 @@ param_names:
 - E_E_FF_syn_proportion
 - I_E_syn_proportion
 - I_E_FF_syn_proportion
+- E_syn_factor
+- I_syn_factor
 target_range:
   E_peak_rate: 0.1
   I_peak_rate: 0.1
@@ -255,3 +260,5 @@ x0:
   E_FF_mean_weight: 1.543887E+00
   I_E_mean_weight: 1.667242E-01
   I_I_tau_offset: 1.132949E+01
+  E_syn_factor: .09
+  I_syn_factor: .09
