@@ -59,12 +59,12 @@ bounds:
   I_E_FF_syn_proportion: !!python/tuple
     - 0.01
     - 0.99
-  E_syn_factor: !!python/tuple
-    - 0.00
-    - 1.00
-  I_syn_factor: !!python/tuple
-    - 0.00
-    - 1.00
+  E_norm_syn_count: !!python/tuple
+    - 0.
+    - 1.
+  I_norm_syn_count: !!python/tuple
+    - 0.
+    - 1.
 rel_bounds:
 - - E_FF_mean_weight
   - '<'
@@ -83,9 +83,8 @@ rel_bounds:
   - 0.5
   - I_E_mean_weight
 feature_names:
-- E_peak_rate
-- I_peak_rate
-- E_mean_active_rate
+- E_mean_peak_rate
+- E_mean_min_rate
 - I_mean_active_rate
 - FF_frac_active
 - E_frac_active
@@ -129,7 +128,7 @@ kwargs:
   input_types:
     FF: gaussian
   input_max_rates:
-    FF: 20.
+    FF: 30.
   input_min_rates:
     FF: 0.
   input_norm_tuning_widths:
@@ -158,9 +157,8 @@ kwargs:
       I:
         g_unit: 0.0005275
 objective_names:
-- E_peak_rate
-- I_peak_rate
-- E_mean_active_rate
+- E_mean_peak_rate
+- E_mean_min_rate
 - I_mean_active_rate
 - E_frac_active
 - I_frac_active
@@ -176,7 +174,7 @@ objective_names:
 - I_theta_tuning_index
 - E_gamma_tuning_index
 - I_gamma_tuning_index
-optimization_title: simple_network_gaussian_connections
+optimization_title: simple_network_gaussian_connections_F
 param_gen: PopulationAnnealing
 param_names:
 - E_FF_mean_weight
@@ -199,12 +197,11 @@ param_names:
 - E_E_FF_syn_proportion
 - I_E_syn_proportion
 - I_E_FF_syn_proportion
-- E_syn_factor
-- I_syn_factor
+- E_norm_syn_count
+- I_norm_syn_count
 target_range:
-  E_peak_rate: 0.1
-  I_peak_rate: 0.1
-  E_mean_active_rate: 0.1
+  E_mean_peak_rate: 0.1
+  E_mean_min_rate: 0.1
   I_mean_active_rate: 0.1
   E_frac_active: .001
   I_frac_active: .001
@@ -221,12 +218,11 @@ target_range:
   E_gamma_tuning_index: 0.2
   I_gamma_tuning_index: 0.2
 target_val:
-  E_peak_rate: 40.
-  I_peak_rate: 40.
-  E_mean_active_rate: 10.
-  I_mean_active_rate: 20.
-  E_frac_active: .25
-  I_frac_active: .9
+  E_mean_peak_rate: 40.
+  E_mean_min_rate: 0.
+  I_mean_active_rate: 30.
+  E_frac_active: .6
+  I_frac_active: 1.
   E_theta_envelope_ratio: .5
   I_theta_envelope_ratio: .5
   E_gamma_envelope_ratio: .25
@@ -260,5 +256,5 @@ x0:
   E_FF_mean_weight: 1.543887E+00
   I_E_mean_weight: 1.667242E-01
   I_I_tau_offset: 1.132949E+01
-  E_syn_factor: .09
-  I_syn_factor: .09
+  E_norm_syn_count: .09
+  I_norm_syn_count: .09

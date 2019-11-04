@@ -64,7 +64,7 @@ default_syn_type_mech_params = \
 
 class SimpleNetwork(object):
 
-    def __init__(self, pc, pop_sizes, pop_gid_ranges, pop_cell_types, pop_syn_factor, pop_syn_proportions,
+    def __init__(self, pc, pop_sizes, pop_gid_ranges, pop_cell_types, pop_syn_counts, pop_syn_proportions,
                  connection_weights_mean, connection_weights_norm_sigma, syn_mech_params, syn_mech_names=None,
                  syn_mech_param_rules=None, syn_mech_param_defaults=None, input_pop_t=None,
                  input_pop_firing_rates=None, input_pop_spike_times=None, tstop=2000, duration=1000.,
@@ -75,7 +75,7 @@ class SimpleNetwork(object):
         :param pop_sizes: dict of int: cell population sizes
         :param pop_gid_ranges: dict of tuple of int: start and stop indexes; gid range of each cell population
         :param pop_cell_types: dict of str: cell_type of each cell population
-        :param pop_syn_factor: dict of floats: proportion of synapses onto each cell population
+        :param pop_syn_counts: dict of int: number of synapses onto each cell population
         :param pop_syn_proportions: nested dict of float:
                     {target_pop_name (str): {syn_type (str): {source_pop_name (str): proportion of synapses from
                         source_pop_name population } } }
@@ -116,7 +116,7 @@ class SimpleNetwork(object):
 
         self.pop_gid_ranges = pop_gid_ranges
         self.pop_cell_types = pop_cell_types
-        self.pop_syn_factor = pop_syn_factor
+        self.pop_syn_counts = pop_syn_counts
         self.pop_syn_proportions = pop_syn_proportions
         self.connection_weights_mean = connection_weights_mean
         self.connection_weights_norm_sigma = connection_weights_norm_sigma
@@ -267,7 +267,7 @@ class SimpleNetwork(object):
         connection_seed = int(connection_seed)
         rank = int(self.pc.id())
         for target_pop_name in self.pop_syn_proportions:
-            total_syn_count = int(self.pop_syn_factor[target_pop_name] * self.total_cells)
+            total_syn_count = self.pop_syn_counts[target_pop_name]
             for target_gid in self.cells[target_pop_name]:
                 self.local_np_random.seed(connection_seed + target_gid)
                 target_cell = self.cells[target_pop_name][target_gid]
@@ -913,22 +913,24 @@ def get_pop_activity_stats(firing_rates_dict, t, threshold=2., plot=False):
     :param plot: bool
     :return: tuple of dict
     """
-    mean_rate_dict = defaultdict(dict)
+    min_rate_dict = defaultdict(dict)
     peak_rate_dict = defaultdict(dict)
     mean_rate_active_cells_dict = dict()
     pop_fraction_active_dict = dict()
+    mean_min_rate_dict = dict()
+    mean_peak_rate_dict = dict()
 
     for pop_name in firing_rates_dict:
         this_active_cell_count = np.zeros_like(t)
         this_summed_rate_active_cells = np.zeros_like(t)
         for gid in firing_rates_dict[pop_name]:
             this_firing_rate = firing_rates_dict[pop_name][gid]
-            mean_rate_dict[pop_name][gid] = np.mean(this_firing_rate)
-            peak_rate_dict[pop_name][gid] = np.max(this_firing_rate)
             active_indexes = np.where(this_firing_rate >= threshold)[0]
             if len(active_indexes) > 0:
                 this_active_cell_count[active_indexes] += 1.
                 this_summed_rate_active_cells[active_indexes] += this_firing_rate[active_indexes]
+                min_rate_dict[pop_name][gid] = np.min(this_firing_rate)
+                peak_rate_dict[pop_name][gid] = np.max(this_firing_rate)
 
         active_indexes = np.where(this_active_cell_count > 0.)[0]
         if len(active_indexes) > 0:
@@ -938,6 +940,12 @@ def get_pop_activity_stats(firing_rates_dict, t, threshold=2., plot=False):
         else:
             mean_rate_active_cells_dict[pop_name] = np.zeros_like(t)
         pop_fraction_active_dict[pop_name] = np.divide(this_active_cell_count, len(firing_rates_dict[pop_name]))
+        if len(min_rate_dict[pop_name]) > 0:
+            mean_min_rate_dict[pop_name] = np.mean(list(min_rate_dict[pop_name].values()))
+            mean_peak_rate_dict[pop_name] = np.mean(list(peak_rate_dict[pop_name].values()))
+        else:
+            mean_min_rate_dict[pop_name] = 0.
+            mean_peak_rate_dict[pop_name] = 0.
 
     if plot:
         fig, axes = plt.subplots(1, 2)
@@ -953,7 +961,7 @@ def get_pop_activity_stats(firing_rates_dict, t, threshold=2., plot=False):
         fig.tight_layout()
         fig.show()
 
-    return mean_rate_dict, peak_rate_dict, mean_rate_active_cells_dict, pop_fraction_active_dict
+    return mean_min_rate_dict, mean_peak_rate_dict, mean_rate_active_cells_dict, pop_fraction_active_dict
 
 
 def get_butter_bandpass_filter(filter_band, sampling_rate, order, filter_label='', plot=False):
@@ -1658,7 +1666,7 @@ def plot_simple_network_results_from_file(data_file_path, verbose=False):
                 pop_cell_positions[pop_name][gid] = position
 
     full_mean_rate_from_spike_count_dict = get_mean_rate_from_spike_count(full_spike_times_dict, full_binned_t)
-    mean_rate_dict, peak_rate_dict, mean_rate_active_cells_dict, pop_fraction_active_dict = \
+    mean_min_rate_dict, mean_peak_rate_dict, mean_rate_active_cells_dict, pop_fraction_active_dict = \
         get_pop_activity_stats(firing_rates_dict, binned_t, threshold=active_rate_threshold, plot=True)
 
     filtered_mean_rate_dict, filter_envelope_dict, filter_envelope_ratio_dict, centroid_freq_dict, \

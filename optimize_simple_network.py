@@ -47,10 +47,9 @@ def main(cli, config_file_path, export, output_dir, export_file_path, label, int
     context.interface = get_parallel_interface(source_file=__file__, source_package=__package__, **kwargs)
     context.interface.start(disp=context.disp)
     context.interface.ensure_controller()
-    config_optimize_interactive(__file__, config_file_path=config_file_path, output_dir=output_dir,
-                                export=export, export_file_path=export_file_path, label=label,
-                                disp=context.disp, interface=context.interface, verbose=verbose, plot=plot,
-                                debug=debug, **kwargs)
+    config_optimize_interactive(__file__, config_file_path=config_file_path, output_dir=output_dir, export=export,
+                                export_file_path=export_file_path, label=label, disp=context.disp,
+                                interface=context.interface, verbose=verbose, plot=plot, debug=debug, **kwargs)
     if simulate:
         run_tests()
 
@@ -111,15 +110,13 @@ def init_context():
 
     # {'pop_name': int}
     if 'pop_sizes' not in context() or context.pop_sizes is None:
-        context.pop_sizes = {'FF': 500, 'E': 500, 'I': 100}
+        raise RuntimeError('optimize_simple_network: pop_sizes must be specified in the config.yaml')
     for pop_name in context.pop_sizes:
         context.pop_sizes[pop_name] = int(context.pop_sizes[pop_name])
 
-    pop_syn_factor = defaultdict(float)
-    pop_gid_ranges = get_pop_gid_ranges(context.pop_sizes)
+    total_cells = np.sum(list(context.pop_sizes.values()))
 
-    # {'target_pop_name': {'syn_type: {'source_pop_name': float} } }
-    pop_syn_proportions = defaultdict(lambda: defaultdict(dict))
+    pop_gid_ranges = get_pop_gid_ranges(context.pop_sizes)
 
     connection_weights_mean = defaultdict(dict)  # {'target_pop_name': {'source_pop_name': float} }
     connection_weights_norm_sigma = defaultdict(dict)  # {'target_pop_name': {'source_pop_name': float} }
@@ -137,14 +134,7 @@ def init_context():
         local_np_random.seed(int(context.tuning_seed))
 
     syn_mech_params = defaultdict(lambda: defaultdict(dict))
-    if 'default_syn_mech_params' not in context() or context.default_syn_mech_params is None:
-        syn_mech_params['I']['FF']['g_unit'] = 0.0001925
-        syn_mech_params['I']['E']['g_unit'] = 0.0001925
-        syn_mech_params['I']['I']['g_unit'] = 0.0001925
-        syn_mech_params['E']['FF']['g_unit'] = 0.0005275
-        syn_mech_params['E']['E']['g_unit'] = 0.0005275
-        syn_mech_params['E']['I']['g_unit'] = 0.0005275
-    else:
+    if 'default_syn_mech_params' in context() and context.default_syn_mech_params is not None:
         for target_pop_name in context.default_syn_mech_params:
             for source_pop_name in context.default_syn_mech_params[target_pop_name]:
                 for param_name in context.default_syn_mech_params[target_pop_name][source_pop_name]:
@@ -328,6 +318,12 @@ def update_context(x, local_context=None):
     local_context.connection_weights_norm_sigma['I']['E'] = x_dict['I_E_weight_norm_sigma']
     local_context.connection_weights_norm_sigma['I']['I'] = x_dict['I_I_weight_norm_sigma']
 
+    context.pop_syn_counts = dict()
+    context.pop_syn_counts['E'] = int(context.total_cells * x_dict['E_norm_syn_count'])
+    context.pop_syn_counts['I'] = int(context.total_cells * x_dict['I_norm_syn_count'])
+
+    # {'target_pop_name': {'syn_type: {'source_pop_name': float} } }
+    local_context.pop_syn_proportions = defaultdict(lambda: defaultdict(dict))
     local_context.pop_syn_proportions['E']['E']['FF'] = x_dict['E_E_syn_proportion'] * x_dict['E_E_FF_syn_proportion']
     local_context.pop_syn_proportions['E']['E']['E'] = x_dict['E_E_syn_proportion'] * \
                                                        (1. - x_dict['E_E_FF_syn_proportion'])
@@ -336,9 +332,6 @@ def update_context(x, local_context=None):
     local_context.pop_syn_proportions['I']['E']['E'] = x_dict['I_E_syn_proportion'] * \
                                                        (1. - x_dict['I_E_FF_syn_proportion'])
     local_context.pop_syn_proportions['I']['I']['I'] = 1. - x_dict['I_E_syn_proportion']
-
-    local_context.pop_syn_factor['E'] = x_dict['E_syn_factor']
-    local_context.pop_syn_factor['I'] = x_dict['I_syn_factor']
 
     if local_context.structured_weights:
         for target_pop_name in local_context.structured_weight_params:
@@ -388,7 +381,7 @@ def analyze_network_output(network, export=False, plot=False):
         connection_weights_dict = merge_list_of_dict(connection_weights_dict)
         connectivity_dict = merge_list_of_dict(connectivity_dict)
         full_mean_rate_from_spike_count_dict = get_mean_rate_from_spike_count(full_spike_times_dict, full_binned_t)
-        mean_rate_dict, peak_rate_dict, mean_rate_active_cells_dict, pop_fraction_active_dict = \
+        mean_min_rate_dict, mean_peak_rate_dict, mean_rate_active_cells_dict, pop_fraction_active_dict = \
             get_pop_activity_stats(firing_rates_dict, binned_t, threshold=context.active_rate_threshold, plot=plot)
 
         filtered_mean_rate_dict, filter_envelope_dict, filter_envelope_ratio_dict, centroid_freq_dict, \
@@ -504,10 +497,9 @@ def analyze_network_output(network, export=False, plot=False):
 
         result = dict()
 
-        result['E_mean_active_rate'] = np.mean(mean_rate_active_cells_dict['E'])
+        result['E_mean_min_rate'] = mean_min_rate_dict['E']
+        result['E_mean_peak_rate'] = mean_peak_rate_dict['E']
         result['I_mean_active_rate'] = np.mean(mean_rate_active_cells_dict['I'])
-        result['E_peak_rate'] = np.mean(list(peak_rate_dict['E'].values()))
-        result['I_peak_rate'] = np.mean(list(peak_rate_dict['I'].values()))
         result['FF_frac_active'] = np.mean(pop_fraction_active_dict['FF'])
         result['E_frac_active'] = np.mean(pop_fraction_active_dict['E'])
         result['I_frac_active'] = np.mean(pop_fraction_active_dict['I'])
@@ -550,7 +542,7 @@ def compute_features(x, export=False):
     start_time = time.time()
     context.network = SimpleNetwork(
         pc=context.pc, pop_sizes=context.pop_sizes, pop_gid_ranges=context.pop_gid_ranges,
-        pop_cell_types=context.pop_cell_types, pop_syn_factor=context.pop_syn_factor,
+        pop_cell_types=context.pop_cell_types, pop_syn_counts=context.pop_syn_counts,
         pop_syn_proportions=context.pop_syn_proportions, connection_weights_mean=context.connection_weights_mean,
         connection_weights_norm_sigma=context.connection_weights_norm_sigma,
         syn_mech_params=context.syn_mech_params, input_pop_t=context.input_pop_t,
