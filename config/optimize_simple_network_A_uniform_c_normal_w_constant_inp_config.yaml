@@ -60,28 +60,28 @@ bounds:
     - 0.01
     - 0.99
   E_norm_syn_count: !!python/tuple
-    - 0.
+    - 0.1
     - 1.
   I_norm_syn_count: !!python/tuple
-    - 0.
+    - 0.1
     - 1.
 rel_bounds:
-- - E_FF_mean_weight
-  - '<'
-  - 2.0
-  - E_E_mean_weight
-- - E_FF_mean_weight
-  - '>'
-  - 0.5
-  - E_E_mean_weight
-- - I_FF_mean_weight
-  - '<'
-  - 2.0
-  - I_E_mean_weight
-- - I_FF_mean_weight
-  - '>'
-  - 0.5
-  - I_E_mean_weight
+#- - E_FF_mean_weight
+#  - '<'
+#  - 2.0
+#  - E_E_mean_weight
+#- - E_FF_mean_weight
+#  - '>'
+#  - 0.5
+#  - E_E_mean_weight
+#- - I_FF_mean_weight
+#  - '<'
+#  - 2.0
+#  - I_E_mean_weight
+#- - I_FF_mean_weight
+#  - '>'
+#  - 0.5
+#  - I_E_mean_weight
 feature_names:
 - E_mean_peak_rate
 - E_mean_min_rate
@@ -113,24 +113,15 @@ get_objectives:
   optimize_simple_network: get_objectives
 kwargs:
   verbose: 1
-  connection_seed: 30000000
-  spikes_seed: 130000000
-  weights_seed: 230000000
-  tuning_seed: 430000000
+  connection_seed: 0
+  spikes_seed: 100000000
+  weights_seed: 200000000
   connectivity_type: uniform
   default_weight_distribution_type: normal
-  connection_weight_distribution_types:
-    E:
-      FF: lognormal
-      E: lognormal
   input_types:
-    FF: gaussian
-  input_max_rates:
-    FF: 30.
-  input_min_rates:
-    FF: 0.
-  input_norm_tuning_widths:
-    FF: 0.5
+    FF: constant
+  input_mean_rates:
+    FF: 20.  # Hz
   pop_cell_types:
     FF: input
     E: IB
@@ -172,7 +163,7 @@ objective_names:
 - I_theta_tuning_index
 - E_gamma_tuning_index
 - I_gamma_tuning_index
-optimization_title: simple_network_uniform_connections_C
+optimization_title: simple_network_A
 param_gen: PopulationAnnealing
 param_names:
 - E_FF_mean_weight
@@ -216,11 +207,11 @@ target_range:
   E_gamma_tuning_index: 0.2
   I_gamma_tuning_index: 0.2
 target_val:
-  E_mean_peak_rate: 40.
+  E_mean_peak_rate: 20.
   E_mean_min_rate: 0.
-  I_mean_active_rate: 30.
+  I_mean_active_rate: 20.
   E_frac_active: .6
-  I_frac_active: 1.
+  I_frac_active: .9
   E_theta_envelope_ratio: .5
   I_theta_envelope_ratio: .5
   E_gamma_envelope_ratio: .25
@@ -234,25 +225,25 @@ target_val:
   E_gamma_tuning_index: 5.
   I_gamma_tuning_index: 5.
 x0:
-  E_I_weight_norm_sigma: 3.133021E-01
-  E_E_FF_syn_proportion: 8.959412E-01
-  E_I_tau_offset: 4.076602E+00
-  E_E_weight_norm_sigma: 3.283792E-01
-  I_E_FF_syn_proportion: 7.391833E-01
-  E_E_tau_offset: 5.549544E+00
-  I_FF_mean_weight: 2.393251E+00
-  E_E_mean_weight: 2.881852E+00
-  E_FF_weight_norm_sigma: 9.257900E-01
-  E_I_mean_weight: 1.131226E-01
-  I_E_weight_norm_sigma: 5.487550E-01
-  I_E_tau_offset: 1.750748E+01
-  I_I_weight_norm_sigma: 5.282017E-01
-  I_E_syn_proportion: 9.759795E-02
-  I_FF_weight_norm_sigma: 7.706212E-01
-  E_E_syn_proportion: 3.916749E-01
-  I_I_mean_weight: 2.311584E+00
-  E_FF_mean_weight: 1.697106E+00
-  I_E_mean_weight: 4.106105E+00
-  I_I_tau_offset: 3.438833E+00
-  E_norm_syn_count: .09
-  I_norm_syn_count: .09
+  E_I_weight_norm_sigma: 7.536725E-01
+  E_E_FF_syn_proportion: 8.130785E-01
+  E_I_tau_offset: 3.904352E+00
+  E_E_weight_norm_sigma: 2.392462E-01
+  I_E_FF_syn_proportion: 6.496068E-01
+  E_E_tau_offset: 7.198046E+00
+  I_FF_mean_weight: 1.746738E+00
+  E_E_mean_weight: 1.535914E-01
+  E_FF_weight_norm_sigma: 1.727204E-01
+  E_I_mean_weight: 8.778353E-01
+  I_E_weight_norm_sigma: 4.729232E-01
+  I_E_tau_offset: 6.201983E+00
+  I_I_weight_norm_sigma: 3.574340E-01
+  I_E_syn_proportion: 3.710289E-01
+  I_FF_weight_norm_sigma: 2.520923E-01
+  E_E_syn_proportion: 9.409761E-01
+  I_I_mean_weight: 1.109997E+00
+  E_FF_mean_weight: 1.920767E-01
+  I_E_mean_weight: 1.222973E+00
+  I_I_tau_offset: 3.791687E+00
+  E_norm_syn_count: .1
+  I_norm_syn_count: .1

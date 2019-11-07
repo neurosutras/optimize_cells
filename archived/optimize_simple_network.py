@@ -20,7 +20,7 @@ context = Context()
 
 @click.command()
 @click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='config/optimize_simple_network_uniform_connections_normal_weights_constant_inputs_config.yaml')
+              default='config/optimize_simple_network_A_uniform_c_normal_w_constant_inp_config.yaml')
 @click.option("--export", is_flag=True)
 @click.option("--output-dir", type=str, default='data')
 @click.option("--export-file-path", type=str, default=None)

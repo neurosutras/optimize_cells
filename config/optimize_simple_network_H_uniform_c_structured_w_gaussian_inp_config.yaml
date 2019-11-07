@@ -60,31 +60,31 @@ bounds:
     - 0.01
     - 0.99
   E_norm_syn_count: !!python/tuple
-    - 0.
+    - 0.1
     - 1.
   I_norm_syn_count: !!python/tuple
-    - 0.
+    - 0.1
     - 1.
   E_peak_delta_weight: !!python/tuple
-    - 1.5
-    - 4.0
+    - 1.
+    - 5.0
 rel_bounds:
-- - E_FF_mean_weight
-  - '<'
-  - 2.0
-  - E_E_mean_weight
-- - E_FF_mean_weight
-  - '>'
-  - 0.5
-  - E_E_mean_weight
-- - I_FF_mean_weight
-  - '<'
-  - 2.0
-  - I_E_mean_weight
-- - I_FF_mean_weight
-  - '>'
-  - 0.5
-  - I_E_mean_weight
+#- - E_FF_mean_weight
+#  - '<'
+#  - 2.0
+#  - E_E_mean_weight
+#- - E_FF_mean_weight
+#  - '>'
+#  - 0.5
+#  - E_E_mean_weight
+#- - I_FF_mean_weight
+#  - '<'
+#  - 2.0
+#  - I_E_mean_weight
+#- - I_FF_mean_weight
+#  - '>'
+#  - 0.5
+#  - I_E_mean_weight
 feature_names:
 - E_mean_peak_rate
 - E_mean_min_rate
@@ -126,7 +126,7 @@ kwargs:
   input_types:
     FF: gaussian
   input_max_rates:
-    FF: 30.
+    FF: 20.
   input_min_rates:
     FF: 0.
   input_norm_tuning_widths:
@@ -178,7 +178,7 @@ objective_names:
 - I_theta_tuning_index
 - E_gamma_tuning_index
 - I_gamma_tuning_index
-optimization_title: simple_network_uniform_connections_H
+optimization_title: simple_network_H
 param_gen: PopulationAnnealing
 param_names:
 - E_FF_mean_weight
@@ -223,11 +223,11 @@ target_range:
   E_gamma_tuning_index: 0.2
   I_gamma_tuning_index: 0.2
 target_val:
-  E_mean_peak_rate: 40.
+  E_mean_peak_rate: 20.
   E_mean_min_rate: 0.
-  I_mean_active_rate: 30.
+  I_mean_active_rate: 20.
   E_frac_active: .6
-  I_frac_active: 1.
+  I_frac_active: .9
   E_theta_envelope_ratio: .5
   I_theta_envelope_ratio: .5
   E_gamma_envelope_ratio: .25
@@ -261,6 +261,6 @@ x0:
   E_FF_mean_weight: 1.543887E+00
   I_E_mean_weight: 5.667242E-01
   I_I_tau_offset: 1.132949E+01
-  E_norm_syn_count: .09
-  I_norm_syn_count: .09
+  E_norm_syn_count: .1
+  I_norm_syn_count: .1
   E_peak_delta_weight: 2.

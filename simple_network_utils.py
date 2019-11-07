@@ -314,7 +314,6 @@ class SimpleNetwork(object):
         :param weights_seed: int: random seed for reproducible connection weights
         """
         weights_seed = int(weights_seed)
-        rank = int(self.pc.id())
         for target_pop_name in self.ncdict:
             for target_gid in self.ncdict[target_pop_name]:
                 self.local_np_random.seed(weights_seed + target_gid)
@@ -344,9 +343,9 @@ class SimpleNetwork(object):
                                 while this_weight <= 0.:
                                     this_weight = mu * self.local_np_random.normal(1., norm_sigma)
                             elif this_weight_distribution_type == 'lognormal':
-                                # enforce weights to be less than 10-fold greater than mean
-                                this_weight = 10. * mu + 1.
-                                while this_weight > 10. * mu:
+                                # enforce weights to be less than 5-fold greater than mean
+                                this_weight = 5. * mu
+                                while this_weight >= 5. * mu:
                                     this_weight = mu * self.local_np_random.lognormal(0., norm_sigma)
                             else:
                                 raise RuntimeError('SimpleNetwork.assign_connection_weights: invalid connection '
@@ -384,7 +383,6 @@ class SimpleNetwork(object):
                     if source_pop_name not in tuning_peak_locs:
                         raise RuntimeError('structure_connection_weights: spatial tuning locations not found for '
                                            'source population: %s' % source_pop_name)
-                    this_mean_connection_weight = self.connection_weights_mean[target_pop_name][source_pop_name]
                     for target_gid in (target_gid for target_gid in self.ncdict[target_pop_name]
                                        if source_pop_name in self.ncdict[target_pop_name][target_gid]):
                         target_cell = self.cells[target_pop_name][target_gid]
@@ -403,7 +401,7 @@ class SimpleNetwork(object):
                                                                       syn_mech_names=self.syn_mech_names,
                                                                       syn_mech_param_rules=self.syn_mech_param_rules)
                                 if this_tuning_type == 'additive':
-                                    updated_weight = initial_weight + this_delta_weight * this_mean_connection_weight
+                                    updated_weight = initial_weight + this_delta_weight
                                 elif this_tuning_type == 'multiplicative':
                                     updated_weight = initial_weight * (1. + this_delta_weight)
                                 if self.debug and self.verbose:
@@ -489,7 +487,7 @@ class SimpleNetwork(object):
             for gid, recvec in viewitems(self.voltage_recvec[pop_name]):
                 rec_array = np.array(recvec)
                 full_voltage_rec_dict[pop_name][gid] = rec_array
-                voltage_rec_dict[pop_name][gid] = rec_array[start_index:end_index]
+                voltage_rec_dict[pop_name][gid] = np.array(rec_array[start_index:end_index])
         return full_voltage_rec_dict, voltage_rec_dict
 
     def get_connection_weights(self):
@@ -1106,7 +1104,6 @@ def get_bandpass_filtered_signal_stats(signal, input_t, sos, filter_band, buffer
     filtered_signal = filtered_padded_signal[pad_len:-pad_len]
     padded_envelope = np.abs(hilbert(filtered_padded_signal))
     envelope = padded_envelope[pad_len:-pad_len]
-
 
     if buffered_sos is not None:
         if buffered_filter_band is None:
