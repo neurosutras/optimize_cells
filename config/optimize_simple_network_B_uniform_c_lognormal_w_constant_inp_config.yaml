@@ -59,27 +59,32 @@ bounds:
   I_E_FF_syn_proportion: !!python/tuple
     - 0.01
     - 0.99
+  E_norm_syn_count: !!python/tuple
+    - 0.1
+    - 1.
+  I_norm_syn_count: !!python/tuple
+    - 0.1
+    - 1.
 rel_bounds:
-- - E_FF_mean_weight
-  - '<'
-  - 2.0
-  - E_E_mean_weight
-- - E_FF_mean_weight
-  - '>'
-  - 0.5
-  - E_E_mean_weight
-- - I_FF_mean_weight
-  - '<'
-  - 2.0
-  - I_E_mean_weight
-- - I_FF_mean_weight
-  - '>'
-  - 0.5
-  - I_E_mean_weight
+#- - E_FF_mean_weight
+#  - '<'
+#  - 2.0
+#  - E_E_mean_weight
+#- - E_FF_mean_weight
+#  - '>'
+#  - 0.5
+#  - E_E_mean_weight
+#- - I_FF_mean_weight
+#  - '<'
+#  - 2.0
+#  - I_E_mean_weight
+#- - I_FF_mean_weight
+#  - '>'
+#  - 0.5
+#  - I_E_mean_weight
 feature_names:
-- E_peak_rate
-- I_peak_rate
-- E_mean_active_rate
+- E_mean_peak_rate
+- E_mean_min_rate
 - I_mean_active_rate
 - FF_frac_active
 - E_frac_active
@@ -129,9 +134,6 @@ kwargs:
     FF: 1000
     E: 1000
     I: 200
-  pop_syn_counts:
-    E: 100
-    I: 100
   default_syn_mech_params:
     I:
       FF:
@@ -148,9 +150,8 @@ kwargs:
       I:
         g_unit: 0.0005275
 objective_names:
-- E_peak_rate
-- I_peak_rate
-- E_mean_active_rate
+- E_mean_peak_rate
+- E_mean_min_rate
 - I_mean_active_rate
 - E_frac_active
 - I_frac_active
@@ -166,7 +167,7 @@ objective_names:
 - I_theta_tuning_index
 - E_gamma_tuning_index
 - I_gamma_tuning_index
-optimization_title: simple_network_uniform_connections
+optimization_title: simple_network_B
 param_gen: PopulationAnnealing
 param_names:
 - E_FF_mean_weight
@@ -189,10 +190,11 @@ param_names:
 - E_E_FF_syn_proportion
 - I_E_syn_proportion
 - I_E_FF_syn_proportion
+- E_norm_syn_count
+- I_norm_syn_count
 target_range:
-  E_peak_rate: 0.1
-  I_peak_rate: 0.1
-  E_mean_active_rate: 0.1
+  E_mean_peak_rate: 0.1
+  E_mean_min_rate: 0.1
   I_mean_active_rate: 0.1
   E_frac_active: .001
   I_frac_active: .001
@@ -209,11 +211,10 @@ target_range:
   E_gamma_tuning_index: 0.2
   I_gamma_tuning_index: 0.2
 target_val:
-  E_peak_rate: 40.
-  I_peak_rate: 40.
-  E_mean_active_rate: 10.
+  E_mean_peak_rate: 20.
+  E_mean_min_rate: 0.
   I_mean_active_rate: 20.
-  E_frac_active: .25
+  E_frac_active: .6
   I_frac_active: .9
   E_theta_envelope_ratio: .5
   I_theta_envelope_ratio: .5
@@ -248,3 +249,5 @@ x0:
   E_FF_mean_weight: 4.569463E+00
   I_E_mean_weight: 2.840374E+00
   I_I_tau_offset: 6.882420E+00
+  E_norm_syn_count: .1
+  I_norm_syn_count: .1
