@@ -179,7 +179,7 @@ objective_names:
 - I_theta_tuning_index
 - E_gamma_tuning_index
 - I_gamma_tuning_index
-optimization_title: simple_network_H
+optimization_title: simple_network_I
 param_gen: PopulationAnnealing
 param_names:
 - E_FF_mean_weight
