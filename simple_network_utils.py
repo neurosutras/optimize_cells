@@ -949,12 +949,12 @@ def get_pop_activity_stats(firing_rates_dict, t, threshold=2., plot=False):
         fig, axes = plt.subplots(1, 2)
         for pop_name in pop_fraction_active_dict:
             axes[0].plot(t, pop_fraction_active_dict[pop_name], label=pop_name)
-            axes[0].set_title('Active fraction of population')
+            axes[0].set_title('Active fraction of population', fontsize=mpl.rcParams['font.size'])
             axes[1].plot(t, mean_rate_active_cells_dict[pop_name])
-            axes[1].set_title('Mean firing rate of active cells')
+            axes[1].set_title('Mean firing rate of active cells', fontsize=mpl.rcParams['font.size'])
         axes[0].set_ylim(0., axes[0].get_ylim()[1])
         axes[1].set_ylim(0., axes[1].get_ylim()[1])
-        axes[0].legend(loc='best', frameon=False, framealpha=0.5)
+        axes[0].legend(loc='best', frameon=False, framealpha=0.5, fontsize=mpl.rcParams['font.size'])
         clean_axes(axes)
         fig.tight_layout()
         fig.show()
@@ -981,7 +981,7 @@ def get_butter_bandpass_filter(filter_band, sampling_rate, order, filter_label='
         plt.plot((sampling_rate * 0.5 / np.pi) * w, abs(h), c='k')
         plt.plot([0, 0.5 * sampling_rate], [np.sqrt(0.5), np.sqrt(0.5)], '--', c='grey')
         plt.title('%s bandpass filter (%.1f:%.1f Hz), Order: %i' %
-                  (filter_label, min(filter_band), max(filter_band), order))
+                  (filter_label, min(filter_band), max(filter_band), order), fontsize=mpl.rcParams['font.size'])
         plt.xlabel('Frequency (Hz)')
         bandwidth = max(filter_band) - min(filter_band)
         plt.xlim(max(0., min(filter_band) - bandwidth / 2.), min(nyq, max(filter_band) + bandwidth / 2.))
@@ -1144,14 +1144,14 @@ def get_bandpass_filtered_signal_stats(signal, input_t, sos, filter_band, buffer
         envelope_ratio = mean_envelope / mean_signal
 
     if plot:
-        fig, axes = plt.subplots(2,2, figsize=(8,7))
+        fig, axes = plt.subplots(2,2, figsize=(8.5,7))
         axes[0][0].plot(t, np.subtract(signal, np.mean(signal)), c='grey', alpha=0.5, label='Original signal')
         axes[0][0].plot(t, filtered_signal, c='r', label='Filtered signal', alpha=0.5)
         axes[0][1].plot(t, signal, label='Original signal', c='grey', alpha=0.5, zorder=2)
         axes[0][1].plot(t, np.ones_like(t) * mean_signal, c='k', zorder=1)
         axes[0][1].plot(t, envelope, label='Envelope amplitude', c='r', alpha=0.5, zorder=2)
         axes[0][1].plot(t, np.ones_like(t) * mean_envelope, c='darkred', zorder=0)
-        axes[0][0].set_ylabel('%s (mean subtracted) (%s)' % (axis_label, units))
+        axes[0][0].set_ylabel('%s\n(mean subtracted) (%s)' % (axis_label, units))
         axes[0][1].set_ylabel('%s (%s)' % (axis_label, units))
         box = axes[0][0].get_position()
         axes[0][0].set_position([box.x0, box.y0, box.width, box.height * 0.8])
@@ -1164,7 +1164,7 @@ def get_bandpass_filtered_signal_stats(signal, input_t, sos, filter_band, buffer
 
         axes[1][0].plot(f, power, c='k')
         axes[1][0].set_xlabel('Frequency (Hz)')
-        axes[1][0].set_ylabel('Spectral density (units$^{2}$/Hz)')
+        axes[1][0].set_ylabel('Spectral density\n(units$^{2}$/Hz)')
         if buffered_filter_band is not None:
             axes[1][0].set_xlim(min(buffered_filter_band), max(buffered_filter_band))
         else:
@@ -1173,9 +1173,10 @@ def get_bandpass_filtered_signal_stats(signal, input_t, sos, filter_band, buffer
         clean_axes(axes)
         fig.suptitle('%s: %s bandpass filter (%.1f:%.1f Hz)\nEnvelope ratio: %.3f; Centroid freq: %.3f Hz\n'
                      'Frequency tuning index: %.3f' % (signal_label, filter_label, min(filter_band), max(filter_band),
-                                                       envelope_ratio, centroid_freq, freq_tuning_index))
+                                                       envelope_ratio, centroid_freq, freq_tuning_index),
+                     fontsize=mpl.rcParams['font.size'])
         fig.tight_layout()
-        fig.subplots_adjust(top=0.8, hspace=0.3)
+        fig.subplots_adjust(top=0.75, hspace=0.3)
         fig.show()
 
     return filtered_signal, envelope, envelope_ratio, centroid_freq, freq_tuning_index
@@ -1351,10 +1352,10 @@ def plot_inferred_spike_rates(spike_times_dict, firing_rates_dict, t, active_rat
                 axes[row][col].plot(t, inferred_rate, label='Rate')
                 axes[row][col].scatter(this_spike_times, [1.] * len(this_spike_times), marker='.', color='k',
                                        label='Spikes')
-                axes[row][col].set_title('gid: {}'.format(gid))
+                axes[row][col].set_title('gid: {}'.format(gid), fontsize=mpl.rcParams['font.size'])
             axes[0][cols-1].legend(loc='center left', frameon=False, framealpha=0.5, bbox_to_anchor=(1., 0.5))
             clean_axes(axes)
-            fig.suptitle('Inferred spike rates: %s population' % pop_name)
+            fig.suptitle('Inferred spike rates: %s population' % pop_name, fontsize=mpl.rcParams['font.size'])
             fig.tight_layout()
             fig.subplots_adjust(top=0.9, right=0.9)
             fig.show()
@@ -1374,7 +1375,7 @@ def plot_voltage_traces(voltage_rec_dict, rec_t, spike_times_dict=None, rows=3, 
     if pop_names is None:
         pop_names = list(voltage_rec_dict.keys())
     for pop_name in pop_names:
-        fig, axes = plt.subplots(rows, cols, sharex=True, sharey=True, figsize=(cols*3, rows*3))
+        fig, axes = plt.subplots(rows, cols, sharex=True, sharey=True, figsize=(cols*3+0.75, rows*3))
         for j in range(cols):
             axes[rows - 1][j].set_xlabel('Time (ms)')
         for i in range(rows):
@@ -1389,12 +1390,13 @@ def plot_voltage_traces(voltage_rec_dict, rec_t, spike_times_dict=None, rows=3, 
             if spike_times_dict is not None and pop_name in spike_times_dict and gid in spike_times_dict[pop_name]:
                 binned_spike_indexes = find_nearest(spike_times_dict[pop_name][gid], rec_t)
                 axes[row][col].plot(rec_t[binned_spike_indexes], rec[binned_spike_indexes], 'k.', label='Spikes')
-            axes[row][col].set_title('gid: {}'.format(gid))
-        axes[0][cols-1].legend(loc='center left', frameon=False, framealpha=0.5, bbox_to_anchor=(1., 0.5))
+            axes[row][col].set_title('gid: {}'.format(gid), fontsize=mpl.rcParams['font.size'])
+        axes[0][cols-1].legend(loc='center left', frameon=False, framealpha=0.5, bbox_to_anchor=(1., 0.5),
+                               fontsize=mpl.rcParams['font.size'])
         clean_axes(axes)
-        fig.suptitle('Voltage recordings: %s population' % pop_name)
+        fig.suptitle('Voltage recordings: %s population' % pop_name, fontsize=mpl.rcParams['font.size'])
         fig.tight_layout()
-        fig.subplots_adjust(top=0.9, right=0.9)
+        fig.subplots_adjust(top=0.9, right=0.85)
         fig.show()
 
 
@@ -1456,9 +1458,10 @@ def plot_weight_matrix(connection_weights_dict, tuning_peak_locs=None, pop_names
                 xlabels = np.array(sorted_gids[source_pop_name])[xticks]
                 axes[col].set_xlabel('Cell ID\nSource: %s' % source_pop_name)
             plot_heatmap_from_matrix(weight_matrix, xticks=xticks, xtick_labels=xlabels, yticks=yticks,
-                                     ytick_labels=ylabels, ax=axes[col], aspect='auto', cbar_label='Synaptic weight')
+                                     ytick_labels=ylabels, ax=axes[col], aspect='auto', cbar_label='Synaptic weight',
+                                     vmin=0.)
         clean_axes(axes)
-        fig.suptitle('Connection weights onto %s population' % target_pop_name, )
+        fig.suptitle('Connection weights onto %s population' % target_pop_name, fontsize=mpl.rcParams['font.size'])
         fig.tight_layout()
         fig.subplots_adjust(top=0.9, wspace=0.2)
         fig.show()
@@ -1492,13 +1495,14 @@ def plot_firing_rate_heatmaps(firing_rates_dict, t, pop_names=None, tuning_peak_
         xticks = list(range(0, len(t), x_interval))
         xlabels = np.array(t)[xticks].astype('int32')
         plot_heatmap_from_matrix(rate_matrix, xticks=xticks, xtick_labels=xlabels, yticks=yticks,
-                                 ytick_labels=ylabels, ax=axes, aspect='auto', cbar_label='Firing rate (Hz)')
+                                 ytick_labels=ylabels, ax=axes, aspect='auto', cbar_label='Firing rate (Hz)',
+                                 vmin=0.)
         axes.set_xlabel('Time (ms)')
         axes.set_ylabel('Target: %s\nCell ID' % pop_name)
         if sort:
-            axes.set_title('Sorted firing rate: %s population' % pop_name)
+            axes.set_title('Sorted firing rate: %s population' % pop_name, fontsize=mpl.rcParams['font.size'])
         else:
-            axes.set_title('Firing rate: %s population' % pop_name)
+            axes.set_title('Firing rate: %s population' % pop_name, fontsize=mpl.rcParams['font.size'])
         clean_axes(axes)
         fig.tight_layout()
         fig.show()
@@ -1534,7 +1538,8 @@ def visualize_connections(pop_gid_ranges, pop_cell_types, pop_syn_proportions, p
                     fig = plt.figure()
                     plt.pcolor(xedge, yedge, vals)
                     plt.title("Cell {} at {}, {} to {} via {} syn".format(target_gid, target_loc, source_pop_name,
-                                                                          target_pop_name, syn_type))
+                                                                          target_pop_name, syn_type),
+                              fontsize=mpl.rcParams['font.size'])
                     fig.show()
 
 
@@ -1568,7 +1573,8 @@ def plot_2D_connection_distance(pop_syn_proportions, pop_cell_positions, connect
                 plt.colorbar().set_label("Count")
                 plt.xlabel('x')
                 plt.ylabel('y')
-                plt.title("{} to {} distances".format(source_pop_name, target_pop_name))
+                plt.title("{} to {} distances".format(source_pop_name, target_pop_name),
+                          fontsize=mpl.rcParams['font.size'])
                 fig.show()
 
 

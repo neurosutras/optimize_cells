@@ -86,9 +86,7 @@ def run_tests():
 
 
 def config_worker():
-    """
 
-    """
     if 'plot' not in context():
         context.plot = False
     if 'verbose' not in context():
@@ -98,10 +96,7 @@ def config_worker():
     if 'debug' not in context():
         context.debug = False
     context.pc = h.ParallelContext()
-    init_context()
 
-
-def init_context():
     start_time = time.time()
 
     # {'pop_name': str}
@@ -610,7 +605,7 @@ def get_objectives(features, export=False):
                 objectives[objective_name] = 0.
             else:
                 objectives[objective_name] = ((context.target_val[objective_name] - features[objective_name]) /
-                                            context.target_range[objective_name]) ** 2.
+                                              context.target_range[objective_name]) ** 2.
         return features, objectives
 
 
