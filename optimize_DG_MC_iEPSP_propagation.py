@@ -16,7 +16,7 @@ context = Context()
 
 @click.command(context_settings=dict(ignore_unknown_options=True, allow_extra_args=True, ))
 @click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='config/optimize_DG_GC_iEPSP_propagation_config.yaml')
+              default='config/optimize_DG_MC_iEPSP_propagation_config.yaml')
 @click.option("--output-dir", type=click.Path(exists=True, file_okay=False, dir_okay=True), default='data')
 @click.option("--export", is_flag=True)
 @click.option("--export-file-path", type=str, default=None)
@@ -134,8 +134,8 @@ def init_context():
     trace_baseline = 10.
     duration = max(sim_duration.values())
     dt = 0.025
-    v_init = -77.
-    v_active = -77.
+    v_init = -66.
+    v_active = -66.
     syn_mech_name = 'EPSC'
 
     context.update(locals())
@@ -182,7 +182,7 @@ def config_sim_env(context):
     if context.v_active not in context.i_holding['soma']:
         context.i_holding['soma'][context.v_active] = 0.
     if not sim.has_rec('dend'):
-        dend, dend_loc = get_thickest_dend_branch(context.cell, 100., terminal=False)
+        dend, dend_loc = get_thickest_dend_branch(context.cell, 150., terminal=False)
         sim.append_rec(cell, dend, name='dend', loc=dend_loc)
     if 'dend' not in context.i_EPSC:
         context.i_EPSC['dend'] = -0.05
