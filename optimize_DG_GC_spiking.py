@@ -135,6 +135,8 @@ def config_worker():
         context.verbose = int(context.verbose)
     if not context_has_sim_env(context):
         build_sim_env(context, **context.kwargs)
+    else:
+        config_sim_env(context)
 
 
 def context_has_sim_env(context):
