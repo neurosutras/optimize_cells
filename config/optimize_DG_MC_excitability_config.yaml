@@ -100,6 +100,9 @@ feature_names:
 - f_I_log10_slope
 - spike_adi_slope
 - spike_detector_delay
+- iEPSP_i_unit
+- iEPSP_attenuation_short
+- iEPSP_attenuation_long
 update_context:
 - - optimize_DG_MC_leak
   - reset_biophysics
@@ -118,9 +121,16 @@ get_features_stages:
   get_args_dynamic: get_args_dynamic_fI
   compute_features: compute_features_fI
   filter_features: filter_features_fI
+- source: optimize_DG_MC_iEPSP_propagation
+  get_args_dynamic: get_args_dynamic_i_holding
+  compute_features: compute_features_iEPSP_i_unit
+- source: optimize_DG_MC_iEPSP_propagation
+  get_args_dynamic: get_args_dynamic_iEPSP_attenuation
+  compute_features: compute_features_iEPSP_attenuation
 get_objectives:
   optimize_DG_MC_leak: get_objectives_leak
   optimize_DG_MC_spiking: get_objectives_spiking
+  optimize_DG_MC_iEPSP_propagation: get_objectives_iEPSP_propagation
 kwargs:
   mech_file_path: mechanisms/20181127_DG_MC_only_leak_mech.yaml  # 20180905_DG_MC_excitability_mech.yaml
   gid: 1000000
@@ -151,7 +161,9 @@ objective_names:
 - slow_depo
 - spike_adaptation_residuals
 - f_I_residuals
-optimization_title: DG_MC_leak_spiking
+- iEPSP_attenuation_short
+- iEPSP_attenuation_long
+optimization_title: DG_MC_excitability
 param_gen: PopulationAnnealing
 param_names:
 - soma.g_pas
@@ -204,6 +216,9 @@ target_val:
   min_slow_depo: 1.0
   vm_th: -48.0
   vm_stability: 5.0
+  iEPSP_unit_amp: 1.
+  iEPSP_attenuation_short: 0.17
+  iEPSP_attenuation_long: 0.23
 x0:
   dend.g_pas slope: 2.301342E-05
   dend.g_pas tau: 1.153835E+02
