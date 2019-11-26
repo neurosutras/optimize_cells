@@ -154,13 +154,14 @@ get_objectives:
   optimize_DG_MC_spiking: get_objectives_spiking
   optimize_DG_MC_iEPSP_propagation: get_objectives_iEPSP_propagation
 kwargs:
-  mech_file_path: mechanisms/20181205_DG_MC_excitability_mech.yaml
-  gid: 0
+  mech_file_path: mechanisms/20191029_DG_MC_excitability_mech.yaml
+  gid: 1000000
   cell_type: MC
   correct_for_spines: True
   verbose: 2
   daspk: False
-  config_file: Small_Scale_Control_tune_MC_synapses.yaml  # Small_Scale_Control_LN_weights_Sat.yaml
+#  config_file: Small_Scale_Control_tune_MC_synapses.yaml  # Small_Scale_Control_LN_weights_Sat.yaml
+  config_file: Small_Scale_Control_MC_BC.yaml 
   template_paths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoc_lib_path: ../dentate
   config_prefix: ../dentate/config
