@@ -81,6 +81,7 @@ def run_tests():
     # Stage 1: Run simulations with a range of amplitudes of step current injections to the soma
     args = context.interface.execute(get_args_dynamic_fI, context.x0_array, features)
     group_size = len(args[0])
+    print(group_size)
     sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
                 [[context.plot] * group_size]
     primitives = context.interface.map(compute_features_fI, *sequences)
@@ -691,6 +692,8 @@ def get_objectives_spiking(features, export=False):
         f_I_residuals += ((this_rate - exp_rate_f_I[i]) / (0.01 * exp_rate_f_I[i])) ** 2.
     objectives['f_I_residuals'] = f_I_residuals
     del features['f_I_rate']
+
+    print(features, objectives, context.feature_names, context.objective_names)
 
     return features, objectives
 
