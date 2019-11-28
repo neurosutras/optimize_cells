@@ -1,8 +1,8 @@
 #!/bin/bash -l
 
-#SBATCH -J optimize_DG_GC_excitability_cell0_20191125
-#SBATCH -o /scratch1/04119/pmoolcha/HDM/optimize_cells/logs/optimize_DG_GC_excitability_cell0_20191125.%j.o
-#SBATCH -e /scratch1/04119/pmoolcha/HDM/optimize_cells/logs/optimize_DG_GC_excitability_cell0_20191125.%j.e
+#SBATCH -J optimize_DG_MC_excitability_cell1000000_20191125
+#SBATCH -o /scratch1/04119/pmoolcha/HDM/optimize_cells/logs/optimize_DG_MC_excitability_cell1000000_20191125.%j.o
+#SBATCH -e /scratch1/04119/pmoolcha/HDM/optimize_cells/logs/optimize_DG_MC_excitability_cell1000000_20191125.%j.e
 #SBATCH -p development 
 #SBATCH -N 22 -n 1232 
 #SBATCH -t 1:00:00
