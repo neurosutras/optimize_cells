@@ -18,6 +18,6 @@ set -x
 
 cd $SCRATCH/src/optimize_cells
 
-ibrun -n 22400 python3 -m nested.optimize --config-file-path=config/$CONFIG_FILE /
+ibrun -n 22400 python3 -m nested.optimize --config-file-path=config/$CONFIG_FILE \
     --output-dir=data --pop_size=200 --max_iter=50 --path_length=3 --disp --procs_per_worker=112 --export
 EOT
