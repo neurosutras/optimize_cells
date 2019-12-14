@@ -1,0 +1,267 @@
+bounds:
+  E_FF_mean_weight: !!python/tuple
+    - 0.1
+    - 5.
+  E_E_mean_weight: !!python/tuple
+    - 0.1
+    - 5.
+  E_I_mean_weight: !!python/tuple
+    - 0.1
+    - 5.
+  I_FF_mean_weight: !!python/tuple
+    - 0.1
+    - 5.
+  I_E_mean_weight: !!python/tuple
+    - 0.1
+    - 5.
+  I_I_mean_weight: !!python/tuple
+    - 0.1
+    - 5.
+  E_FF_weight_norm_sigma: !!python/tuple
+    - 0.1
+    - 1.
+  E_E_weight_norm_sigma: !!python/tuple
+    - 0.1
+    - 1.
+  E_I_weight_norm_sigma: !!python/tuple
+    - 0.1
+    - 1.
+  I_FF_weight_norm_sigma: !!python/tuple
+    - 0.1
+    - 1.
+  I_E_weight_norm_sigma: !!python/tuple
+    - 0.1
+    - 1.
+  I_I_weight_norm_sigma: !!python/tuple
+    - 0.1
+    - 1.
+  E_E_tau_offset: !!python/tuple
+    - 2.
+    - 20.
+  E_I_tau_offset: !!python/tuple
+    - 2.
+    - 30.
+  I_E_tau_offset: !!python/tuple
+    - 2.
+    - 20.
+  I_I_tau_offset: !!python/tuple
+    - 2.
+    - 30.
+  E_E_syn_proportion: !!python/tuple
+    - 0.01
+    - 0.99
+  E_E_FF_syn_proportion: !!python/tuple
+    - 0.01
+    - 0.99
+  I_E_syn_proportion: !!python/tuple
+    - 0.01
+    - 0.99
+  I_E_FF_syn_proportion: !!python/tuple
+    - 0.01
+    - 0.99
+  E_norm_syn_count: !!python/tuple
+    - 0.1
+    - 1.
+  I_norm_syn_count: !!python/tuple
+    - 0.1
+    - 1.
+  E_peak_delta_weight: !!python/tuple
+    - 1.
+    - 5.0
+rel_bounds:
+#- - E_FF_mean_weight
+#  - '<'
+#  - 2.0
+#  - E_E_mean_weight
+#- - E_FF_mean_weight
+#  - '>'
+#  - 0.5
+#  - E_E_mean_weight
+#- - I_FF_mean_weight
+#  - '<'
+#  - 2.0
+#  - I_E_mean_weight
+#- - I_FF_mean_weight
+#  - '>'
+#  - 0.5
+#  - I_E_mean_weight
+feature_names:
+- E_mean_peak_rate
+- E_mean_min_rate
+- I_mean_active_rate
+- FF_frac_active
+- E_frac_active
+- I_frac_active
+- FF_theta_envelope_ratio
+- E_theta_envelope_ratio
+- I_theta_envelope_ratio
+- FF_gamma_envelope_ratio
+- E_gamma_envelope_ratio
+- I_gamma_envelope_ratio
+- E_centroid_theta_freq
+- I_centroid_theta_freq
+- E_centroid_gamma_freq
+- I_centroid_gamma_freq
+- E_theta_tuning_index
+- I_theta_tuning_index
+- E_gamma_tuning_index
+- I_gamma_tuning_index
+update_context:
+- - optimize_simple_network
+  - update_context
+get_features_stages:
+- source: optimize_simple_network
+  compute_features: compute_features
+get_objectives:
+  optimize_simple_network: get_objectives
+kwargs:
+  verbose: 1
+  connection_seed: 80000000
+  spikes_seed: 180000000
+  weights_seed: 280000000
+  location_seed: 380000000
+  tuning_seed: 480000000
+  connectivity_type: uniform
+  default_weight_distribution_type: normal
+  input_types:
+    FF: gaussian
+  input_max_rates:
+    FF: 20.
+  input_min_rates:
+    FF: 0.
+  input_norm_tuning_widths:
+    FF: 0.5
+  structured_weight_params:
+    E:  # target_pop_name
+      source_pop_names:
+        - FF
+        - E
+      tuning_type: additive
+      norm_tuning_width: 0.5
+  pop_cell_types:
+    FF: input
+    E: IB
+    I: FS
+  pop_sizes:
+    FF: 10000
+    E: 10000
+    I: 2000
+  default_syn_mech_params:
+    I:
+      FF:
+        g_unit: 0.0001925
+      E:
+        g_unit: 0.0001925
+      I:
+        g_unit: 0.0001925
+    E:
+      FF:
+        g_unit: 0.0005275
+      E:
+        g_unit: 0.0005275
+      I:
+        g_unit: 0.0005275
+objective_names:
+- E_mean_peak_rate
+- E_mean_min_rate
+- I_mean_active_rate
+- E_frac_active
+- I_frac_active
+- E_theta_envelope_ratio
+- I_theta_envelope_ratio
+- E_gamma_envelope_ratio
+- I_gamma_envelope_ratio
+- E_centroid_theta_freq
+- I_centroid_theta_freq
+- E_centroid_gamma_freq
+- I_centroid_gamma_freq
+- E_theta_tuning_index
+- I_theta_tuning_index
+- E_gamma_tuning_index
+- I_gamma_tuning_index
+optimization_title: simple_network_I
+param_gen: PopulationAnnealing
+param_names:
+- E_FF_mean_weight
+- E_E_mean_weight
+- E_I_mean_weight
+- I_FF_mean_weight
+- I_E_mean_weight
+- I_I_mean_weight
+- E_FF_weight_norm_sigma
+- E_E_weight_norm_sigma
+- E_I_weight_norm_sigma
+- I_FF_weight_norm_sigma
+- I_E_weight_norm_sigma
+- I_I_weight_norm_sigma
+- E_E_tau_offset
+- E_I_tau_offset
+- I_E_tau_offset
+- I_I_tau_offset
+- E_E_syn_proportion
+- E_E_FF_syn_proportion
+- I_E_syn_proportion
+- I_E_FF_syn_proportion
+- E_norm_syn_count
+- I_norm_syn_count
+- E_peak_delta_weight
+target_range:
+  E_mean_peak_rate: 0.1
+  E_mean_min_rate: 0.1
+  I_mean_active_rate: 0.1
+  E_frac_active: .001
+  I_frac_active: .001
+  E_theta_envelope_ratio: .01
+  I_theta_envelope_ratio: .01
+  E_gamma_envelope_ratio: .01
+  I_gamma_envelope_ratio: .01
+  E_centroid_theta_freq: 0.05
+  I_centroid_theta_freq: 0.05
+  E_centroid_gamma_freq: 0.5
+  I_centroid_gamma_freq: 0.5
+  E_theta_tuning_index: 0.2
+  I_theta_tuning_index: 0.2
+  E_gamma_tuning_index: 0.2
+  I_gamma_tuning_index: 0.2
+target_val:
+  E_mean_peak_rate: 20.
+  E_mean_min_rate: 0.
+  I_mean_active_rate: 20.
+  E_frac_active: .6
+  I_frac_active: .9
+  E_theta_envelope_ratio: .5
+  I_theta_envelope_ratio: .5
+  E_gamma_envelope_ratio: .25
+  I_gamma_envelope_ratio: .25
+  E_centroid_theta_freq: 7.
+  I_centroid_theta_freq: 7.
+  E_centroid_gamma_freq: 70.
+  I_centroid_gamma_freq: 70.
+  E_theta_tuning_index: 5.
+  I_theta_tuning_index: 5.
+  E_gamma_tuning_index: 5.
+  I_gamma_tuning_index: 5.
+x0:
+  E_I_weight_norm_sigma: 2.656846E-01
+  E_E_FF_syn_proportion: 6.600589E-01
+  E_I_tau_offset: 2.337357E+00
+  E_E_weight_norm_sigma: 2.811705E-01
+  I_E_FF_syn_proportion: 6.194819E-01
+  E_E_tau_offset: 2.963663E+00
+  I_FF_mean_weight: 5.223595E-01
+  E_E_mean_weight: 1.045123E+00
+  E_FF_weight_norm_sigma: 4.350169E-01
+  E_I_mean_weight: 5.930118E-01
+  I_E_weight_norm_sigma: 2.351989E-01
+  I_E_tau_offset: 9.893768E+00
+  I_I_weight_norm_sigma: 2.579828E-01
+  I_E_syn_proportion: 9.133134E-01
+  I_FF_weight_norm_sigma: 5.021779E-01
+  E_E_syn_proportion: 7.102740E-01
+  I_I_mean_weight: 4.978184E-01
+  E_FF_mean_weight: 1.543887E+00
+  I_E_mean_weight: 5.667242E-01
+  I_I_tau_offset: 1.132949E+01
+  E_norm_syn_count: .1
+  I_norm_syn_count: .1
+  E_peak_delta_weight: 2.
