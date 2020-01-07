@@ -220,7 +220,7 @@ def compute_features_leak(x, section, export=False, plot=False):
     sim.parameters['duration'] = duration
     amp = -0.025
     context.sim.parameters['amp'] = amp
-    vm_rest, vm_offset, context.i_holding[section][v_init] = offset_vm(section, context, v_init, dynamic=True)
+    vm_rest, vm_offset, context.i_holding[section][v_init] = offset_vm(section, context, v_init, dynamic=False)
     sim.modify_stim('holding', dur=duration)
 
     rec_dict = sim.get_rec(section)

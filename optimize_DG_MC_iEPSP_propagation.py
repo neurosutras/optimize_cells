@@ -4,7 +4,7 @@ Uses nested.optimize to tune frequency-dependent attenuation of EPSPs from dendr
 Requires a YAML file to specify required configuration parameters.
 Requires use of a nested.parallel interface.
 """
-__author__ = 'Aaron D. Milstein and Grace Ng'
+__author__ = 'Aaron D. Milstein and Prannath Moolchand'
 from dentate.biophysics_utils import *
 from nested.parallel import *
 from nested.optimize_utils import *
@@ -63,7 +63,8 @@ def main(cli, config_file_path, output_dir, export, export_file_path, label, ver
 def run_tests():
     features = dict()
     # Stage 0:
-    args = context.interface.execute(get_args_dynamic_i_holding, context.x0_array, features)
+#    args = context.interface.execute(get_args_dynamic_i_holding, context.x0_array, features)
+    args = context.interface.execute(get_args_dynamic_iEPSP_unit_optimize, context.x0_array, features)
     group_size = len(args[0])
     sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
                 [[context.plot] * group_size]
@@ -71,20 +72,22 @@ def run_tests():
     features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
     context.update(locals())
 
-    # Stage 1:
-    args = context.interface.execute(get_args_dynamic_iEPSP_attenuation, context.x0_array, features)
+    args = context.interface.execute(get_args_dynamic_iEPSP_unit, context.x0_array, features)
     group_size = len(args[0])
     sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
                 [[context.plot] * group_size]
-    primitives = context.interface.map(compute_features_iEPSP_attenuation, *sequences)
-    this_features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
-    features.update(this_features)
-    context.update(locals())
+    primitives = context.interface.map(compute_features_iEPSP_i_unit, *sequences)
+    #this_features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
+    #features.update(this_features)
 
-    features, objectives = context.interface.execute(get_objectives_iEPSP_propagation, features, context.export)
+    this_features = filter_features_attenuation(primitives, features, export=context.export)
+    features.update(this_features)
+    
+    features, objectives = context.interface.execute(get_objectives_iEPSP_attenuation, features, context.export)
     if context.export:
         collect_and_merge_temp_output(context.interface, context.export_file_path, verbose=context.disp)
     sys.stdout.flush()
+
     time.sleep(1.)
     print('params:')
     pprint.pprint(context.x0_dict)
@@ -175,17 +178,22 @@ def config_sim_env(context):
         context.i_holding = defaultdict(dict)
     if 'i_EPSC' not in context():
         context.i_EPSC = defaultdict()
+        context.i_EPSC['ini_syn_amp'] = -0.05
     cell = context.cell
     sim = context.sim
     if not sim.has_rec('soma'):
         sim.append_rec(cell, cell.tree.root, name='soma', loc=0.5)
     if context.v_active not in context.i_holding['soma']:
         context.i_holding['soma'][context.v_active] = 0.
+    dend, dend_loc = get_thickest_dend_branch(context.cell, 150., terminal=False)
     if not sim.has_rec('dend'):
-        dend, dend_loc = get_thickest_dend_branch(context.cell, 150., terminal=False)
         sim.append_rec(cell, dend, name='dend', loc=dend_loc)
+
     if 'dend' not in context.i_EPSC:
         context.i_EPSC['dend'] = -0.05
+
+    if not sim.has_rec('dendlocal'):
+        sim.append_rec(cell, cell.tree.root, name='dendlocal', loc=0.5)
 
     equilibrate = context.equilibrate
     duration = context.duration
@@ -194,29 +202,60 @@ def config_sim_env(context):
         sim.append_stim(cell, cell.tree.root, name='holding', loc=0.5, amp=0., delay=0., dur=duration)
 
     if 'i_syn' not in context():
+        context.syns = defaultdict()
+        context.i_syn = []
         rec_dict = sim.get_rec('dend')
         node = rec_dict['node']
         loc = rec_dict['loc']
         seg = node.sec(loc)
-        context.i_syn = make_unique_synapse_mech(context.syn_mech_name, seg)
-        config_syn(context.syn_mech_name, context.env.synapse_attributes.syn_param_rules, syn=context.i_syn,
-                   i_unit=context.i_EPSC['dend'], tau_rise=1., tau_decay=10.)
+        dist = get_distance_to_node(cell, cell.tree.root, node, loc)
+        context.syns['dend'] = {'node': node, 'loc': loc, 'seg': seg, 'idx': 0, 'dist': dist}
+        context.i_syn.append(make_unique_synapse_mech(context.syn_mech_name, seg))
+        config_syn(context.syn_mech_name, context.env.synapse_attributes.syn_param_rules, syn=context.i_syn[-1],
+                   i_unit=context.i_EPSC['ini_syn_amp'], tau_rise=1., tau_decay=10.)
+
     if 'i_nc' not in context():
-        context.i_nc, context.i_vs = mknetcon_vecstim(context.i_syn)
+        context.i_nc = []
+        context.i_vs = []
+        i_nc, i_vs = mknetcon_vecstim(context.i_syn[-1])
+        context.i_nc.append(i_nc)
+        context.i_vs.append(i_vs)
+
+    if not hasattr(context.cell, 'node_loc_arr'):
+        node_loc_arr = get_dend_segments(context.cell, ref_seg=dend, all_seg=True, dist_bounds=[0, 300])
+        context.cell.node_loc_arr = node_loc_arr
+        N_syn = node_loc_arr.shape[0]
+        context.cell.N_syn = N_syn
+    
+        for dendi, dend in enumerate(node_loc_arr):
+            node = dend[0]
+            loc = dend[1]
+            seg = node.sec(loc)
+            idx = dendi + 1
+            dist = dend[2]
+            dendn = 'dend{:03d}'.format(dendi)
+            context.syns[dendn] = {'node': node, 'loc': loc, 'seg': seg, 'idx': idx, 'dist': dist}
+            context.i_syn.append(make_unique_synapse_mech(context.syn_mech_name, seg))
+            config_syn(context.syn_mech_name, context.env.synapse_attributes.syn_param_rules, syn=context.i_syn[idx],
+                       i_unit=context.i_EPSC['ini_syn_amp'], tau_rise=1., tau_decay=10.)
+    
+            i_nc, i_vs = mknetcon_vecstim(context.i_syn[idx])
+            context.i_nc.append(i_nc)
+            context.i_vs.append(i_vs)
 
     sim.parameters['duration'] = duration
     sim.parameters['equilibrate'] = equilibrate
     context.previous_module = __file__
 
 
-def iEPSP_amp_error(x):
+def iEPSP_amp_error(x, idx):
     """
 
     :param x: array
     :return: float
     """
     start_time = time.time()
-    config_syn(context.syn_mech_name, context.env.synapse_attributes.syn_param_rules, syn=context.i_syn, i_unit=x[0])
+    config_syn(context.syn_mech_name, context.env.synapse_attributes.syn_param_rules, syn=context.i_syn[idx], i_unit=x[0])
 
     dt = context.dt
     equilibrate = context.equilibrate
@@ -248,8 +287,28 @@ def get_args_dynamic_i_holding(x, features):
         i_holding = features['i_holding']
     return [[i_holding]]
 
+def get_args_dynamic_iEPSP_unit_optimize(x, features):
+    if 'i_holding' not in features:
+        i_holding = context.i_holding
+    else:
+        i_holding = features['i_holding']
 
-def compute_features_iEPSP_i_unit(x, i_holding, export=False, plot=False):
+    if 'i_syn_amp' not in features:
+        res = [[i_holding], ['dend'], [None]]
+    return res
+
+def get_args_dynamic_iEPSP_unit(x, features):
+    if 'i_holding' not in features:
+        i_holding = context.i_holding
+    else:
+        i_holding = features['i_holding']
+
+    N_syn = context.cell.N_syn
+    res = [[i_holding] * N_syn, ['dend{:03d}'.format(i) for i in range(N_syn)], [features['i_syn_amp']] * N_syn]
+    return res
+
+
+def compute_features_iEPSP_i_unit(x, i_holding, dend_name, i_syn_amp=None, export=False, plot=False):
     """
 
     :param x: array
@@ -265,43 +324,72 @@ def compute_features_iEPSP_i_unit(x, i_holding, export=False, plot=False):
 
     dt = context.dt
     duration = context.sim_duration['unit']
+    equilibrate = context.equilibrate
 
     v_active = context.v_active
     context.i_holding = i_holding
-    offset_vm('soma', context, v_active, i_history=context.i_holding, dynamic=True)
+    offset_vm('soma', context, v_active, i_history=context.i_holding, dynamic=False)
 
     sim = context.sim
     sim.modify_stim('holding', dur=duration)
     sim.backup_state()
     sim.set_state(dt=dt, tstop=duration, cvode=False)
+    
+    dend = context.syns[dend_name]
+    idx = dend['idx']
+    context.i_vs[idx].play(h.Vector([context.equilibrate]))
 
-    context.i_vs.play(h.Vector([context.equilibrate]))
-    i_EPSC = context.i_EPSC['dend']
-    bounds = [(-0.3, -0.01)]
-    i_EPSC_result = scipy.optimize.minimize(iEPSP_amp_error, [i_EPSC], method='L-BFGS-B', bounds=bounds,
-                                   options={'ftol': 1e-3, 'disp': context.verbose > 1, 'maxiter': 5})
-    i_EPSC = i_EPSC_result.x[0]
-    context.i_EPSC['dend'] = i_EPSC
+    if i_syn_amp is None:
+        i_EPSC = context.i_EPSC['ini_syn_amp']
+        bounds = [(-0.3, -0.01)]
+        i_EPSC_result = scipy.optimize.minimize(iEPSP_amp_error, [i_EPSC], args=(idx), method='L-BFGS-B', bounds=bounds,
+                                       options={'ftol': 1e-3, 'disp': context.verbose > 1, 'maxiter': 5})
+        i_EPSC = i_EPSC_result.x[0]
+    else:
+        i_EPSC = i_syn_amp
+
+    config_syn(context.syn_mech_name, context.env.synapse_attributes.syn_param_rules, syn=context.i_syn[idx], i_unit=i_EPSC)
+    sim.modify_rec(name='dendlocal', node=dend['node'], loc=dend['loc'])
+    sim.run(v_active)
+
+    soma_vm = np.array(sim.get_rec('soma')['vec'])
+    soma_baseline = np.mean(soma_vm[int((equilibrate - 3.) / dt):int((equilibrate - 1.) / dt)])
+    soma_vm -= soma_baseline
+    soma_iEPSP_amp = np.max(soma_vm[int(equilibrate / dt):])
+
+    dend_vm = np.array(sim.get_rec('dend')['vec'])
+    dend_baseline = np.mean(dend_vm[int((equilibrate - 3.) / dt):int((equilibrate - 1.) / dt)])
+    dend_vm -= dend_baseline
+    dend_iEPSP_amp = np.max(dend_vm[int(equilibrate / dt):])
+
+    dendloc_vm = np.array(sim.get_rec('dendlocal')['vec'])
+    dendloc_baseline = np.mean(dendloc_vm[int((equilibrate - 3.) / dt):int((equilibrate - 1.) / dt)])
+    dendloc_vm -= dendloc_baseline
+    dendloc_iEPSP_amp = np.max(dendloc_vm[int(equilibrate / dt):])
 
     result = dict()
-    result['iEPSP_i_unit'] = i_EPSC
-    result['i_holding'] = context.i_holding
+    if i_syn_amp is None:
+        result['i_syn_amp'] = i_EPSC
+    
+    result['i_EPSP_rep_{!s}'.format(dend_name)] = \
+        {'soma_EPSP_amp': soma_iEPSP_amp, 'syn_loc_amp': dendloc_iEPSP_amp, 'index': idx, 'dist': dend['dist'], 'att_ratio': soma_iEPSP_amp/dendloc_iEPSP_amp, 'ref_dend_amp': dend_iEPSP_amp} 
 
     title = 'iEPSP'
-    description = 'i_unit: %.3f (nA)' % i_EPSC
+    description = 'i_unit: {!s}'.format(dend_name)
     sim.parameters['duration'] = duration
     sim.parameters['title'] = title
     sim.parameters['description'] = description
 
     if context.verbose > 0:
-        print('compute_features_iEPSP_i_unit: pid: %i; %s: %s took %.3f s' % \
-              (os.getpid(), title, description, time.time() - start_time))
+        print('compute_features_iEPSP_i_unit: pid: {:d}; {!s}: {!s} took {:.3f} s'\
+              .format(os.getpid(), title, description, time.time() - start_time))
+        sys.stdout.flush()
     if plot:
         context.sim.plot()
     if export:
         context.sim.export_to_file(context.temp_output_path)
     sim.restore_state()
-    context.i_vs.play(h.Vector())
+    context.i_vs[idx].play(h.Vector())
     return result
 
 
@@ -347,7 +435,7 @@ def compute_features_iEPSP_attenuation(x, i_holding, ISI_key, i_EPSC, export=Fal
 
     v_active = context.v_active
     context.i_holding = i_holding
-    offset_vm('soma', context, v_active, i_history=context.i_holding, dynamic=True)
+    offset_vm('soma', context, v_active, i_history=context.i_holding, dynamic=False)
 
     sim = context.sim
     sim.modify_stim('holding', dur=duration)
@@ -402,6 +490,107 @@ def get_objectives_iEPSP_propagation(features, export=False):
             ((features[target] - context.target_val[target]) / (0.01 * context.target_val[target])) ** 2.
     return features, objectives
 
+def get_objectives_iEPSP_attenuation(features, export=False):
+    """
+
+    :param features: dict
+    :param export: bool
+    :return: tuple of dict
+    """
+    objectives = dict()
+
+    x = features['distance_array']
+    gompertz_coeffs = get_gompertz_coeffs()
+    expected_atten = gompertz(x, *gompertz_coeffs) 
+    atten_resi = np.mean(((expected_atten-features['attenuation_array'])/0.02)**2)
+    objectives['iEPSP_attenuation_residual'] = atten_resi
+
+    if export:
+        f = h5py.File(context.export_file_path, 'a')
+        description = 'iEPSP_attenuation'
+        f[description].create_dataset('gompertz_coeffs', compression='gzip', data=gompertz_coeffs)
+        f[description].create_dataset('expected_attenuations', compression='gzip', data=expected_atten)
+        f[description].attrs['gompertz_fn'] = '1+a*np.exp(-b*np.exp(-c*(t-m))), coeffs=(a,b,c,m)'
+        f.close()
+    return features, objectives
+
+def filter_features_attenuation(primitives, features, export=False):
+    dendkeys = [key for key in features.keys() if key.startswith('i_EPSP_rep_dend')]
+    atten_lst = []
+    dist_lst = []
+    soma_amp = []
+    syn_loc_amp = []
+    ref_dend_amp = []
+    for key in dendkeys:
+        atten_lst.append(features[key]['att_ratio'])    
+        dist_lst.append(features[key]['dist'])    
+        soma_amp.append(features[key]['soma_EPSP_amp'])
+        syn_loc_amp.append(features[key]['syn_loc_amp'])
+        ref_dend_amp.append(features[key]['ref_dend_amp'])
+
+    for res in primitives:
+        dendkeys = [key for key in res.keys() if key.startswith('i_EPSP_rep_dend')]
+        for key in dendkeys:
+            atten_lst.append(res[key]['att_ratio'])    
+            dist_lst.append(res[key]['dist'])    
+            soma_amp.append(res[key]['soma_EPSP_amp'])
+            syn_loc_amp.append(res[key]['syn_loc_amp'])
+            ref_dend_amp.append(res[key]['ref_dend_amp'])
+        
+    dist_arr, uniq_idx = np.unique(dist_lst, return_index=True)
+    atten_arr = np.array(atten_lst)[uniq_idx]
+    soma_amp_arr = np.array(soma_amp)[uniq_idx]
+    syn_amp_arr = np.array(syn_loc_amp)[uniq_idx]
+    ref_dend_arr = np.array(ref_dend_amp)[uniq_idx]
+
+    new_features = {'attenuation_array': atten_arr, 'distance_array': dist_arr}
+
+    if export:
+        description = 'iEPSP_attenuation'
+        distance, attenuation = get_attenuation_data()
+        f = h5py.File(context.export_file_path, 'a')
+        if description not in f:
+            f.create_group(description)
+            f[description].attrs['enumerated'] = False
+        group = f[description]
+        group.attrs['i_syn_amp'] = features['i_syn_amp']
+        group.create_dataset('distance', compression='gzip', data=dist_arr)
+        group.create_dataset('attenuation', compression='gzip', data=atten_arr)
+        group.create_dataset('soma_EPSP_amp', compression='gzip', data=soma_amp_arr)
+        group.create_dataset('local_dend_amp', compression='gzip', data=syn_amp_arr)
+        group.create_dataset('ref_dend_amp', compression='gzip', data=ref_dend_arr)
+        group.create_dataset('expmt_distance', compression='gzip', data=distance)
+        group.create_dataset('expmt_attenuation', compression='gzip', data=attenuation)
+        f.close()
+
+    return new_features 
+
+def get_attenuation_data():
+    distance = np.array([  0.        ,  40.5904059 ,  45.29520295,  47.50922509, \
+                          77.39852399,  90.12915129,  90.68265683, 121.95571956, \
+                         126.93726937, 133.02583026, 138.83763838, 145.20295203, \
+                         150.46125461, 156.5498155 , 185.60885609, 185.88560886, \
+                         293.26568266])
+
+    attenuation = np.array([1.        , 0.4453202 , 1.03940887, 0.16157635, 0.21871921, \
+                            0.2       , 0.14384236, 0.19014778, 0.12512315, 0.17536946, \
+                            0.23251232, 0.13300493, 0.38128079, 0.13103448, 0.0955665 , \
+                            0.13103448, 0.08571429])
+    return distance, attenuation
+
+
+def get_gompertz_coeffs(optimize=False):
+    if optimize:
+        data = get_attenuation_data()
+        data = np.append(data, np.array([[0,1]]), axis=0)
+    #    results = optimize.curve_fit(gompertz,  data[:,0],  data[:,1], p0=[-0.9, 1.5, 0.2,40]) 
+        results = optimize.curve_fit(gompertz,  distance,  attenuation, p0=[-0.9, 1.5, 0.2,40]) 
+    else:
+        results = np.array([-0.87,  1.06160453,  0.06154768, 35.55592743])
+    return results
+
+def gompertz(t, a, b, c, m):
+    return 1+a*np.exp(-b*np.exp(-c*(t-m)))
 
 if __name__ == '__main__':
     main(args=sys.argv[(list_find(lambda s: s.find(os.path.basename(__file__)) != -1, sys.argv) + 1):],

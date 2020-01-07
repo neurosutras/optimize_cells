@@ -3,21 +3,29 @@ bounds:
   - 1.0E-12
   - 1.0E-7
 feature_names:
-- iEPSP_i_unit
-- iEPSP_attenuation_short
-- iEPSP_attenuation_long
+#- iEPSP_i_unit
+#- iEPSP_attenuation_short
+#- iEPSP_attenuation_long
+- i_syn_amp
+#- attenuation_residual
 update_context:
 - - optimize_DG_MC_iEPSP_propagation
   - reset_biophysics
 get_features_stages:
 - source: optimize_DG_MC_iEPSP_propagation
-  get_args_dynamic: get_args_dynamic_i_holding
-  compute_features: compute_features_iEPSP_i_unit
+#  get_args_dynamic: get_args_dynamic_i_holding
+  get_args_dynamic: get_args_dynamic_iEPSP_unit_optimize 
+  compute_features: compute_features_iEPSP_i_unit 
 - source: optimize_DG_MC_iEPSP_propagation
-  get_args_dynamic: get_args_dynamic_iEPSP_attenuation
-  compute_features: compute_features_iEPSP_attenuation
+  get_args_dynamic: get_args_dynamic_iEPSP_unit 
+  compute_features: compute_features_iEPSP_i_unit 
+  filter_features: filter_features_attenuation 
+#- source: optimize_DG_MC_iEPSP_propagation
+#  get_args_dynamic: get_args_dynamic_iEPSP_attenuation
+#  compute_features: compute_features_iEPSP_attenuation
 get_objectives:
-  optimize_DG_MC_iEPSP_propagation: get_objectives_iEPSP_propagation
+#  optimize_DG_MC_iEPSP_propagation: get_objectives_iEPSP_propagation
+  optimize_DG_MC_iEPSP_propagation: get_objectives_iEPSP_attenuation 
 kwargs:
   mech_file_path: mechanisms/20191029_DG_MC_excitability_mech.yaml
   gid: 1000000
@@ -27,14 +35,15 @@ kwargs:
   daspk: True 
   config_file: Small_Scale_Control_MC_BC.yaml 
 #  config_file: Small_Scale_Control_tune_MC_synapses.yaml  # Small_Scale_Control_LN_weights_Sat.yaml
-  template_paths: ../DMC/Mateos-Aparicio2014:../dentate/templates
+  template_paths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoc_lib_path: ../dentate
   config_prefix: ../dentate/config
   dataset_prefix: ../dentate/datasets
   results_path: data
 objective_names:
-- iEPSP_attenuation_short
-- iEPSP_attenuation_long
+#- iEPSP_attenuation_short
+#- iEPSP_attenuation_long
+- iEPSP_attenuation_residual
 optimization_title: DG_MC_iEPSP_propagation
 param_gen: PopulationAnnealing
 param_names:

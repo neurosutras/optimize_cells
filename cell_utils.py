@@ -1,4 +1,4 @@
-__author__ = 'Aaron D. Milstein and Grace Ng'
+__author__ = 'Aaron D. Milstein, Grace Ng and Prannath Moolchand'
 from nested.utils import *
 from dentate.cells import *
 from dentate.synapses import *
@@ -536,6 +536,109 @@ def get_thickest_dend_branch(cell, distance_target=None, sec_type='apical', dist
         index = np.argmax(candidate_diams)
     return candidate_branches[index], candidate_locs[index]
 
+def get_dend_segments(cell, ref_seg=None, sec_type='apical', soma_near=False, term_near=True, middle=True, extra_locs=[], all_seg=False, dist_bounds=None, soma_dend=True, term_dend=True):
+    """
+    Get the patches along a dendritic branch 
+    To get nodes at dendritic junctions, pass 0 and/or 1 in extra_locs
+
+    :param cell: "class:'BiophysCell'
+    :param sec_type: str
+    :param soma_near: bool (include the dendritic segment nearest to the soma)
+    :param thick_side: bool (include segment on the thicker side at a dendrite-dendrite junction)
+    :param thin_side: bool (include segment on the thinner side at a dendrite-dendrite junction)
+    :param middle: bool (include middle segment of the dendrite section) 
+    :param extra_locs: list of floats (arbitrary segments)
+    :return: node, loc: :class:'SHocNode', float
+    """
+
+    if sec_type not in cell.nodes:
+        raise RuntimeError('get_dend_branch_patch: pid: {:d}; {!s} cell {:d}: {!s} does not exist'.format(os.getpid(), cell.pop_name, cell.gid, sec_type))
+
+    # Populate dendrite list
+    section_list=[]
+    soma=cell.nodes['soma'][0]
+
+    if ref_seg is None:
+        for i in soma.children:
+            if i.get_type() == sec_type:
+                dend = i
+                section_list.append(dend)
+                break
+        
+        while len(section_list[-1].children):
+            dendt = section_list[-1].children[0]
+            section_list.append(dendt)
+    else:
+        par_lst = []
+        chl_lst = []
+        if ref_seg.parent is not None:
+            if ref_seg.parent.type== 'apical': par_lst.append(ref_seg.parent)
+        if len(par_lst):
+            while par_lst[-1].parent.type == sec_type:
+                par_lst.append(par_lst[-1].parent)    
+
+        if len(ref_seg.children): chl_lst.append(ref_seg.children[0]) 
+        if len(chl_lst):
+            while len(chl_lst[-1].children):
+                chl_lst.append(chl_lst[-1].children[0]) 
+
+        if len(par_lst): par_lst.reverse()
+        section_list = par_lst + [ref_seg] + chl_lst
+
+    n_seg_list = [i.sec.nseg for i in section_list]
+
+    N_dend = len(section_list)
+
+    # Create segment indices
+    soma_junc = True if 0 in extra_locs else False
+    term_junc = True if 1 in extra_locs else False
+
+    # Setting terminal centric scheme
+    san_locs = [i for i in extra_locs if 0 < i <= 1] if soma_junc and term_junc else [i for i in extra_locs if 0 <= i <= 1]
+    if middle: san_locs.append(0.5)
+
+    san_locs = np.array(san_locs)
+
+    seg_idx_list = [] 
+    seg_idx_arr = np.empty(shape=(N_dend,2), dtype='O')
+
+    # Add most proximal segment on section
+    idx_lst = [1] if soma_near else []
+    for i in range(N_dend):
+        seg_idx_arr[i,0] = np.rint(san_locs*(n_seg_list[i]+1)).astype(np.int)
+        seg_idx_arr[i,1] = [] + idx_lst 
+
+    # Add most distal segment on section
+    if term_near:
+        for idx, nseg in enumerate(n_seg_list):
+            seg_idx_arr[idx,1].append(nseg)
+            
+    # Special conditions for most proximal and most distal dendrites
+    if soma_dend: seg_idx_arr[0,1].append(1)        
+    if term_dend: seg_idx_arr[-1,1].append(n_seg_list[-1])
+
+    N_segs = 0
+    seg_lst = []
+    tot_len = 0
+    for i, obj in enumerate(section_list):
+        tmp_lst = [j for j in obj.sec.allseg()]
+        all_idx = np.union1d(seg_idx_arr[i,0], seg_idx_arr[i,1]).astype(np.int)
+        if all_seg: all_idx = np.union1d(all_idx, np.arange(1, obj.sec.nseg+1))
+        for k in all_idx: 
+            frac_pos = tmp_lst[k].x
+            seg_lst.append((obj, frac_pos, frac_pos*obj.sec.L + tot_len)) 
+        tot_len += obj.sec.L
+
+    node_loc_arr = np.array(seg_lst, dtype='O')
+
+    if dist_bounds is not None:
+        bds_idx = np.searchsorted(node_loc_arr[:,2], dist_bounds, side='right')
+        bds_idx_lst = [i for i in range(*bds_idx)]
+        if term_dend: bds_idx_lst.append(-1)
+        node_loc_arr = node_loc_arr[np.array(bds_idx_lst), :] 
+
+    return node_loc_arr 
+   
 
 def get_distal_most_terminal_branch(cell, distance_target=None, sec_type='apical'):
     """

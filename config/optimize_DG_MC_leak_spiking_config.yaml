@@ -136,7 +136,7 @@ kwargs:
   dataset_prefix: ../dentate/datasets
   results_path: data
 objective_names:
-- dend R_inp
+# - dend R_inp
 - term_dend R_inp
 - soma R_inp
 - soma R_inp (no h)

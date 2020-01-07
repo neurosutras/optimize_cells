@@ -236,7 +236,7 @@ def config_sim_env(context):
     # if context.v_active not in context.i_th_history['soma']:
     #    context.i_th_history['soma'][context.v_active] = context.i_th_start
     if not sim.has_rec('dend'):
-        dend, dend_loc = get_thickest_dend_branch(context.cell, 100., terminal=False)
+        dend, dend_loc = get_thickest_dend_branch(context.cell, 150., terminal=False)
         sim.append_rec(cell, dend, name='dend', loc=dend_loc)
     if not sim.has_rec('ais'):
         sim.append_rec(cell, cell.ais[0], name='ais', loc=1.)
@@ -293,7 +293,7 @@ def compute_features_spike_shape(x, i_holding, export=False, plot=False):
     v_active = context.v_active
     sim = context.sim
     context.i_holding = i_holding
-    offset_vm('soma', context, v_active, i_history=context.i_holding, dynamic=True, cvode=context.cvode)
+    offset_vm('soma', context, v_active, i_history=context.i_holding, dynamic=False, cvode=context.cvode)
     sim.modify_stim('holding', dur=duration)
 
     spike_times = np.array(context.cell.spike_detector.get_recordvec())
@@ -475,7 +475,7 @@ def compute_features_fI(x, i_holding, spike_detector_delay, rheobase, relative_a
 
     v_active = context.v_active
     context.i_holding = i_holding
-    offset_vm('soma', context, v_active, i_history=context.i_holding, dynamic=True, cvode=context.cvode)
+    offset_vm('soma', context, v_active, i_history=context.i_holding, dynamic=False, cvode=context.cvode)
     sim = context.sim
     dt = context.dt
     stim_dur = context.stim_dur_f_I

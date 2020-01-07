@@ -4,7 +4,7 @@ Uses nested.optimize to tune somatodendritic input resistance in dentate granule
 Requires a YAML file to specify required configuration parameters.
 Requires use of a nested.parallel interface.
 """
-__author__ = 'Aaron D. Milstein and Grace Ng'
+__author__ = 'Aaron D. Milstein and Prannath Moolchand'
 from dentate.biophysics_utils import *
 from nested.parallel import *
 from nested.optimize_utils import *
@@ -158,7 +158,7 @@ def config_sim_env(context):
     if context.v_init not in context.i_holding['soma']:
         context.i_holding['soma'][context.v_init] = 0.
     if not sim.has_rec('dend'):
-        dend, dend_loc = get_thickest_dend_branch(context.cell, 100., terminal=False)
+        dend, dend_loc = get_thickest_dend_branch(context.cell, 150., terminal=False)
         sim.append_rec(cell, dend, name='dend', loc=dend_loc)
     if context.v_init not in context.i_holding['dend']:
         context.i_holding['dend'][context.v_init] = 0.
@@ -230,7 +230,7 @@ def compute_features_leak(x, section, block_h, export=False, plot=False):
     sim.parameters['duration'] = duration
     amp = -0.025
     context.sim.parameters['amp'] = amp
-    vm_rest, vm_offset, context.i_holding[section][v_init] = offset_vm(section, context, v_init, dynamic=True,
+    vm_rest, vm_offset, context.i_holding[section][v_init] = offset_vm(section, context, v_init, dynamic=False,
                                                                        cvode=context.cvode)
     sim.modify_stim('holding', dur=duration)
     rec_dict = sim.get_rec(section)

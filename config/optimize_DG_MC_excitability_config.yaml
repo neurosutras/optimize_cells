@@ -100,9 +100,7 @@ feature_names:
 - f_I_log10_slope
 - spike_adi_slope
 - spike_detector_delay
-- iEPSP_i_unit
-- iEPSP_attenuation_short
-- iEPSP_attenuation_long
+- i_syn_amp
 update_context:
 - - optimize_DG_MC_leak
   - reset_biophysics
@@ -122,17 +120,18 @@ get_features_stages:
   compute_features: compute_features_fI
   filter_features: filter_features_fI
 - source: optimize_DG_MC_iEPSP_propagation
-  get_args_dynamic: get_args_dynamic_i_holding
+  get_args_dynamic: get_args_dynamic_iEPSP_unit_optimize
   compute_features: compute_features_iEPSP_i_unit
 - source: optimize_DG_MC_iEPSP_propagation
-  get_args_dynamic: get_args_dynamic_iEPSP_attenuation
-  compute_features: compute_features_iEPSP_attenuation
+  get_args_dynamic: get_args_dynamic_iEPSP_unit
+  compute_features: compute_features_iEPSP_i_unit
+  filter_features: filter_features_attenuation
 get_objectives:
   optimize_DG_MC_leak: get_objectives_leak
   optimize_DG_MC_spiking: get_objectives_spiking
-  optimize_DG_MC_iEPSP_propagation: get_objectives_iEPSP_propagation
+  optimize_DG_MC_iEPSP_propagation: get_objectives_iEPSP_attenuation
 kwargs:
-  mech_file_path: mechanisms/20181127_DG_MC_only_leak_mech.yaml  # 20180905_DG_MC_excitability_mech.yaml
+  mech_file_path: mechanisms/20191029_DG_MC_excitability_mech.yaml
   gid: 1000000
   cell_type: MC
   correct_for_spines: False
@@ -146,7 +145,7 @@ kwargs:
   dataset_prefix: ../dentate/datasets
   results_path: data
 objective_names:
-- dend R_inp
+# - dend R_inp
 - term_dend R_inp
 - soma R_inp
 - soma R_inp (no h)
@@ -161,8 +160,7 @@ objective_names:
 - slow_depo
 - spike_adaptation_residuals
 - f_I_residuals
-- iEPSP_attenuation_short
-- iEPSP_attenuation_long
+- iEPSP_attenuation_residual
 optimization_title: DG_MC_excitability
 param_gen: PopulationAnnealing
 param_names:
@@ -217,8 +215,6 @@ target_val:
   vm_th: -48.0
   vm_stability: 5.0
   iEPSP_unit_amp: 1.
-  iEPSP_attenuation_short: 0.17
-  iEPSP_attenuation_long: 0.23
 x0:
   dend.g_pas slope: 2.301342E-05
   dend.g_pas tau: 1.153835E+02
