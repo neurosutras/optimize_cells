@@ -736,6 +736,7 @@ def update_mechanisms_spiking(x, context=None):
     modify_mech_param(cell, 'ais', 'nax', 'gbar', x_dict['ais.gbar_nax'])
     for sec_type in ['apical', 'hillock', 'ais', 'axon']:
         modify_mech_param(cell, sec_type, 'ions', 'ek', origin='soma')
+    modify_mech_param(cell, 'apical', 'kap', 'gkabar', x_dict['dend.gkabar'])
 
 
 def add_diagnostic_recordings():

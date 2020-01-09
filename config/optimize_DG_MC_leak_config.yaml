@@ -9,7 +9,7 @@ bounds:
   - 1.0E-12
   - 1.0E-4
   e_pas: !!python/tuple
-  - -70.0
+  - -75.0
   - -60.0
   soma.ghbar: !!python/tuple
   - 1.0E-9

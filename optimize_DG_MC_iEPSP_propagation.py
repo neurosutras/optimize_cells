@@ -501,8 +501,13 @@ def get_objectives_iEPSP_attenuation(features, export=False):
 
 #    x = features['distance_array'][:-1]
     # Discard terminal dendrite in computing objectives
-    x = features['distance_array'][:-1]
-    atten = features['attenuation_array'][:-1]
+
+#    x = features['distance_array'][:-1]
+#    atten = features['attenuation_array'][:-1]
+
+    x = features['distance_array']
+    atten = features['attenuation_array']
+
     gompertz_coeffs = get_gompertz_coeffs()
     expected_atten = gompertz(x, *gompertz_coeffs) 
     atten_resi = np.mean(((expected_atten-atten)/0.02)**2)

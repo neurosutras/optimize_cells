@@ -317,6 +317,7 @@ def update_mechanisms_leak(x, context):
     modify_mech_param(cell, 'soma', 'pas', 'e', x_dict['e_pas'])
     modify_mech_param(cell, 'apical', 'pas', 'g', origin='soma', slope=x_dict['dend.g_pas slope'],
                       tau=x_dict['dend.g_pas tau'])
+    modify_mech_param(cell, 'apical', 'pas', 'g', origin='parent', custom={'func': 'custom_filter_if_terminal'}, append=True)
 #    modify_mech_param(cell, 'apical', 'h', 'ghbar', origin='soma')
     modify_mech_param(cell, 'apical', 'h', 'ghbar', x_dict['dend.ghbar'])
     for sec_type in ['hillock', 'ais', 'axon', 'apical']:
