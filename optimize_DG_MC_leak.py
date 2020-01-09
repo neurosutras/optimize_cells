@@ -1,5 +1,5 @@
 """
-Uses nested.optimize to tune somatodendritic input resistance in dentate granule cells.
+Uses nested.optimize to tune somatodendritic input resistance in dentate mossy cells.
 
 Requires a YAML file to specify required configuration parameters.
 Requires use of a nested.parallel interface.
@@ -317,7 +317,8 @@ def update_mechanisms_leak(x, context):
     modify_mech_param(cell, 'soma', 'pas', 'e', x_dict['e_pas'])
     modify_mech_param(cell, 'apical', 'pas', 'g', origin='soma', slope=x_dict['dend.g_pas slope'],
                       tau=x_dict['dend.g_pas tau'])
-    modify_mech_param(cell, 'apical', 'h', 'ghbar', origin='soma')
+#    modify_mech_param(cell, 'apical', 'h', 'ghbar', origin='soma')
+    modify_mech_param(cell, 'apical', 'h', 'ghbar', x_dict['dend.ghbar'])
     for sec_type in ['hillock', 'ais', 'axon', 'apical']:
         update_mechanism_by_sec_type(cell, sec_type, 'pas')
     if context.correct_for_spines:

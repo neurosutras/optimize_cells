@@ -14,6 +14,9 @@ bounds:
   soma.ghbar: !!python/tuple
   - 1.0E-9
   - 1.0E-2
+  dend.ghbar: !!python/tuple
+    - 1.0E-9
+    - 1.0E-2
 feature_names:
 - dend R_inp
 - term_dend R_inp
@@ -61,6 +64,7 @@ param_names:
 - dend.g_pas tau
 - e_pas
 - soma.ghbar
+- dend.ghbar
 target_range:
   dend R_inp: 1.
   soma R_inp: 0.5
@@ -78,3 +82,4 @@ x0:
   soma.g_pas: 1.050E-5
   e_pas: -66.0
   soma.ghbar: 1.e-5
+  dend.ghbar: 1.e-5

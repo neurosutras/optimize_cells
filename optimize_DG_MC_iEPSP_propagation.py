@@ -499,10 +499,13 @@ def get_objectives_iEPSP_attenuation(features, export=False):
     """
     objectives = dict()
 
-    x = features['distance_array']
+#    x = features['distance_array'][:-1]
+    # Discard terminal dendrite in computing objectives
+    x = features['distance_array'][:-1]
+    atten = features['attenuation_array'][:-1]
     gompertz_coeffs = get_gompertz_coeffs()
     expected_atten = gompertz(x, *gompertz_coeffs) 
-    atten_resi = np.mean(((expected_atten-features['attenuation_array'])/0.02)**2)
+    atten_resi = np.mean(((expected_atten-atten)/0.02)**2)
     objectives['iEPSP_attenuation_residual'] = atten_resi
 
     if export:

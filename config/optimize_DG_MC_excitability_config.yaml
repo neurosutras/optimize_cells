@@ -8,6 +8,9 @@ bounds:
   soma.g_pas: !!python/tuple
   - 1.0E-12
   - 1.0E-4
+  dend.ghbar: !!python/tuple
+    - 1.0E-9
+    - 1.0E-2
   soma.ghbar: !!python/tuple
   - 1.0E-9
   - 1.0E-2
@@ -167,6 +170,7 @@ param_names:
 - soma.g_pas
 - dend.g_pas slope
 - dend.g_pas tau
+- dend.ghbar
 - e_pas
 - soma.ghbar
 - soma.gbar_nas
@@ -218,6 +222,7 @@ target_val:
 x0:
   dend.g_pas slope: 2.301342E-05
   dend.g_pas tau: 1.153835E+02
+  dend.ghbar: 1.e-3
   soma.g_pas: 3.453683E-06
   e_pas: -6.452659E+01
   soma.ghbar: 1.e-3

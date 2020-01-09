@@ -457,6 +457,7 @@ def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.005, vm_tol=0.5, i
         if i_inc < 0.:
             i_inc *= -1.
         delta_str = 'increased'
+        prev_vm_rest = vm_rest
         while vm_rest < vm_target:
             prev_vm_rest = vm_rest
             i_amp += i_inc
@@ -467,6 +468,7 @@ def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.005, vm_tol=0.5, i
             if sim.verbose:
                 print('offset_vm: pid: %i; %s; %s i_holding to %.3f nA; vm_rest: %.1f' % \
                       (os.getpid(), rec_name, delta_str, i_amp, vm_rest))
+
         if abs(vm_rest - vm_target) > abs(prev_vm_rest - vm_target):
             i_amp -= i_inc
             vm_rest = prev_vm_rest
