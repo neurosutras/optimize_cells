@@ -859,6 +859,7 @@ def plot_helper(fig, show=True, filename_prefix=None, filename_suffix=None, save
             raise IOError('File already exists: {!s}'.format(filename))
         fig.savefig(filename, format=fig_format, transparent=transparent)
 
+
 def plot_attenuation(file_path, axes=None, show=True):
     """
     :param file_path: str 
@@ -915,6 +916,7 @@ def plot_attenuation(file_path, axes=None, show=True):
         plt.show()
     else:
         return axes
+
 
 def gompertz(t, a, b, c, m):
     return 1+a*np.exp(-b*np.exp(-c*(t-m)))
