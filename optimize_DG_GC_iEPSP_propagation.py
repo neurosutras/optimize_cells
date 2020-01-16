@@ -149,6 +149,7 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
     :param cvode: bool
     :param daspk: bool
     """
+    verbose = int(verbose)
     init_context()
     context.env = Env(comm=context.comm, verbose=verbose > 1, **kwargs)
     configure_hoc_env(context.env)
@@ -229,8 +230,9 @@ def iEPSP_amp_error(x):
     iEPSP_amp = np.max(vm[int(equilibrate / dt):])
     Err = ((iEPSP_amp - context.target_val['iEPSP_unit_amp']) / (0.01 * context.target_val['iEPSP_unit_amp'])) ** 2.
     if context.verbose > 1:
-        print('iEPSP_amp_error: %s.i_unit: %.3f, soma iEPSP amp: %.2f; took %.1f s' % \
+        print('iEPSP_amp_error: %s.i_unit: %.3f, soma iEPSP amp: %.2f; took %.1f s' %
               (context.syn_mech_name, x[0], iEPSP_amp, time.time() - start_time))
+        sys.stdout.flush()
     return Err
 
 
@@ -294,8 +296,9 @@ def compute_features_iEPSP_i_unit(x, i_holding, export=False, plot=False):
     sim.parameters['description'] = description
 
     if context.verbose > 0:
-        print('compute_features_iEPSP_i_unit: pid: %i; %s: %s took %.3f s' % \
+        print('compute_features_iEPSP_i_unit: pid: %i; %s: %s took %.3f s' %
               (os.getpid(), title, description, time.time() - start_time))
+        sys.stdout.flush()
     if plot:
         context.sim.plot()
     if export:
@@ -379,6 +382,7 @@ def compute_features_iEPSP_attenuation(x, i_holding, ISI_key, i_EPSC, export=Fal
     if context.verbose > 0:
         print('compute_features_iEPSP_attenuation: pid: %i; %s: %s took %.3f s' %
               (os.getpid(), title, description, time.time() - start_time))
+        sys.stdout.flush()
     if plot:
         context.sim.plot()
     if export:

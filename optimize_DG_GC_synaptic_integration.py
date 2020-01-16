@@ -194,6 +194,7 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
     :param cvode: bool
     :param daspk: bool
     """
+    verbose = int(verbose)
     init_context()
     context.env = Env(comm=context.comm, verbose=verbose > 1, **kwargs)
     configure_hoc_env(context.env)
@@ -326,14 +327,14 @@ def update_syn_mechanisms(x, context=None):
     modify_syn_param(cell, env, 'apical', context.AMPA_type, param_name='g_unit',
                      filters={'syn_types': ['excitatory'], 'layers': ['OML']}, origin='apical',
                      origin_filters={'syn_types': ['excitatory'], 'layers': ['MML']}, update_targets=False, append=True)
-    modify_syn_param(cell, env, 'apical', context.NMDA_type, param_name='Kd', value=x_dict['NMDA.Kd'],
-                     update_targets=False)
-    modify_syn_param(cell, env, 'apical', context.NMDA_type, param_name='gamma', value=x_dict['NMDA.gamma'],
-                     update_targets=False)
-    modify_syn_param(cell, env, 'apical', context.NMDA_type, param_name='g_unit', value=x_dict['NMDA.g_unit'],
-                     update_targets=False)
-    modify_syn_param(cell, env, 'apical', context.NMDA_type, param_name='vshift', value=x_dict['NMDA.vshift'],
-                     update_targets=False)
+    modify_syn_param(cell, env, 'apical', context.NMDA_type, filters={'syn_types': ['excitatory']}, param_name='Kd',
+                     value=x_dict['NMDA.Kd'], update_targets=False)
+    modify_syn_param(cell, env, 'apical', context.NMDA_type, filters={'syn_types': ['excitatory']}, param_name='gamma',
+                     value=x_dict['NMDA.gamma'], update_targets=False)
+    modify_syn_param(cell, env, 'apical', context.NMDA_type, filters={'syn_types': ['excitatory']}, param_name='g_unit',
+                     value=x_dict['NMDA.g_unit'], update_targets=False)
+    modify_syn_param(cell, env, 'apical', context.NMDA_type, filters={'syn_types': ['excitatory']}, param_name='vshift',
+                     value=x_dict['NMDA.vshift'], update_targets=False)
     config_biophys_cell_syns(env=env, gid=cell.gid, postsyn_name=cell.pop_name, syn_ids=context.syn_id_list,
                              verbose=context.verbose > 1, throw_error=True)
 

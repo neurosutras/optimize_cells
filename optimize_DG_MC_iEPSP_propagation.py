@@ -152,6 +152,7 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
     :param cvode: bool
     :param daspk: bool
     """
+    verbose = int(verbose)
     init_context()
     context.env = Env(comm=context.comm, verbose=verbose > 1, **kwargs)
     configure_hoc_env(context.env)
@@ -467,6 +468,7 @@ def compute_features_iEPSP_attenuation(x, i_holding, ISI_key, i_EPSC, export=Fal
     if context.verbose > 0:
         print('compute_features_iEPSP_attenuation: pid: %i; %s: %s took %.3f s' %
               (os.getpid(), title, description, time.time() - start_time))
+        sys.stdout.flush()
     if plot:
         context.sim.plot()
     if export:

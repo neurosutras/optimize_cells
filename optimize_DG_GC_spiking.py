@@ -202,6 +202,7 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
     :param cvode: bool
     :param daspk: bool
     """
+    verbose = int(verbose)
     init_context()
     context.env = Env(comm=context.comm, verbose=verbose > 1, **kwargs)
     configure_hoc_env(context.env)
@@ -301,6 +302,7 @@ def compute_features_spike_shape(x, i_holding, export=False, plot=False):
     if np.any(spike_times < equilibrate):
         if context.verbose > 0:
             print('compute_features_spike_shape: pid: %i; aborting - spontaneous firing' % (os.getpid()))
+            sys.stdout.flush()
         return dict()
 
     result = dict()
@@ -336,10 +338,12 @@ def compute_features_spike_shape(x, i_holding, export=False, plot=False):
             if sim.verbose:
                 print('compute_features_spike_shape: pid: %i; %s; %s i_th to %.3f nA; num_spikes: %i' % \
                       (os.getpid(), 'soma', delta_str, i_th, len(spike_times)))
+                sys.stdout.flush()
             spike = np.any(spike_times > equilibrate)
     if i_th <= 0.:
         if context.verbose > 0:
             print('compute_features_spike_shape: pid: %i; aborting - spontaneous firing' % (os.getpid()))
+            sys.stdout.flush()
         return dict()
 
     i_inc = 0.01
@@ -349,6 +353,7 @@ def compute_features_spike_shape(x, i_holding, export=False, plot=False):
         if i_th > context.i_th_max:
             if context.verbose > 0:
                 print('compute_features_spike_shape: pid: %i; aborting - rheobase outside target range' % (os.getpid()))
+                sys.stdout.flush()
             return dict()
         sim.modify_stim('step', amp=i_th)
         sim.run(v_active)
@@ -356,6 +361,7 @@ def compute_features_spike_shape(x, i_holding, export=False, plot=False):
         if sim.verbose:
             print('compute_features_spike_shape: pid: %i; %s; %s i_th to %.3f nA; num_spikes: %i' % \
                   (os.getpid(), 'soma', delta_str, i_th, len(spike_times)))
+            sys.stdout.flush()
         spike = np.any(spike_times > equilibrate)
 
     soma_vm = np.array(soma_rec)  # Get voltage waveforms of spike from various subcellular compartments
@@ -374,6 +380,7 @@ def compute_features_spike_shape(x, i_holding, export=False, plot=False):
     if spike_shape_dict is None:
         if context.verbose > 0:
             print('compute_features_spike_shape: pid: %i; aborting - problem analyzing spike shape' % (os.getpid()))
+            sys.stdout.flush()
         return dict()
     peak = spike_shape_dict['v_peak']
     threshold = spike_shape_dict['th_v']
@@ -394,6 +401,7 @@ def compute_features_spike_shape(x, i_holding, export=False, plot=False):
     if context.verbose > 1:
         print('compute_features_spike_shape: pid: %i; spike detector delay: %.3f (ms)' % \
               (os.getpid(), spike_detector_delay))
+        sys.stdout.flush()
 
     start = int((equilibrate + 1.) / dt)
     th_x = np.where(soma_vm[start:] >= threshold)[0][0] + start
@@ -423,6 +431,7 @@ def compute_features_spike_shape(x, i_holding, export=False, plot=False):
     if context.verbose > 0:
         print('compute_features_spike_shape: pid: %i; %s: %s took %.1f s; vm_th: %.1f' % \
               (os.getpid(), title, description, time.time() - start_time, threshold))
+        sys.stdout.flush()
     if plot:
         sim.plot()
     if export:
@@ -541,6 +550,7 @@ def compute_features_fI(x, i_holding, spike_detector_delay, rheobase, relative_a
     if context.verbose > 0:
         print('compute_features_fI: pid: %i; %s: %s took %.1f s; spike_rate: %.1f' % \
               (os.getpid(), title, description, time.time() - start_time, spike_rate))
+        sys.stdout.flush()
     if plot:
         sim.plot()
     if export:
@@ -582,6 +592,7 @@ def filter_features_fI(primitives, current_features, export=False):
         if context.verbose > 0:
             print('filter_features_fI: pid: %i; aborting - failed to compute required feature: %s' % \
                   (os.getpid(), feature_name))
+            sys.stdout.flush()
         return dict()
 
     if export:
@@ -685,6 +696,7 @@ def compute_features_spike_adaptation(x, i_holding, spike_detector_delay, start_
             if sim.verbose:
                 print('compute_features_spike_adaptation: pid: %i; %s; %s i_inj to %.3f nA; num_spikes: %i' % \
                       (os.getpid(), 'soma', delta_str, amp, spike_count))
+                sys.stdout.flush()
     if spike_count < target_spike_count:
         if len(prev_spike_times) > spike_count:
             spike_times = prev_spike_times
@@ -698,6 +710,7 @@ def compute_features_spike_adaptation(x, i_holding, spike_detector_delay, start_
                     if context.verbose > 0:
                         print('compute_features_spike_adaptation: pid: %i; i_inj: %.3f; aborting: too few spikes after ' \
                               '%.1f s' % (os.getpid(), amp - i_inc, time.time() - start_time))
+                        sys.stdout.flush()
                     return dict()
                 sim.modify_stim('step', amp=amp)
                 sim.run(v_active)
@@ -706,6 +719,7 @@ def compute_features_spike_adaptation(x, i_holding, spike_detector_delay, start_
                 if sim.verbose:
                     print('compute_features_spike_adaptation: pid: %i; %s; %s i_inj to %.3f nA; num_spikes: %i' % \
                           (os.getpid(), 'soma', delta_str, amp, spike_count))
+                    sys.stdout.flush()
 
     sim.parameters['i_amp'] = amp
     result = dict()
@@ -714,6 +728,7 @@ def compute_features_spike_adaptation(x, i_holding, spike_detector_delay, start_
         print('compute_features_spike_adaptation: pid: %i; %s: %s took %.1f s; ISI1: %.1f; ISI2: %.1f' % \
               (os.getpid(), title, description, time.time() - start_time, result['ISI_array'][0],
                result['ISI_array'][1]))
+        sys.stdout.flush()
 
     if plot:
         sim.plot()
@@ -813,6 +828,7 @@ def compute_features_dend_spike(x, i_holding, amp, export=False, plot=False):
     if context.verbose > 0:
         print('compute_features_dend_spike: pid: %i; %s: %s took %.1f s; dend_spike_amp: %.1f' % \
               (os.getpid(), title, description, time.time() - start_time, dend_spike_amp))
+        sys.stdout.flush()
     if plot:
         sim.plot()
     if export:
@@ -1008,7 +1024,7 @@ def add_complete_axon_recordings():
             if not sim.has_rec(name):
                 sim.append_rec(cell, cell.axon[0], name=name, loc=loc)
             target_distance += 100.
-
+    sys.stdout.flush()
 
 if __name__ == '__main__':
     main(args=sys.argv[(list_find(lambda s: s.find(os.path.basename(__file__)) != -1, sys.argv) + 1):],
