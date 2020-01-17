@@ -717,7 +717,7 @@ def update_mechanisms_spiking(x, context=None):
     modify_mech_param(cell, 'soma', 'CadepK', 'gbkbar', x_dict['soma.gbkbar'])
     modify_mech_param(cell, 'soma', 'Cacum', 'tau', x_dict['soma.tau_Cacum'])
     for sec_type in ['apical']:
-        modify_mech_param(cell, sec_type, 'kap', 'gkabar', origin='soma')
+        # modify_mech_param(cell, sec_type, 'kap', 'gkabar', origin='soma')
         modify_mech_param(cell, sec_type, 'kdr', 'gkdrbar', origin='soma')
     modify_mech_param(cell, 'hillock', 'kap', 'gkabar', origin='soma')
     modify_mech_param(cell, 'hillock', 'kdr', 'gkdrbar', origin='soma')
