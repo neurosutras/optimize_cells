@@ -69,8 +69,8 @@ bounds:
   - 9.
   - 100.
 default_params:
-  - ais.gkmbar: 0    
-  - axon.gkmbar: 0    
+  ais.gkmbar: 0    
+  axon.gkmbar: 0    
 
 rel_bounds:
 - - axon.gbar_nax
