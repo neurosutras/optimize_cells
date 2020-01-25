@@ -138,7 +138,7 @@ def init_context():
     duration = max(sim_duration.values())
     dt = 0.025
     v_init = -66.
-    v_active = -66.
+    v_active = -60.
     syn_mech_name = 'EPSC'
 
     context.update(locals())

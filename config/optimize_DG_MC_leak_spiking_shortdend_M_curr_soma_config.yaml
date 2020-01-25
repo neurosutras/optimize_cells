@@ -62,6 +62,9 @@ bounds:
   axon.gkdrbar: !!python/tuple
   - 0.001
   - 0.075
+  soma.gkmbar: !!python/tuple
+  - 0.00005
+  - 0.05
   soma.sh_nas/x: !!python/tuple
   - 1.0
   - 8.0
@@ -186,6 +189,7 @@ param_names:
 - soma.gskbar
 - ais.gkmbar
 - soma.tau_Cacum
+- soma.gkmbar
 target_range:
   dend R_inp: 1.
   soma R_inp: 0.5
@@ -239,3 +243,4 @@ x0:
   soma.gskbar: 0.0001
   ais.gkmbar: 2.584361E-04
   soma.gkabar: 3.166313E-02
+  soma.gkmbar: 2.584361E-04

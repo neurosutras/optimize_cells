@@ -140,7 +140,7 @@ def init_context():
     th_dvdt = 10.
     dend_th_dvdt = 30.
     v_init = -66.
-    v_active = -66.
+    v_active = -60.
     i_th_start = 0.2
     i_th_max = 0.4
 
@@ -716,6 +716,7 @@ def update_mechanisms_spiking(x, context=None):
     modify_mech_param(cell, 'soma', 'CadepK', 'gskbar', x_dict['soma.gskbar'])
     modify_mech_param(cell, 'soma', 'CadepK', 'gbkbar', x_dict['soma.gbkbar'])
     modify_mech_param(cell, 'soma', 'Cacum', 'tau', x_dict['soma.tau_Cacum'])
+    modify_mech_param(cell, 'soma', 'DGC_KM', 'gbar', x_dict['soma.gkmbar'])
     for sec_type in ['apical']:
         # modify_mech_param(cell, sec_type, 'kap', 'gkabar', origin='soma')
         modify_mech_param(cell, sec_type, 'kdr', 'gkdrbar', origin='soma')
@@ -730,9 +731,9 @@ def update_mechanisms_spiking(x, context=None):
     modify_mech_param(cell, 'axon', 'nax', 'gbar', x_dict['axon.gbar_nax'])
     for sec_type in ['ais', 'axon']:
         modify_mech_param(cell, sec_type, 'nax', 'sh', origin='hillock')
-#    modify_mech_param(cell, 'ais', 'DGC_KM', 'gbar', x_dict['ais.gkmbar'])
-#    modify_mech_param(cell, 'hillock', 'DGC_KM', 'gbar', x_dict['ais.gkmbar'])
-#    modify_mech_param(cell, 'axon', 'DGC_KM', 'gbar', origin='ais')
+    modify_mech_param(cell, 'ais', 'DGC_KM', 'gbar', x_dict['ais.gkmbar'])
+    modify_mech_param(cell, 'hillock', 'DGC_KM', 'gbar', x_dict['ais.gkmbar'])
+    modify_mech_param(cell, 'axon', 'DGC_KM', 'gbar', origin='ais')
     modify_mech_param(cell, 'ais', 'nax', 'sha', x_dict['ais.sha_nax'])
     modify_mech_param(cell, 'ais', 'nax', 'gbar', x_dict['ais.gbar_nax'])
     for sec_type in ['apical', 'hillock', 'ais', 'axon']:

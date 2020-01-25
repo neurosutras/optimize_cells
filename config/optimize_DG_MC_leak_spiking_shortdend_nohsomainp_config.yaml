@@ -199,7 +199,7 @@ target_val:
   term_dend R_inp: 1000.
   dend R_inp: 117.
   soma R_inp: 126.
-#  soma R_inp (no h): 144.
+  soma R_inp (no h): 144.
   soma vm_rest: -66.0
   soma vm_rest (no h): -70.0
   min_ADP: 1.

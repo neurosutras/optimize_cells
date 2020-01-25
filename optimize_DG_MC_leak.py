@@ -115,7 +115,7 @@ def init_context():
     duration = equilibrate + stim_dur
     dt = 0.025
     v_init = -66.
-    v_active = -66.
+    v_active = -60.
     context.update(locals())
 
 
