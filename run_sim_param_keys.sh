@@ -24,12 +24,11 @@ sim_id=${sim_id_temp%.*}
 
 keys=$(grep "^[^ ]" $param_fil) 
 
-#for var in $keys
-for var in term_dend_R_inp_specialist soma_R_inp_specialist; 
+for var in $keys
 do
     short_key=(${var//_specialist/ })
     output_fil="data/$sim_id""_$short_key.hdf5"
-    mpirun -n 6 python3 -m nested.optimize --config-file-path=$config_fil --analyze --export --param_file=$param_fil --x0_key=$var --export-file-path=$output_fil
+    mpirun -n 6 python3 -m nested.optimize --config-file-path=$config_fil --analyze --export --param_file=$param_fil --x0_key=$var --export-file-path=$output_fil --label=$var
     echo $var
 done
 
