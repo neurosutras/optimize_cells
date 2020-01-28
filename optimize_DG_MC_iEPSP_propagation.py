@@ -77,7 +77,7 @@ def run_tests():
     sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
                 [[context.plot] * group_size]
     primitives = context.interface.map(compute_features_iEPSP_i_unit, *sequences)
-    this_features = filter_features_attenuation(primitives, features, export=context.export)
+    this_features = context.interface.execute(filter_features_attenuation, primitives, features, context.export)
     features.update(this_features)
     
     features, objectives = context.interface.execute(get_objectives_iEPSP_attenuation, features, context.export)
@@ -274,6 +274,7 @@ def get_args_dynamic_iEPSP_unit_optimize(x, features):
     if 'i_syn_amp' not in features:
         res = [[i_holding], ['dend'], [None]]
     return res
+
 
 def get_args_dynamic_iEPSP_unit(x, features):
     if 'i_holding' not in features:
