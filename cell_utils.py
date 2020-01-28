@@ -510,10 +510,9 @@ def get_thickest_dend_branch(cell, distance_target=None, sec_type='apical', dist
     :param terminal: bool
     :return: node, loc: :class:'SHocNode', float
     """
-    candidate_branches = []
-    candidate_distances = []
-    candidate_diams = []
-    candidate_locs = []
+    candidate_distances = {}
+    candidate_diams = {}
+    candidate_locs = {}
     if sec_type not in cell.nodes:
         raise RuntimeError('get_thickest_dend_branch: pid: %i; %s cell %i: cannot find branch to satisfy '
                            'provided filter' % (os.getpid(), cell.pop_name, cell.gid))
@@ -522,23 +521,37 @@ def get_thickest_dend_branch(cell, distance_target=None, sec_type='apical', dist
             for seg in branch.sec:
                 loc = seg.x
                 distance = get_distance_to_node(cell, cell.tree.root, branch, loc)
-                if distance_target is None or \
-                        distance_target - distance_tolerance < distance < distance_target + distance_tolerance:
-                    candidate_branches.append(branch)
-                    candidate_distances.append(distance)
-                    candidate_diams.append(branch.sec(loc).diam)
-                    candidate_locs.append(loc)
-    indexes = list(range(len(candidate_distances)))
-    if len(indexes) == 0:
+                if distance_target is None or distance_target < distance < distance_target + distance_tolerance:
+                    abs_distance_to_target = abs(distance - distance_target)
+                    if branch not in candidate_distances:
+                        candidate_distances[branch] = abs_distance_to_target
+                        candidate_diams[branch] = branch.sec(loc).diam
+                        candidate_locs[branch] = loc
+                    elif abs_distance_to_target < candidate_distances[branch]:
+                        candidate_distances[branch] = abs_distance_to_target
+                        candidate_diams[branch] = branch.sec(loc).diam
+                        candidate_locs[branch] = loc
+
+    if len(candidate_distances) == 0:
         raise RuntimeError('get_thickest_dend_branch: pid: %i; %s cell %i: cannot find branch to satisfy '
                            'provided filter' % (os.getpid(), cell.pop_name, cell.gid))
-    elif len(indexes) == 1:
-        index = 0
+    elif len(candidate_distances) == 1:
+        best_branch = next(iter(candidate_distances))
+        best_loc = candidate_locs[branch]
     else:
-        index = np.argmax(candidate_diams)
-    return candidate_branches[index], candidate_locs[index]
+        best_branch = None
+        for branch in candidate_diams:
+            print(branch.name, candidate_diams[branch], candidate_distances[branch])
+            if best_branch is None:
+                best_branch = branch
+            elif candidate_diams[branch] > candidate_diams[best_branch]:
+                best_branch = branch
+        best_loc = candidate_locs[best_branch]
+    return best_branch, best_loc
 
-def get_dend_segments(cell, ref_seg=None, sec_type='apical', soma_near=False, term_near=True, middle=True, extra_locs=[], all_seg=False, dist_bounds=None, soma_dend=True, term_dend=True):
+
+def get_dend_segments(cell, ref_seg=None, sec_type='apical', soma_near=False, term_near=True, middle=True,
+                      extra_locs=[], all_seg=False, dist_bounds=None, soma_dend=True, term_dend=True):
     """
     Get the patches along a dendritic branch 
     To get nodes at dendritic junctions, pass 0 and/or 1 in extra_locs
