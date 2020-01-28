@@ -541,7 +541,6 @@ def get_thickest_dend_branch(cell, distance_target=None, sec_type='apical', dist
     else:
         best_branch = None
         for branch in candidate_diams:
-            print(branch.name, candidate_diams[branch], candidate_distances[branch])
             if best_branch is None:
                 best_branch = branch
             elif candidate_diams[branch] > candidate_diams[best_branch]:
