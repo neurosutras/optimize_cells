@@ -3,23 +3,23 @@ bounds:
   - 1.0E-12
   - 1.0E-7
 feature_names:
-- iEPSP_i_unit
-- iEPSP_attenuation_short
-- iEPSP_attenuation_long
+- i_EPSC
 update_context:
 - - optimize_DG_GC_iEPSP_propagation
   - reset_biophysics
 get_features_stages:
 - source: optimize_DG_GC_iEPSP_propagation
-  get_args_dynamic: get_args_dynamic_i_holding
+  get_args_dynamic: get_args_dynamic_i_EPSC
   compute_features: compute_features_iEPSP_i_unit
 - source: optimize_DG_GC_iEPSP_propagation
-  get_args_dynamic: get_args_dynamic_iEPSP_attenuation
-  compute_features: compute_features_iEPSP_attenuation
+  get_args_dynamic: get_args_dynamic_iEPSP_unit
+  compute_features: compute_features_iEPSP_i_unit
+  filter_features: filter_features_iEPSP_attenuation
 get_objectives:
-  optimize_DG_GC_iEPSP_propagation: get_objectives_iEPSP_propagation
+  optimize_DG_GC_iEPSP_propagation: get_objectives_iEPSP_attenuation
 kwargs:
   mech_file_path: mechanisms/20181205_DG_GC_excitability_mech.yaml
+  max_i_EPSP_attenuation_distance: 300.
   gid: 0
   cell_type: GC
   correct_for_spines: True
@@ -32,16 +32,14 @@ kwargs:
   dataset_prefix: ../dentate/datasets
   results_path: data
 objective_names:
-- iEPSP_attenuation_short
-- iEPSP_attenuation_long
+- iEPSP_attenuation_residual
 optimization_title: DG_GC_iEPSP_propagation
 param_gen: PopulationAnnealing
 param_names:
 - soma.g_pas
 target_range:
+  iEPSP_attenuation: 0.001
 target_val:
   iEPSP_unit_amp: 1.
-  iEPSP_attenuation_short: 0.17
-  iEPSP_attenuation_long: 0.23
 x0:
   soma.g_pas: 1.050E-10

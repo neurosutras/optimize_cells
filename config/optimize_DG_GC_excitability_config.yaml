@@ -114,9 +114,7 @@ feature_names:
 - soma_spike_amp
 - f_I_slope
 - dend_spike_amp
-- iEPSP_i_unit
-- iEPSP_attenuation_short
-- iEPSP_attenuation_long
+- i_EPSC
 - spike_detector_delay
 update_context:
 - - optimize_DG_GC_leak
@@ -144,17 +142,19 @@ get_features_stages:
   compute_features: compute_features_dend_spike
   filter_features: filter_features_dend_spike
 - source: optimize_DG_GC_iEPSP_propagation
-  get_args_dynamic: get_args_dynamic_i_holding
+  get_args_dynamic: get_args_dynamic_i_EPSC
   compute_features: compute_features_iEPSP_i_unit
 - source: optimize_DG_GC_iEPSP_propagation
-  get_args_dynamic: get_args_dynamic_iEPSP_attenuation
-  compute_features: compute_features_iEPSP_attenuation
+  get_args_dynamic: get_args_dynamic_iEPSP_unit
+  compute_features: compute_features_iEPSP_i_unit
+  filter_features: filter_features_iEPSP_attenuation
 get_objectives:
   optimize_DG_GC_leak: get_objectives_leak
   optimize_DG_GC_spiking: get_objectives_spiking
-  optimize_DG_GC_iEPSP_propagation: get_objectives_iEPSP_propagation
+  optimize_DG_GC_iEPSP_propagation: get_objectives_iEPSP_attenuation
 kwargs:
   mech_file_path: mechanisms/20181205_DG_GC_excitability_mech.yaml
+  max_i_EPSP_attenuation_distance: 300.
   gid: 0
   cell_type: GC
   correct_for_spines: True
@@ -182,8 +182,7 @@ objective_names:
 - spike_adaptation_residuals
 - f_I_residuals
 - dend_spike_score
-- iEPSP_attenuation_short
-- iEPSP_attenuation_long
+- iEPSP_attenuation_residual
 optimization_title: DG_GC_excitability
 param_gen: PopulationAnnealing
 param_names:
@@ -220,6 +219,7 @@ target_range:
   vm_th: 0.01
   vm_stability: 0.1
   dend_spike_amp: 0.1
+  iEPSP_attenuation: 0.001
 target_val:
   term_dend R_inp: 1000.
   dend R_inp: 275.

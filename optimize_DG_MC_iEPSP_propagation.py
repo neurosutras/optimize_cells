@@ -4,7 +4,7 @@ Uses nested.optimize to tune frequency-dependent attenuation of EPSPs from dendr
 Requires a YAML file to specify required configuration parameters.
 Requires use of a nested.parallel interface.
 """
-__author__ = 'Aaron D. Milstein and Prannath Moolchand'
+__author__ = 'Aaron D. Milstein, Grace Ng, and Prannath Moolchand'
 from dentate.biophysics_utils import *
 from nested.parallel import *
 from nested.optimize_utils import *
@@ -62,8 +62,8 @@ def main(cli, config_file_path, output_dir, export, export_file_path, label, ver
 
 def run_tests():
     features = dict()
+
     # Stage 0:
-#    args = context.interface.execute(get_args_dynamic_i_holding, context.x0_array, features)
     args = context.interface.execute(get_args_dynamic_iEPSP_unit_optimize, context.x0_array, features)
     group_size = len(args[0])
     sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
@@ -77,9 +77,6 @@ def run_tests():
     sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
                 [[context.plot] * group_size]
     primitives = context.interface.map(compute_features_iEPSP_i_unit, *sequences)
-    #this_features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
-    #features.update(this_features)
-
     this_features = filter_features_attenuation(primitives, features, export=context.export)
     features.update(this_features)
     
@@ -124,18 +121,11 @@ def context_has_sim_env(context):
 
 
 def init_context():
-    """
 
-    """
-    ISI = {'long': 10., 'short': 1.}  # inter-stimulus interval for synaptic stim (ms)
     equilibrate = 250.  # time to steady-state
     stim_dur = 50.
-    num_pulses = 5
-    sim_duration = {'long': equilibrate + (num_pulses - 1.) * ISI['long'] + stim_dur,
-                    'short': equilibrate + (num_pulses - 1.) * ISI['short'] + stim_dur,
-                    'unit': equilibrate + stim_dur}
     trace_baseline = 10.
-    duration = max(sim_duration.values())
+    duration = equilibrate + stim_dur
     dt = 0.025
     v_init = -66.
     v_active = -60.
@@ -186,7 +176,7 @@ def config_sim_env(context):
         sim.append_rec(cell, cell.tree.root, name='soma', loc=0.5)
     if context.v_active not in context.i_holding['soma']:
         context.i_holding['soma'][context.v_active] = 0.
-    dend, dend_loc = get_thickest_dend_branch(context.cell, 150., terminal=False)
+    dend, dend_loc = get_thickest_dend_branch(context.cell, 100., terminal=False)
     if not sim.has_rec('dend'):
         sim.append_rec(cell, dend, name='dend', loc=dend_loc)
 
@@ -269,24 +259,11 @@ def iEPSP_amp_error(x, idx):
     iEPSP_amp = np.max(vm[int(equilibrate / dt):])
     Err = ((iEPSP_amp - context.target_val['iEPSP_unit_amp']) / (0.01 * context.target_val['iEPSP_unit_amp'])) ** 2.
     if context.verbose > 1:
-        print('iEPSP_amp_error: %s.i_unit: %.3f, soma iEPSP amp: %.2f; took %.1f s' % \
+        print('iEPSP_amp_error: %s.i_unit: %.3f, soma iEPSP amp: %.2f; took %.1f s' %
               (context.syn_mech_name, x[0], iEPSP_amp, time.time() - start_time))
+        sys.stdout.flush()
     return Err
 
-
-def get_args_dynamic_i_holding(x, features):
-    """
-    A nested map operation is required to compute iEPSP features. The arguments to be mapped depend on prior features
-    (dynamic).
-    :param x: array
-    :param features: dict
-    :return: list of list
-    """
-    if 'i_holding' not in features:
-        i_holding = context.i_holding
-    else:
-        i_holding = features['i_holding']
-    return [[i_holding]]
 
 def get_args_dynamic_iEPSP_unit_optimize(x, features):
     if 'i_holding' not in features:
@@ -324,7 +301,7 @@ def compute_features_iEPSP_i_unit(x, i_holding, dend_name, i_syn_amp=None, expor
     zero_na(context.cell)
 
     dt = context.dt
-    duration = context.sim_duration['unit']
+    duration = context.duration
     equilibrate = context.equilibrate
 
     v_active = context.v_active
@@ -349,7 +326,8 @@ def compute_features_iEPSP_i_unit(x, i_holding, dend_name, i_syn_amp=None, expor
     else:
         i_EPSC = i_syn_amp
 
-    config_syn(context.syn_mech_name, context.env.synapse_attributes.syn_param_rules, syn=context.i_syn[idx], i_unit=i_EPSC)
+    config_syn(context.syn_mech_name, context.env.synapse_attributes.syn_param_rules, syn=context.i_syn[idx],
+               i_unit=i_EPSC)
     sim.modify_rec(name='dendlocal', node=dend['node'], loc=dend['loc'])
     sim.run(v_active)
 
@@ -373,7 +351,8 @@ def compute_features_iEPSP_i_unit(x, i_holding, dend_name, i_syn_amp=None, expor
         result['i_syn_amp'] = i_EPSC
     
     result['i_EPSP_rep_{!s}'.format(dend_name)] = \
-        {'soma_EPSP_amp': soma_iEPSP_amp, 'syn_loc_amp': dendloc_iEPSP_amp, 'index': idx, 'dist': dend['dist'], 'att_ratio': soma_iEPSP_amp/dendloc_iEPSP_amp, 'ref_dend_amp': dend_iEPSP_amp} 
+        {'soma_EPSP_amp': soma_iEPSP_amp, 'syn_loc_amp': dendloc_iEPSP_amp, 'index': idx, 'dist': dend['dist'],
+         'att_ratio': soma_iEPSP_amp/dendloc_iEPSP_amp, 'ref_dend_amp': dend_iEPSP_amp}
 
     title = 'iEPSP'
     description = 'i_unit: {!s}'.format(dend_name)
@@ -393,104 +372,6 @@ def compute_features_iEPSP_i_unit(x, i_holding, dend_name, i_syn_amp=None, expor
     context.i_vs[idx].play(h.Vector())
     return result
 
-
-def get_args_dynamic_iEPSP_attenuation(x, features):
-    """
-    A nested map operation is required to compute iEPSP_propagation features. The arguments to be mapped depend on
-    prior features (dynamic).
-    :param x: array
-    :param features: dict
-    :return: list of list
-    """
-    if 'i_holding' not in features:
-        i_holding = context.i_holding
-    else:
-        i_holding = features['i_holding']
-    i_EPSC = features['iEPSP_i_unit']
-    return [[i_holding] * 2, ['long', 'short'], [i_EPSC, i_EPSC]]
-
-
-def compute_features_iEPSP_attenuation(x, i_holding, ISI_key, i_EPSC, export=False, plot=False):
-    """
-
-    :param x:
-    :param i_holding: defaultdict(dict: float)
-    :param ISI_key: str
-    :param i_EPSC: float
-    :param export:
-    :param plot:
-    :return: dict
-    """
-    start_time = time.time()
-    config_sim_env(context)
-    update_source_contexts(x, context)
-    zero_na(context.cell)
-
-    result = dict()
-
-    dt = context.dt
-    duration = context.sim_duration[ISI_key]
-    ISI = context.ISI[ISI_key]
-    equilibrate = context.equilibrate
-    context.i_EPSC['dend'] = i_EPSC
-
-    v_active = context.v_active
-    context.i_holding = i_holding
-    offset_vm('soma', context, v_active, i_history=context.i_holding, dynamic=False)
-
-    sim = context.sim
-    sim.modify_stim('holding', dur=duration)
-    sim.backup_state()
-    sim.set_state(dt=dt, tstop=duration, cvode=False)
-
-    context.i_vs.play(h.Vector([equilibrate + i * ISI for i in range(context.num_pulses)]))
-    config_syn(context.syn_mech_name, context.env.synapse_attributes.syn_param_rules, syn=context.i_syn, i_unit=i_EPSC)
-    sim.run(v_active)
-
-    soma_vm = np.array(sim.get_rec('soma')['vec'])
-    soma_baseline = np.mean(soma_vm[int((equilibrate - 3.) / dt):int((equilibrate - 1.) / dt)])
-    soma_vm -= soma_baseline
-    soma_iEPSP_amp = np.max(soma_vm[int(equilibrate / dt):])
-
-    dend_vm = np.array(sim.get_rec('dend')['vec'])
-    dend_baseline = np.mean(dend_vm[int((equilibrate - 3.) / dt):int((equilibrate - 1.) / dt)])
-    dend_vm -= dend_baseline
-    dend_iEPSP_amp = np.max(dend_vm[int(equilibrate / dt):])
-
-    result['iEPSP_attenuation_%s' % ISI_key] = soma_iEPSP_amp / dend_iEPSP_amp
-
-    title = 'iEPSP_attenuation'
-    description = 'ISI: %.1f' % ISI
-    sim.parameters['duration'] = duration
-    sim.parameters['title'] = title
-    sim.parameters['description'] = description
-
-    if context.verbose > 0:
-        print('compute_features_iEPSP_attenuation: pid: %i; %s: %s took %.3f s' %
-              (os.getpid(), title, description, time.time() - start_time))
-        sys.stdout.flush()
-    if plot:
-        context.sim.plot()
-    if export:
-        context.sim.export_to_file(context.temp_output_path)
-    sim.restore_state()
-    context.i_vs.play(h.Vector())
-    return result
-
-
-def get_objectives_iEPSP_propagation(features, export=False):
-    """
-
-    :param features: dict
-    :param export: bool
-    :return: tuple of dict
-    """
-    objectives = dict()
-    for ISI_key in context.ISI:
-        target = 'iEPSP_attenuation_%s' % ISI_key
-        objectives[target] = \
-            ((features[target] - context.target_val[target]) / (0.01 * context.target_val[target])) ** 2.
-    return features, objectives
 
 def get_objectives_iEPSP_attenuation(features, export=False):
     """
@@ -523,6 +404,7 @@ def get_objectives_iEPSP_attenuation(features, export=False):
         f[description].attrs['gompertz_fn'] = '1+a*np.exp(-b*np.exp(-c*(t-m))), coeffs=(a,b,c,m)'
         f.close()
     return features, objectives
+
 
 def filter_features_attenuation(primitives, features, export=False):
     dendkeys = [key for key in features.keys() if key.startswith('i_EPSP_rep_dend')]
@@ -575,6 +457,7 @@ def filter_features_attenuation(primitives, features, export=False):
 
     return new_features 
 
+
 def get_attenuation_data():
     distance = np.array([  0.        ,  40.5904059 ,  45.29520295,  47.50922509, \
                           77.39852399,  90.12915129,  90.68265683, 121.95571956, \
@@ -591,16 +474,16 @@ def get_attenuation_data():
 
 def get_gompertz_coeffs(optimize=False):
     if optimize:
-        data = get_attenuation_data()
-        data = np.append(data, np.array([[0,1]]), axis=0)
-    #    results = optimize.curve_fit(gompertz,  data[:,0],  data[:,1], p0=[-0.9, 1.5, 0.2,40]) 
+        distance, attenuation = get_attenuation_data()
         results = optimize.curve_fit(gompertz,  distance,  attenuation, p0=[-0.9, 1.5, 0.2,40]) 
     else:
         results = np.array([-0.87,  1.06160453,  0.06154768, 35.55592743])
     return results
 
+
 def gompertz(t, a, b, c, m):
     return 1+a*np.exp(-b*np.exp(-c*(t-m)))
+
 
 if __name__ == '__main__':
     main(args=sys.argv[(list_find(lambda s: s.find(os.path.basename(__file__)) != -1, sys.argv) + 1):],
