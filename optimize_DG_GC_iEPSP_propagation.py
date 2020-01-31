@@ -384,8 +384,8 @@ def compute_features_iEPSP_i_unit(x, i_holding, syn_index, i_EPSC=None, export=F
                                                    'dend_local_iEPSP_amp': dend_local_iEPSP_amp,
                                                    'syn_index': syn_index}
 
-    title = 'iEPSP'
-    description = 'iEPSP_unit: {!s}'.format(this_syn_name)
+    title = 'iEPSP_unit'
+    description = '{!s} ({:d} um from soma)'.format(this_syn_name, int(this_syn_attr_dict['distance']))
     sim.parameters['duration'] = duration
     sim.parameters['title'] = title
     sim.parameters['description'] = description
@@ -438,19 +438,19 @@ def filter_features_iEPSP_attenuation(primitives, features, export=False):
 
     if export:
         description = 'iEPSP_attenuation'
-        distance, attenuation = get_attenuation_data()
+        exp_distance, exp_attenuation = get_attenuation_data()
         with h5py.File(context.export_file_path, 'a') as f:
             if description not in f:
                 f.create_group(description)
                 f[description].attrs['enumerated'] = False
             group = f[description]
-            group.attrs['i_syn_amp'] = features['i_syn_amp']
+            group.attrs['i_EPSC'] = features['i_EPSC']
             group.create_dataset('distance', compression='gzip', data=dist_arr)
             group.create_dataset('attenuation', compression='gzip', data=atten_arr)
             group.create_dataset('soma_iEPSP_amp', compression='gzip', data=soma_amp_arr)
-            group.create_dataset('dend_local_amp', compression='gzip', data=dend_local_amp_arr)
-            group.create_dataset('exp_distance', compression='gzip', data=distance)
-            group.create_dataset('exp_attenuation', compression='gzip', data=attenuation)
+            group.create_dataset('dend_local_iEPSP_amp', compression='gzip', data=dend_local_amp_arr)
+            group.create_dataset('exp_distance', compression='gzip', data=exp_distance)
+            group.create_dataset('exp_attenuation', compression='gzip', data=exp_attenuation)
 
     return new_features
 
@@ -476,7 +476,6 @@ def get_objectives_iEPSP_attenuation(features, export=False):
         with h5py.File(context.export_file_path, 'a') as f:
             description = 'iEPSP_attenuation'
             f[description].create_dataset('gompertz_coeffs', compression='gzip', data=gompertz_coeffs)
-            f[description].create_dataset('expected_attenuations', compression='gzip', data=expected_atten)
             f[description].attrs['gompertz_fn'] = '1+a*np.exp(-b*np.exp(-c*(t-m))), coeffs=(a,b,c,m)'
     return features, objectives
 

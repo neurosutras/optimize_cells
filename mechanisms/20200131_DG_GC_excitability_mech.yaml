@@ -1,7 +1,7 @@
 ais:
   DGC_KM:
     gbar:
-      value: 0.01305485237132087
+      value: 0.01733489
   cable:
     Ra:
       origin: soma
@@ -12,17 +12,17 @@ ais:
       origin: soma
   kap:
     gkabar:
-      value: 0.012292879073768853
+      value: 0.005507091
   kdr:
     gkdrbar:
-      value: 0.05814910113712799
+      value: 0.07188143
   nax:
     gbar:
-      value: 0.19931876455388456
+      value: 0.4929055
     sh:
       origin: hillock
     sha:
-      value: -3.882715732208579
+      value: -3.24887
   pas:
     e:
       origin: soma
@@ -43,26 +43,26 @@ apical:
       min_loc: 75.0
       origin: soma
       outside: 0.0
-      slope: 0.0004590447833906747
-      value: 0.052307764561184356
+      slope: 0.0006031884
+      value: 0.09277991
     - min_loc: 300.0
       origin: soma
-      value: 0.15559284082408614
+      value: 0.2284973
   kap:
     gkabar:
       max_loc: 75.0
       origin: soma
       outside: 0.0
-      slope: 0.0004590447833906747
+      slope: 0.0006031884
   kdr:
     gkdrbar:
-      value: 0.0076350895988660985
+      value: 0.006729052
   nas:
     gbar:
-    - value: 0.03650909781719163
+    - value: 0.02267795
     - custom:
         func: custom_filter_modify_slope_if_terminal
-      min: 0.023164941660486337
+      min: 0.009975359
       origin: parent
       slope: 0.0
     sh:
@@ -74,8 +74,8 @@ apical:
       origin: soma
     g:
       origin: soma
-      slope: 3.829971282710617e-05
-      tau: 305.3398519738249
+      slope: 4.29752e-05
+      tau: 252.5872
 axon:
   DGC_KM:
     gbar:
@@ -96,7 +96,7 @@ axon:
       origin: ais
   nax:
     gbar:
-      value: 0.06364520556375414
+      value: 0.09503712
     sh:
       origin: hillock
   pas:
@@ -107,7 +107,7 @@ axon:
 hillock:
   DGC_KM:
     gbar:
-      value: 0.01305485237132087
+      value: 0.01733489
   cable:
     Ra:
       origin: soma
@@ -124,9 +124,9 @@ hillock:
       origin: soma
   nax:
     gbar:
-      value: 0.039254939220402615
+      value: 0.04824673
     sh:
-      value: 6.443239154016422
+      value: 7.680351
   pas:
     e:
       origin: soma
@@ -135,13 +135,13 @@ hillock:
 soma:
   Ca:
     gcamult:
-      value: 0.3386286416627743
+      value: 0.3333256
   Cacum:
     tau:
-      value: 57.838336312905206
+      value: 86.35422
   CadepK:
     gcakmult:
-      value: 8.701311909957697
+      value: 7.475305
   cable:
     Ra:
       value: 150.0
@@ -152,17 +152,17 @@ soma:
       value: -80.0
   kap:
     gkabar:
-      value: 0.017879405806883755
+      value: 0.04754078
   kdr:
     gkdrbar:
-      value: 0.04012674485858249
+      value: 0.06994847
   nas:
     gbar:
-      value: 0.039254939220402615
+      value: 0.04824673
     sh:
-      value: 6.443239154016422
+      value: 7.680351
   pas:
     e:
-      value: -74.4486260929934
+      value: -74.91217
     g:
-      value: 2.3628251674095195e-08
+      value: 2.60473e-09

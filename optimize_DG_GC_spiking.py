@@ -190,7 +190,9 @@ def init_context():
     exp_rheobase_f_I = (rate_at_rheobase - exp_fit_f_I_intercept) / exp_fit_f_I_slope
     i_inj_relative_amp_array_f_I = np.array([i_inj_increment_f_I * i for i in range(num_increments_f_I)])
     exp_rate_f_I_array = np.add(np.multiply(i_inj_relative_amp_array_f_I, exp_fit_f_I_slope), rate_at_rheobase)
-    
+
+    dend_spike_i_amp_list = [0.5, 0.7]
+
     context.update(locals())
 
 
@@ -227,19 +229,20 @@ def config_sim_env(context):
     init_context()
     if 'i_holding' not in context():
         context.i_holding = defaultdict(dict)
-    # if 'i_th_history' not in context():
-    #    context.i_th_history = defaultdict(dict)
+
     cell = context.cell
     sim = context.sim
     if not sim.has_rec('soma'):
         sim.append_rec(cell, cell.tree.root, name='soma', loc=0.5)
     if context.v_active not in context.i_holding['soma']:
         context.i_holding['soma'][context.v_active] = 0.
-    # if context.v_active not in context.i_th_history['soma']:
-    #    context.i_th_history['soma'][context.v_active] = context.i_th_start
+
     if not sim.has_rec('dend'):
         dend, dend_loc = get_thickest_dend_branch(context.cell, 100., terminal=False)
         sim.append_rec(cell, dend, name='dend', loc=dend_loc)
+    if not sim.has_rec('dend_distal'):
+        dend_distal, dend_distal_loc = get_thickest_dend_branch(context.cell, 150.)
+        sim.append_rec(cell, dend_distal, name='dend_distal', loc=dend_distal_loc)
     if not sim.has_rec('ais'):
         sim.append_rec(cell, cell.ais[0], name='ais', loc=1.)
     if not sim.has_rec('axon'):
@@ -311,13 +314,6 @@ def compute_features_spike_shape(x, i_holding, export=False, plot=False):
     node = rec_dict['node']
     soma_rec = rec_dict['vec']
 
-    """
-    if v_active not in context.i_th_history['soma']:
-        i_th = context.i_th_start
-        context.i_th_history['soma'][v_active] = i_th
-    else:
-        i_th = context.i_th_history['soma'][v_active]
-    """
     i_th = context.i_th_start
 
     sim.modify_stim('step', node=node, loc=loc, dur=stim_dur, amp=i_th)
@@ -762,7 +758,9 @@ def get_args_dynamic_dend_spike(x, features):
         i_holding = context.i_holding
     else:
         i_holding = features['i_holding']
-    return [[i_holding] * 2, [0.4, 0.7]]
+    count = len(context.dend_spike_i_amp_list)
+
+    return [[i_holding] * count, context.dend_spike_i_amp_list]
 
 
 def compute_features_dend_spike(x, i_holding, amp, export=False, plot=False):
@@ -790,7 +788,7 @@ def compute_features_dend_spike(x, i_holding, amp, export=False, plot=False):
 
     sim.modify_stim('holding', dur=duration)
 
-    rec_dict = sim.get_rec('dend')
+    rec_dict = sim.get_rec('dend_distal')
     loc = rec_dict['loc']
     node = rec_dict['node']
     dend_rec = rec_dict['vec']
@@ -833,6 +831,14 @@ def compute_features_dend_spike(x, i_holding, amp, export=False, plot=False):
         sim.plot()
     if export:
         context.sim.export_to_file(context.temp_output_path)
+
+    spike_times = np.array(context.cell.spike_detector.get_recordvec())
+    if np.any(spike_times > equilibrate):
+        if context.verbose > 0:
+            print('compute_features_dend_spike: pid: %i; aborting - dend spike caused soma spike' % (os.getpid()))
+            sys.stdout.flush()
+        return dict()
+
     sim.restore_state()
     sim.modify_stim('step', amp=0.)
     return result
@@ -851,10 +857,10 @@ def filter_features_dend_spike(primitives, current_features, export=False):
     for i, this_dict in enumerate(primitives):
         i_amp = this_dict['i_amp']
         spike_amp = this_dict['dend_spike_amp']
-        if i_amp == 0.4:
+        if i_amp == context.dend_spike_i_amp_list[0]:
             target_amp = 0.
             dend_spike_score += ((spike_amp - target_amp) / context.target_range['dend_spike_amp']) ** 2.
-        elif i_amp == 0.7:
+        elif i_amp == context.dend_spike_i_amp_list[1]:
             target_amp = context.target_val['dend_spike_amp']
             new_features['dend_spike_amp'] = spike_amp
             if spike_amp < target_amp:

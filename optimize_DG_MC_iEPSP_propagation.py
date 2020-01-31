@@ -398,12 +398,12 @@ def get_objectives_iEPSP_attenuation(features, export=False):
     objectives['iEPSP_attenuation_residual'] = atten_resi
 
     if export:
-        f = h5py.File(context.export_file_path, 'a')
-        description = 'iEPSP_attenuation'
-        f[description].create_dataset('gompertz_coeffs', compression='gzip', data=gompertz_coeffs)
-        f[description].create_dataset('expected_attenuations', compression='gzip', data=expected_atten)
-        f[description].attrs['gompertz_fn'] = '1+a*np.exp(-b*np.exp(-c*(t-m))), coeffs=(a,b,c,m)'
-        f.close()
+        with h5py.File(context.export_file_path, 'a') as f:
+            description = 'iEPSP_attenuation'
+            f[description].create_dataset('gompertz_coeffs', compression='gzip', data=gompertz_coeffs)
+            f[description].create_dataset('expected_attenuations', compression='gzip', data=expected_atten)
+            f[description].attrs['gompertz_fn'] = '1+a*np.exp(-b*np.exp(-c*(t-m))), coeffs=(a,b,c,m)'
+
     return features, objectives
 
 
@@ -441,20 +441,19 @@ def filter_features_attenuation(primitives, features, export=False):
     if export:
         description = 'iEPSP_attenuation'
         distance, attenuation = get_attenuation_data()
-        f = h5py.File(context.export_file_path, 'a')
-        if description not in f:
-            f.create_group(description)
-            f[description].attrs['enumerated'] = False
-        group = f[description]
-        group.attrs['i_syn_amp'] = features['i_syn_amp']
-        group.create_dataset('distance', compression='gzip', data=dist_arr)
-        group.create_dataset('attenuation', compression='gzip', data=atten_arr)
-        group.create_dataset('soma_EPSP_amp', compression='gzip', data=soma_amp_arr)
-        group.create_dataset('local_dend_amp', compression='gzip', data=syn_amp_arr)
-        group.create_dataset('ref_dend_amp', compression='gzip', data=ref_dend_arr)
-        group.create_dataset('expmt_distance', compression='gzip', data=distance)
-        group.create_dataset('expmt_attenuation', compression='gzip', data=attenuation)
-        f.close()
+        with h5py.File(context.export_file_path, 'a') as f:
+            if description not in f:
+                f.create_group(description)
+                f[description].attrs['enumerated'] = False
+            group = f[description]
+            group.attrs['i_syn_amp'] = features['i_syn_amp']
+            group.create_dataset('distance', compression='gzip', data=dist_arr)
+            group.create_dataset('attenuation', compression='gzip', data=atten_arr)
+            group.create_dataset('soma_EPSP_amp', compression='gzip', data=soma_amp_arr)
+            group.create_dataset('local_dend_amp', compression='gzip', data=syn_amp_arr)
+            group.create_dataset('ref_dend_amp', compression='gzip', data=ref_dend_arr)
+            group.create_dataset('expmt_distance', compression='gzip', data=distance)
+            group.create_dataset('expmt_attenuation', compression='gzip', data=attenuation)
 
     return new_features 
 

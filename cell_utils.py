@@ -500,7 +500,7 @@ def get_spike_adaptation_indexes(spike_times):
     return np.array(adi)
 
 
-def get_thickest_dend_branch(cell, distance_target=None, sec_type='apical', distance_tolerance=50., terminal=False):
+def get_thickest_dend_branch(cell, distance_target=None, sec_type='apical', distance_tolerance=50., terminal=None):
     """
     Get the thickest apical dendrite with a segment closest to a target distance from the soma.
     :param cell: "class:'BiophysCell'
@@ -517,7 +517,7 @@ def get_thickest_dend_branch(cell, distance_target=None, sec_type='apical', dist
         raise RuntimeError('get_thickest_dend_branch: pid: %i; %s cell %i: cannot find branch to satisfy '
                            'provided filter' % (os.getpid(), cell.pop_name, cell.gid))
     for branch in cell.nodes[sec_type]:
-        if terminal == is_terminal(branch):
+        if (terminal is None) or (terminal == is_terminal(branch)):
             for seg in branch.sec:
                 loc = seg.x
                 distance = get_distance_to_node(cell, cell.tree.root, branch, loc)

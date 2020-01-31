@@ -860,27 +860,24 @@ def plot_helper(fig, show=True, filename_prefix=None, filename_suffix=None, save
         fig.savefig(filename, format=fig_format, transparent=transparent)
 
 
-def plot_attenuation(file_path, axes=None, show=True):
+def plot_exported_DG_MC_iEPSP_attenuation(file_path, axes=None, show=True):
     """
     :param file_path: str 
     :param axes: :class:'Axes'
     :param show: bool
     """
+    with h5py.File(file_path, 'r') as f:
+        group_name = 'iEPSP_attenuation'
+        expt_att = np.array(f[group_name]['expmt_attenuation'])
+        expt_dist = np.array(f[group_name]['expmt_distance'])
+        dend_dist = np.array(f[group_name]['distance'])
+        expect_att = np.array(f[group_name]['expected_attenuations'])
+        resultant_att = np.array(f[group_name]['attenuation'])
+        gompertz_coeffs = np.array(f[group_name]['gompertz_coeffs'])
 
-    f = h5py.File(file_path, 'r')
-    group_name = 'iEPSP_attenuation'
-    expt_att = np.array(f[group_name]['expmt_attenuation'])
-    expt_dist = np.array(f[group_name]['expmt_distance'])
-    dend_dist = np.array(f[group_name]['distance'])
-    expect_att = np.array(f[group_name]['expected_attenuations'])
-    resultant_att = np.array(f[group_name]['attenuation'])
-    gompertz_coeffs = np.array(f[group_name]['gompertz_coeffs'])
-
-    local_dend_amp = np.array(f[group_name]['local_dend_amp'])
-    ref_dend_amp = np.array(f[group_name]['ref_dend_amp'])
-    soma_amp = np.array(f[group_name]['soma_EPSP_amp'])
-
-    f.close()
+        local_dend_amp = np.array(f[group_name]['local_dend_amp'])
+        ref_dend_amp = np.array(f[group_name]['ref_dend_amp'])
+        soma_amp = np.array(f[group_name]['soma_EPSP_amp'])
 
     dist_arr = np.arange(0, 500, 5)
     gompertz_line = gompertz(dist_arr, *gompertz_coeffs)   
@@ -910,10 +907,51 @@ def plot_attenuation(file_path, axes=None, show=True):
     axes[1].set_title('EPSP recordings')
     axes[1].legend(loc='best', frameon=False, framealpha=0.5)
 
-    for ax in axes:
-        clean_axes(ax)
+    clean_axes(axes)
     if show:
         plt.show()
+    else:
+        return axes
+
+
+def plot_exported_DG_GC_iEPSP_attenuation(file_path, show=True):
+    """
+    :param file_path: str
+    :param show: bool
+    """
+    with h5py.File(file_path, 'r') as f:
+        group_name = 'iEPSP_attenuation'
+        exp_attenuation = np.array(f[group_name]['exp_attenuation'])
+        exp_distance = np.array(f[group_name]['exp_distance'])
+        distance = np.array(f[group_name]['distance'])
+        attenuation = np.array(f[group_name]['attenuation'])
+        gompertz_coeffs = np.array(f[group_name]['gompertz_coeffs'])
+        dend_local_amp = np.array(f[group_name]['dend_local_iEPSP_amp'])
+        soma_amp = np.array(f[group_name]['soma_iEPSP_amp'])
+
+    distance_fit = np.arange(0., max(np.max(exp_distance), np.max(distance)), 5.)
+    attenuation_fit = gompertz(distance_fit, *gompertz_coeffs)
+
+    fig, axes = plt.subplots(1, 2)
+
+    axes[0].plot(distance_fit, attenuation_fit, c='k', label='Experiment (fit)')
+    axes[0].scatter(exp_distance, exp_attenuation, c='k', label='Experiment')
+    axes[0].scatter(distance, attenuation, c='r', label='Model')
+    axes[0].set_ylabel('iEPSP attenuation ratio')
+    axes[0].set_xlabel('Distance from soma (um)')
+    axes[0].set_title('iEPSP attenuation')
+    axes[0].legend(loc='best', frameon=False, framealpha=0.5)
+
+    axes[1].plot(distance, dend_local_amp, marker='o', c='c', label='Dendrite')
+    axes[1].plot(distance, soma_amp, marker='o', c='r', label='Soma')
+    axes[1].set_ylabel('iEPSP amplitude (mV)')
+    axes[1].set_xlabel('Distance from soma [um]')
+    axes[1].set_title('iEPSP amplitude')
+    axes[1].legend(loc='best', frameon=False, framealpha=0.5)
+
+    clean_axes(axes)
+    if show:
+        fig.show()
     else:
         return axes
 
