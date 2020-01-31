@@ -1,0 +1,168 @@
+ais:
+  DGC_KM:
+    gbar:
+      value: 0.01733489
+  cable:
+    Ra:
+      origin: soma
+    cm:
+      origin: soma
+  ions:
+    ek:
+      origin: soma
+  kap:
+    gkabar:
+      value: 0.005507091
+  kdr:
+    gkdrbar:
+      value: 0.07188143
+  nax:
+    gbar:
+      value: 0.4929055
+    sh:
+      origin: hillock
+    sha:
+      value: -3.24887
+  pas:
+    e:
+      origin: soma
+    g:
+      origin: soma
+apical:
+  cable:
+    Ra:
+      origin: soma
+    cm:
+      origin: soma
+  ions:
+    ek:
+      origin: soma
+  kad:
+    gkabar:
+    - max_loc: 300.0
+      min_loc: 75.0
+      origin: soma
+      outside: 0.0
+      slope: 0.0006031884
+      value: 0.09277991
+    - min_loc: 300.0
+      origin: soma
+      value: 0.2284973
+  kap:
+    gkabar:
+      max_loc: 75.0
+      origin: soma
+      outside: 0.0
+      slope: 0.0006031884
+  kdr:
+    gkdrbar:
+      value: 0.006729052
+  nas:
+    gbar:
+    - value: 0.02267795
+    - custom:
+        func: custom_filter_modify_slope_if_terminal
+      min: 0.009975359
+      origin: parent
+      slope: 0.0
+    sh:
+      origin: soma
+    sha:
+      value: 0.0
+  pas:
+    e:
+      origin: soma
+    g:
+      origin: soma
+      slope: 4.29752e-05
+      tau: 252.5872
+axon:
+  DGC_KM:
+    gbar:
+      origin: ais
+  cable:
+    Ra:
+      origin: soma
+    cm:
+      origin: soma
+  ions:
+    ek:
+      origin: soma
+  kap:
+    gkabar:
+      origin: ais
+  kdr:
+    gkdrbar:
+      origin: ais
+  nax:
+    gbar:
+      value: 0.09503712
+    sh:
+      origin: hillock
+  pas:
+    e:
+      origin: soma
+    g:
+      origin: soma
+hillock:
+  DGC_KM:
+    gbar:
+      value: 0.01733489
+  cable:
+    Ra:
+      origin: soma
+    cm:
+      origin: soma
+  ions:
+    ek:
+      origin: soma
+  kap:
+    gkabar:
+      origin: soma
+  kdr:
+    gkdrbar:
+      origin: soma
+  nax:
+    gbar:
+      value: 0.04824673
+    sh:
+      value: 7.680351
+  pas:
+    e:
+      origin: soma
+    g:
+      origin: soma
+soma:
+  Ca:
+    gcamult:
+      value: 0.3333256
+  Cacum:
+    tau:
+      value: 86.35422
+  CadepK:
+    gcakmult:
+      value: 7.475305
+  cable:
+    Ra:
+      value: 150.0
+    cm:
+      value: 1.0
+  ions:
+    ek:
+      value: -80.0
+  kap:
+    gkabar:
+      value: 0.04754078
+  kdr:
+    gkdrbar:
+      value: 0.06994847
+  nas:
+    gbar:
+      value: 0.04824673
+    sh:
+      value: 7.680351
+  pas:
+    e:
+      value: -74.91217
+    g:
+      value: 2.60473e-09

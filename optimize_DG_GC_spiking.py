@@ -855,6 +855,8 @@ def filter_features_dend_spike(primitives, current_features, export=False):
     new_features = dict()
     dend_spike_score = 0.
     for i, this_dict in enumerate(primitives):
+        if len(this_dict) == 0:
+            return dict()
         i_amp = this_dict['i_amp']
         spike_amp = this_dict['dend_spike_amp']
         if i_amp == context.dend_spike_i_amp_list[0]:
