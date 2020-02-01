@@ -903,6 +903,15 @@ def get_objectives_synaptic_integration(features, export=False):
     """
     start_time = time.time()
     objectives = dict()
+    failed = False
+
+    if 'soma_spikes' in features:
+        failed = True
+        if context.verbose > 0:
+            print('get_objectives_synaptic_integration: pid: %i; aborting - dendritic spike propagated to soma' %
+                  (os.getpid()))
+            sys.stdout.flush()
+
     model_key = features['model_key']
     group_key = context.temp_model_data_legend[model_key]
 
@@ -984,11 +993,11 @@ def get_objectives_synaptic_integration(features, export=False):
             indexes = np.where(this_expected <= context.max_expected_compound_EPSP_amp)[0]
             if not np.any(indexes) or (not context.limited_branches and
                                        max(this_expected) < context.min_expected_compound_EPSP_amp):
+                failed = True
                 if context.verbose > 0:
                     print('optimize_DG_GC_synaptic_integration: get_objectives: pid: %i; aborting - expected ' \
                           'compound EPSP amplitude below criterion' % os.getpid())
                     sys.stdout.flush()
-                return dict(), dict()
             slope, intercept, r_value, p_value, std_err = stats.linregress(this_expected[indexes], this_actual[indexes])
             integration_gain[syn_condition].append(slope)
             feature_key = 'integration_gain_%s' % syn_condition
@@ -1061,11 +1070,7 @@ def get_objectives_synaptic_integration(features, export=False):
         print('get_objectives_synaptic_integration: pid: %i; took %.3f s' % (os.getpid(), time.time() - start_time))
         sys.stdout.flush()
 
-    if 'soma_spikes' in features:
-        if context.verbose > 0:
-            print('get_objectives_synaptic_integration: pid: %i; aborting - dendritic spike propagated to soma' %
-                  (os.getpid()))
-            sys.stdout.flush()
+    if failed:
         return dict(), dict()
 
     return features, objectives
