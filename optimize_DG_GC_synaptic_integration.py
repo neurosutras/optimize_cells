@@ -232,7 +232,9 @@ def config_sim_env(context):
     if not sim.has_rec('dend'):
         dend, dend_loc = get_thickest_dend_branch(context.cell, 100., terminal=False)
         sim.append_rec(cell, dend, name='dend', loc=dend_loc)
-        sim.append_rec(cell, dend, name='local_branch', loc=0.5)
+    if not sim.has_rec('dend_local'):
+        dend = sim.get_rec('dend')['node']
+        sim.append_rec(cell, dend, name='dend_local', loc=0.5)
 
     equilibrate = context.equilibrate
     duration = context.duration
@@ -686,7 +688,7 @@ def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, mode
         context.sim.parameters['swc_types'].append(node_type)
         if i == 0:
             branch = context.cell.tree.get_node_with_index(node_index)
-            context.sim.modify_rec('local_branch', node=branch)
+            context.sim.modify_rec('dend_local', node=branch)
 
     sim.run(context.v_active)
 
@@ -820,7 +822,7 @@ def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, mod
         context.sim.parameters['swc_types'].append(node_type)
         if i == 0:
             branch = context.cell.tree.get_node_with_index(node_index)
-            context.sim.modify_rec('local_branch', node=branch)
+            context.sim.modify_rec('dend_local', node=branch)
 
     sim.run(context.v_active)
 

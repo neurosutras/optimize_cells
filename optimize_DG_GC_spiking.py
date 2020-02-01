@@ -722,9 +722,7 @@ def compute_features_spike_adaptation(x, i_holding, spike_detector_delay, start_
     sim.parameters['i_amp'] = amp
     result = dict()
     result['ISI_array'] = np.diff(spike_times)
-    print('debug: len(spike_times): %i, spike_count: %i, target_spike_count: %i' %
-          (len(spike_times), spike_count, target_spike_count))
-    sys.stdout.flush()
+
     if context.verbose > 0:
         print('compute_features_spike_adaptation: pid: %i; %s: %s took %.1f s; ISI1: %.1f; ISI2: %.1f' % \
               (os.getpid(), title, description, time.time() - start_time, result['ISI_array'][0],
