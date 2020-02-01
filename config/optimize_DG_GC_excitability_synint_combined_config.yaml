@@ -62,6 +62,27 @@ bounds:
   soma.tau_Cacum: !!python/tuple
   - 9.
   - 100.
+  AMPA.tau: !!python/tuple
+  - 50.
+  - 400.
+  AMPA.slope: !!python/tuple
+  - 1.0e-7
+  - 1.0e-5
+  AMPA.g0: !!python/tuple
+  - 1.0e-4
+  - 0.001
+  NMDA.g_unit: !!python/tuple
+  - 1.0e-4
+  - 5.0e-2
+  NMDA.gamma: !!python/tuple
+  - 0.02
+  - 0.12
+  NMDA.Kd: !!python/tuple
+  - 3.
+  - 12.
+  NMDA.vshift: !!python/tuple
+    - -10.
+    - 10.
 default_params:
 rel_bounds:
 - - dend.gbar_nas
@@ -116,6 +137,12 @@ feature_names:
 - dend_spike_amp
 - i_EPSC
 - spike_detector_delay
+- mean_unitary_EPSP_amp
+- mean_NMDA_contribution
+- integration_gain_control
+- integration_gain_AP5
+- initial_gain_control
+- initial_gain_AP5
 update_context:
 - - optimize_DG_GC_leak
   - reset_biophysics
@@ -123,6 +150,10 @@ update_context:
   - update_mechanisms_leak
 - - optimize_DG_GC_spiking
   - update_mechanisms_spiking
+- - optimize_DG_GC_synaptic_integration
+  - reset_syn_mechanisms
+- - optimize_DG_GC_synaptic_integration
+  - update_syn_mechanisms
 get_features_stages:
 - source: optimize_DG_GC_leak
   get_args_static: get_args_static_leak
@@ -148,17 +179,27 @@ get_features_stages:
   get_args_dynamic: get_args_dynamic_iEPSP_unit
   compute_features: compute_features_iEPSP_i_unit
   filter_features: filter_features_iEPSP_attenuation
+- source: optimize_DG_GC_synaptic_integration
+  get_args_dynamic: get_args_dynamic_unitary_EPSP_amp
+  compute_features: compute_features_unitary_EPSP_amp
+  synchronize: export_unitary_EPSP_traces
+- source: optimize_DG_GC_synaptic_integration
+  get_args_dynamic: get_args_dynamic_compound_EPSP_amp
+  compute_features: compute_features_compound_EPSP_amp
+  synchronize: export_compound_EPSP_traces
 get_objectives:
   optimize_DG_GC_leak: get_objectives_leak
   optimize_DG_GC_spiking: get_objectives_spiking
   optimize_DG_GC_iEPSP_propagation: get_objectives_iEPSP_attenuation
+  optimize_DG_GC_synaptic_integration: get_objectives_synaptic_integration
 kwargs:
   mech_file_path: mechanisms/20181205_DG_GC_excitability_mech.yaml
   max_i_EPSP_attenuation_distance: 300.
   gid: 0
   cell_type: GC
   correct_for_spines: True
-  verbose: 2
+  verbose: 1
+  seed_offset: 14e6
   daspk: False
   config_file: Small_Scale_Control_tune_GC_synapses.yaml  # Small_Scale_Control_LN_weights_Sat.yaml
   template_paths: ../DGC/Mateos-Aparicio2014:../dentate/templates
@@ -166,6 +207,10 @@ kwargs:
   config_prefix: ../dentate/config
   dataset_prefix: ../dentate/datasets
   results_path: data
+  cache_queries: True
+  debug: False  # True
+  load_edges: True
+  set_edge_delays: False
 objective_names:
 - dend R_inp
 - term_dend R_inp
@@ -183,7 +228,13 @@ objective_names:
 - f_I_residuals
 - dend_spike_score
 - iEPSP_attenuation_residual
-optimization_title: DG_GC_excitability
+- mean_unitary_EPSP_amp_residuals
+- mean_NMDA_contribution_residuals
+- integration_gain_control_residuals
+- integration_gain_AP5_residuals
+- initial_gain_control_residuals
+- initial_gain_AP5_residuals
+optimization_title: DG_GC_excitability_synint_combined
 param_gen: PopulationAnnealing
 param_names:
 - dend.g_pas slope
@@ -207,6 +258,13 @@ param_names:
 - soma.gCadepK factor
 - ais.gkmbar
 - soma.tau_Cacum
+- AMPA.tau
+- AMPA.slope
+- AMPA.g0
+- NMDA.g_unit
+- NMDA.gamma
+- NMDA.Kd
+- NMDA.vshift
 target_range:
   dend R_inp: 1.
   soma R_inp: 0.5
@@ -220,6 +278,12 @@ target_range:
   vm_stability: 0.1
   dend_spike_amp: 0.1
   iEPSP_attenuation: 0.001
+  mean_unitary_EPSP_amp: 0.005
+  mean_NMDA_contribution: 0.001
+  integration_gain_control: 0.005
+  integration_gain_AP5: 0.005
+  initial_gain_control: 0.005
+  initial_gain_AP5: 0.005
 target_val:
   term_dend R_inp: 1000.
   dend R_inp: 275.
@@ -237,6 +301,12 @@ target_val:
   vm_stability: 5.0
   dend_spike_amp: 15.
   iEPSP_unit_amp: 1.
+  mean_unitary_EPSP_amp: 0.6
+  mean_NMDA_contribution: 0.2
+  integration_gain_control: 1.38
+  integration_gain_AP5: 0.8
+  initial_gain_control: 1.
+  initial_gain_AP5: 1.
 x0:
   soma.gCa factor: 3.386286E-01
   soma.tau_Cacum: 5.783834E+01
@@ -259,3 +329,11 @@ x0:
   soma.gCadepK factor: 8.701312E+00
   ais.gkmbar: 1.305485E-02
   e_pas: -7.444863E+01
+  AMPA.tau: 1.868088E+02
+  AMPA.slope: 3.293672E-06
+  AMPA.g0: 1.464409E-04
+  NMDA.g_unit: 4.316527E-03
+  NMDA.gamma: 8.130658E-02
+  NMDA.Kd: 4.331929E+00
+  NMDA.vshift: 9.592656E+00
+

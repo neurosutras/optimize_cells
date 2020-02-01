@@ -196,7 +196,7 @@ def init_context():
     context.update(locals())
 
 
-def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
+def build_sim_env(context, verbose=2, cvode=True, daspk=True, load_edges=False, set_edge_delays=False, **kwargs):
     """
 
     :param context: :class:'Context'
@@ -208,8 +208,8 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
     init_context()
     context.env = Env(comm=context.comm, verbose=verbose > 1, **kwargs)
     configure_hoc_env(context.env)
-    cell = get_biophys_cell(context.env, gid=context.gid, pop_name=context.cell_type, load_edges=False,
-                            mech_file_path=context.mech_file_path)
+    cell = get_biophys_cell(context.env, gid=context.gid, pop_name=context.cell_type, load_edges=load_edges,
+                            set_edge_delays=set_edge_delays, mech_file_path=context.mech_file_path)
     init_biophysics(cell, reset_cable=True, correct_cm=context.correct_for_spines,
                     correct_g_pas=context.correct_for_spines, env=context.env, verbose=verbose > 1)
     context.sim = QuickSim(context.duration, cvode=cvode, daspk=daspk, dt=context.dt, verbose=verbose>1)

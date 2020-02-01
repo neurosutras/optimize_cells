@@ -15,24 +15,6 @@ import uuid
 context = Context()
 
 
-def config_worker():
-    """
-
-    """
-    if 'plot' not in context():
-        context.plot = False
-    if 'debug' not in context():
-        context.debug = False
-    if 'limited_branches' not in context():
-        context.limited_branches = False
-    if 'verbose' in context():
-        context.verbose = int(context.verbose)
-    if not context_has_sim_env(context):
-        build_sim_env(context, **context.kwargs)
-    else:
-        config_sim_env(context)
-
-
 @click.command(context_settings=dict(ignore_unknown_options=True, allow_extra_args=True, ))
 @click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
               default='config/optimize_DG_GC_synaptic_integration_config.yaml')
@@ -133,6 +115,26 @@ def run_tests():
     context.update(locals())
 
 
+def config_worker():
+    """
+
+    """
+    if 'plot' not in context():
+        context.plot = False
+    if 'debug' not in context():
+        context.debug = False
+    if 'limited_branches' not in context():
+        context.limited_branches = False
+    if 'verbose' in context():
+        context.verbose = int(context.verbose)
+    context.temp_model_data = dict()
+    context.temp_model_data_file_path = None
+    if not context_has_sim_env(context):
+        build_sim_env(context, **context.kwargs)
+    else:
+        config_sim_env(context)
+
+
 def context_has_sim_env(context):
     """
 
@@ -186,7 +188,7 @@ def init_context():
     context.update(locals())
 
 
-def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
+def build_sim_env(context, verbose=2, cvode=True, daspk=True, load_edges=True, set_edge_delays=False, **kwargs):
     """
 
     :param context: :class:'Context'
@@ -198,17 +200,14 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
     init_context()
     context.env = Env(comm=context.comm, verbose=verbose > 1, **kwargs)
     configure_hoc_env(context.env)
-    cell = get_biophys_cell(context.env, gid=context.gid, pop_name=context.cell_type, set_edge_delays=False,
-                            mech_file_path=context.mech_file_path)
+    cell = get_biophys_cell(context.env, gid=context.gid, pop_name=context.cell_type, load_edges=load_edges,
+                            set_edge_delays=set_edge_delays, mech_file_path=context.mech_file_path)
     init_biophysics(cell, reset_cable=True, correct_cm=context.correct_for_spines,
                     correct_g_pas=context.correct_for_spines, env=context.env, verbose=verbose > 1)
-    init_syn_mech_attrs(cell, context.env)
     context.sim = QuickSim(context.duration, cvode=cvode, daspk=daspk, dt=context.dt, verbose=verbose > 1)
     context.spike_output_vec = h.Vector()
     cell.spike_detector.record(context.spike_output_vec)
     context.cell = cell
-    context.temp_model_data = dict()
-    context.temp_model_data_file_path = None
     config_sim_env(context)
 
 
@@ -243,6 +242,7 @@ def config_sim_env(context):
         offset_vm('soma', context, vm_target=context.v_active, i_history=context.i_holding)
 
     if 'syn_id_dict' not in context():
+        init_syn_mech_attrs(cell, context.env)
         context.local_random.seed(int(float(context.seed_offset)) + int(context.gid))
         syn_attrs = env.synapse_attributes
         syn_id_dict = defaultdict(list)
@@ -350,7 +350,6 @@ def shutdown_worker():
     """
 
     """
-    # context.temp_model_data_file.close()
     if context.temp_model_data_file is not None:
         context.temp_model_data_file.close()
     time.sleep(2.)
@@ -999,27 +998,17 @@ def get_objectives_synaptic_integration(features, export=False):
                           'syn_condition: %s; aborting - expected compound EPSP amplitude below criterion' %
                           (os.getpid(), syn_group, syn_condition))
                     sys.stdout.flush()
-            slope, intercept, r_value, p_value, std_err = stats.linregress(this_expected[indexes], this_actual[indexes])
-            integration_gain[syn_condition].append(slope)
-            feature_key = 'integration_gain_%s' % syn_condition
-            this_target = context.target_val[feature_key] * this_expected[indexes] + intercept
-            this_integration_gain_residuals = 0.
-            for target_val, actual_val in zip(this_target, this_actual[indexes]):
-                this_integration_gain_residuals += ((actual_val - target_val) /
-                                                    context.target_range['mean_unitary_EPSP_amp']) ** 2.
-            this_integration_gain_residuals /= float(len(indexes))
-            integration_gain_residuals[syn_condition].append(this_integration_gain_residuals)
-
-    for feature_name, feature_dict in zip(['initial_gain', 'integration_gain'], [initial_gain, integration_gain]):
-        for syn_condition in context.syn_conditions:
-            feature_key = '%s_%s' % (feature_name, syn_condition)
-            features[feature_key] = np.mean(feature_dict[syn_condition])
-
-    for feature_name, feature_dict in zip(['initial_gain', 'integration_gain'],
-                                          [initial_gain_residuals, integration_gain_residuals]):
-        for syn_condition in context.syn_conditions:
-            residuals_key = '%s_%s_residuals' % (feature_name, syn_condition)
-            objectives[residuals_key] = np.mean(feature_dict[syn_condition])
+            else:
+                slope, intercept, r_value, p_value, std_err = stats.linregress(this_expected[indexes], this_actual[indexes])
+                integration_gain[syn_condition].append(slope)
+                feature_key = 'integration_gain_%s' % syn_condition
+                this_target = context.target_val[feature_key] * this_expected[indexes] + intercept
+                this_integration_gain_residuals = 0.
+                for target_val, actual_val in zip(this_target, this_actual[indexes]):
+                    this_integration_gain_residuals += ((actual_val - target_val) /
+                                                        context.target_range['mean_unitary_EPSP_amp']) ** 2.
+                this_integration_gain_residuals /= float(len(indexes))
+                integration_gain_residuals[syn_condition].append(this_integration_gain_residuals)
 
     if export:
         with h5py.File(context.export_file_path, 'a') as f:
@@ -1073,6 +1062,17 @@ def get_objectives_synaptic_integration(features, export=False):
 
     if failed:
         return dict(), dict()
+
+    for feature_name, feature_dict in zip(['initial_gain', 'integration_gain'], [initial_gain, integration_gain]):
+        for syn_condition in context.syn_conditions:
+            feature_key = '%s_%s' % (feature_name, syn_condition)
+            features[feature_key] = np.mean(feature_dict[syn_condition])
+
+    for feature_name, feature_dict in zip(['initial_gain', 'integration_gain'],
+                                          [initial_gain_residuals, integration_gain_residuals]):
+        for syn_condition in context.syn_conditions:
+            residuals_key = '%s_%s_residuals' % (feature_name, syn_condition)
+            objectives[residuals_key] = np.mean(feature_dict[syn_condition])
 
     return features, objectives
 

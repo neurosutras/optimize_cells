@@ -237,8 +237,6 @@ target_val:
   vm_stability: 5.0
   dend_spike_amp: 15.
   iEPSP_unit_amp: 1.
-  iEPSP_attenuation_short: 0.17
-  iEPSP_attenuation_long: 0.23
 x0:
   soma.gCa factor: 3.386286E-01
   soma.tau_Cacum: 5.783834E+01
