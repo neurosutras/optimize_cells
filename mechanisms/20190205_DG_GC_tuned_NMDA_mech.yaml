@@ -1,0 +1,241 @@
+ais:
+  DGC_KM:
+    gbar:
+      value: 0.01305485237132087
+  cable:
+    Ra:
+      origin: soma
+    cm:
+      origin: soma
+  ions:
+    ek:
+      origin: soma
+  kap:
+    gkabar:
+      value: 0.012292879073768853
+  kdr:
+    gkdrbar:
+      value: 0.05814910113712799
+  nax:
+    gbar:
+      value: 0.19931876455388456
+    sh:
+      origin: hillock
+    sha:
+      value: -3.882715732208579
+  pas:
+    e:
+      origin: soma
+    g:
+      origin: soma
+apical:
+  cable:
+    Ra:
+      origin: soma
+    cm:
+      origin: soma
+  ions:
+    ek:
+      origin: soma
+  kad:
+    gkabar:
+    - max_loc: 300.0
+      min_loc: 75.0
+      origin: soma
+      outside: 0.0
+      slope: 0.0004590447833906747
+      value: 0.052307764561184356
+    - min_loc: 300.0
+      origin: soma
+      value: 0.15559284082408614
+  kap:
+    gkabar:
+      max_loc: 75.0
+      origin: soma
+      outside: 0.0
+      slope: 0.0004590447833906747
+  kdr:
+    gkdrbar:
+      value: 0.0076350895988660985
+  nas:
+    gbar:
+    - value: 0.03650909781719163
+    - custom:
+        func: custom_filter_modify_slope_if_terminal
+      min: 0.023164941660486337
+      origin: parent
+      slope: 0.0
+    sh:
+      origin: soma
+    sha:
+      value: 0.0
+  pas:
+    e:
+      origin: soma
+    g:
+      origin: soma
+      slope: 3.829971282710617e-05
+      tau: 305.3398519738249
+  synapses:
+    AMPA:
+      g_unit:
+      - filters:
+          syn_types:
+          - excitatory
+        origin: soma
+        slope: 3.293672e-06
+        tau: 186.8088
+        value: 0.0001464409
+      - custom:
+          func: custom_filter_if_terminal
+        filters:
+          syn_types:
+          - excitatory
+        origin: parent
+        origin_filters:
+          syn_types:
+          - excitatory
+      - filters:
+          layers:
+          - OML
+          syn_types:
+          - excitatory
+        origin: apical
+        origin_filters:
+          layers:
+          - MML
+          syn_types:
+          - excitatory
+    NMDA:
+      Kd:
+        filters:
+            syn_types:
+              - excitatory
+        value: 4.331929
+      g_unit:
+        filters:
+            syn_types:
+              - excitatory
+        value: 0.004316527
+      gamma:
+        filters:
+            syn_types:
+              - excitatory
+        value: 0.08130658
+      vshift:
+        filters:
+            syn_types:
+              - excitatory
+        value: 9.592656
+axon:
+  DGC_KM:
+    gbar:
+      origin: ais
+  cable:
+    Ra:
+      origin: soma
+    cm:
+      origin: soma
+  ions:
+    ek:
+      origin: soma
+  kap:
+    gkabar:
+      origin: ais
+  kdr:
+    gkdrbar:
+      origin: ais
+  nax:
+    gbar:
+      value: 0.06364520556375414
+    sh:
+      origin: hillock
+  pas:
+    e:
+      origin: soma
+    g:
+      origin: soma
+hillock:
+  DGC_KM:
+    gbar:
+      value: 0.01305485237132087
+  cable:
+    Ra:
+      origin: soma
+    cm:
+      origin: soma
+  ions:
+    ek:
+      origin: soma
+  kap:
+    gkabar:
+      origin: soma
+  kdr:
+    gkdrbar:
+      origin: soma
+  nax:
+    gbar:
+      value: 0.039254939220402615
+    sh:
+      value: 6.443239154016422
+  pas:
+    e:
+      origin: soma
+    g:
+      origin: soma
+soma:
+  Ca:
+    gcamult:
+      value: 0.3386286416627743
+  Cacum:
+    tau:
+      value: 57.838336312905206
+  CadepK:
+    gcakmult:
+      value: 8.701311909957697
+  cable:
+    Ra:
+      value: 150.0
+    cm:
+      value: 1.0
+  ions:
+    ek:
+      value: -80.0
+  kap:
+    gkabar:
+      value: 0.017879405806883755
+  kdr:
+    gkdrbar:
+      value: 0.04012674485858249
+  nas:
+    gbar:
+      value: 0.039254939220402615
+    sh:
+      value: 6.443239154016422
+  pas:
+    e:
+      value: -74.4486260929934
+    g:
+      value: 2.3628251674095195e-08
+spine_head:
+  cable:
+    Ra:
+      origin: soma
+    cm:
+      origin: soma
+  pas:
+    e:
+      origin: soma
+    g:
+      origin: soma
+spine_neck:
+  cable:
+    Ra:
+      origin: soma
+    cm:
+      origin: soma
+  pas:
+    e:
+      origin: soma
+    g:
+      origin: soma

@@ -677,6 +677,7 @@ def compute_features_spike_adaptation(x, i_holding, spike_detector_delay, start_
     prev_spike_times = spike_times
     target_spike_count = len(context.exp_ISI_array) + 1
     spike_count = len(np.where(spike_times > equilibrate + spike_detector_delay)[0])
+    prev_spike_count = spike_count
     prev_amp = amp
     if spike_count > target_spike_count:
         i_inc = -0.01
@@ -687,6 +688,7 @@ def compute_features_spike_adaptation(x, i_holding, spike_detector_delay, start_
             sim.modify_stim('step', amp=amp)
             sim.run(v_active)
             prev_spike_times = spike_times
+            prev_spike_count = spike_count
             spike_times = np.array(context.cell.spike_detector.get_recordvec())
             spike_count = len(np.where(spike_times > equilibrate + spike_detector_delay)[0])
             if sim.verbose:
@@ -694,7 +696,7 @@ def compute_features_spike_adaptation(x, i_holding, spike_detector_delay, start_
                       (os.getpid(), 'soma', delta_str, amp, spike_count))
                 sys.stdout.flush()
     if spike_count < target_spike_count:
-        if len(prev_spike_times) > spike_count:
+        if prev_spike_count >= target_spike_count:
             spike_times = prev_spike_times
             amp = prev_amp
         else:
@@ -704,8 +706,8 @@ def compute_features_spike_adaptation(x, i_holding, spike_detector_delay, start_
                 amp += i_inc
                 if amp > max_amp:
                     if context.verbose > 0:
-                        print('compute_features_spike_adaptation: pid: %i; i_inj: %.3f; aborting: too few spikes after ' \
-                              '%.1f s' % (os.getpid(), amp - i_inc, time.time() - start_time))
+                        print('compute_features_spike_adaptation: pid: %i; i_inj: %.3f; aborting: too few spikes after'
+                              ' %.1f s' % (os.getpid(), amp - i_inc, time.time() - start_time))
                         sys.stdout.flush()
                     return dict()
                 sim.modify_stim('step', amp=amp)
@@ -713,13 +715,16 @@ def compute_features_spike_adaptation(x, i_holding, spike_detector_delay, start_
                 spike_times = np.array(context.cell.spike_detector.get_recordvec())
                 spike_count = len(np.where(spike_times > equilibrate + spike_detector_delay)[0])
                 if sim.verbose:
-                    print('compute_features_spike_adaptation: pid: %i; %s; %s i_inj to %.3f nA; num_spikes: %i' % \
+                    print('compute_features_spike_adaptation: pid: %i; %s; %s i_inj to %.3f nA; num_spikes: %i' %
                           (os.getpid(), 'soma', delta_str, amp, spike_count))
                     sys.stdout.flush()
 
     sim.parameters['i_amp'] = amp
     result = dict()
     result['ISI_array'] = np.diff(spike_times)
+    print('debug: len(spike_times): %i, spike_count: %i, target_spike_count: %i' %
+          (len(spike_times), spike_count, target_spike_count))
+    sys.stdout.flush()
     if context.verbose > 0:
         print('compute_features_spike_adaptation: pid: %i; %s: %s took %.1f s; ISI1: %.1f; ISI2: %.1f' % \
               (os.getpid(), title, description, time.time() - start_time, result['ISI_array'][0],

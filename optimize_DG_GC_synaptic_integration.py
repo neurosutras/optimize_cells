@@ -268,9 +268,15 @@ def config_sim_env(context):
                               90. < branch.sec.L < 120.]
         context.local_random.shuffle(candidate_branches)
 
-        parents = []
+        parents = set()
         branch_count = 0
-        for branch in (branch for branch in candidate_branches if branch.parent not in parents):
+        candidate_clustered_branches = []
+        candidate_clustered_branches_from_separate_subtrees = []
+        candidate_syn_id_dict = dict()
+
+        # if len(candidates_from_separate_subtrees) >= context.num_clustered_branches:
+
+        for branch in candidate_branches:
             this_syn_ids = syn_attrs.get_filtered_syn_ids(cell.gid, syn_sections=[branch.index],
                                                           syn_types=[env.Synapse_Types['excitatory']])
             candidate_syn_ids = []
@@ -279,17 +285,24 @@ def config_sim_env(context):
                 if 30. <= syn_loc * branch.sec.L <= 60.:
                     candidate_syn_ids.append(syn_id)
             if len(candidate_syn_ids) >= context.num_syns_per_clustered_branch:
-                branch_key = context.clustered_branch_names[branch_count]
-                syn_id_dict[branch_key].extend(context.local_random.sample(candidate_syn_ids,
-                                                                           context.num_syns_per_clustered_branch))
-                branch_count += 1
-                parents.append(branch.parent)
-            if branch_count >= context.num_clustered_branches:
-                break
-        if branch_count < context.num_clustered_branches:
+                candidate_clustered_branches.append(branch)
+                candidate_syn_id_dict[branch] = context.local_random.sample(candidate_syn_ids,
+                                                                            context.num_syns_per_clustered_branch)
+                if branch.parent not in parents:
+                    candidate_clustered_branches_from_separate_subtrees.append(branch)
+                    parents.add(branch.parent)
+                # branch_key = context.clustered_branch_names[branch_count]
+                # syn_id_dict[branch_key].extend()
+
+        if len(candidate_clustered_branches) < context.num_clustered_branches:
             raise RuntimeError('optimize_DG_GC_synaptic_integration: problem finding required number of branches that'
                                'satisfy the requirement for clustered synapses: %i/%i' %
-                               (branch_count, context.num_clustered_branches))
+                               (len(candidate_clustered_branches), context.num_clustered_branches))
+        elif len(candidate_clustered_branches_from_separate_subtrees) >= context.num_clustered_branches:
+            candidate_clustered_branches = candidate_clustered_branches_from_separate_subtrees
+        for i, branch in enumerate(candidate_clustered_branches[:context.num_clustered_branches]):
+            branch_key = context.clustered_branch_names[branch_count]
+            syn_id_dict[branch_key].extend(candidate_syn_id_dict[branch])
 
         context.syn_id_dict = syn_id_dict
         syn_id_set = set()
