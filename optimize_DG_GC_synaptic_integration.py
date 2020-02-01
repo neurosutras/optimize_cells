@@ -995,8 +995,9 @@ def get_objectives_synaptic_integration(features, export=False):
                                        max(this_expected) < context.min_expected_compound_EPSP_amp):
                 failed = True
                 if context.verbose > 0:
-                    print('optimize_DG_GC_synaptic_integration: get_objectives: pid: %i; aborting - expected ' \
-                          'compound EPSP amplitude below criterion' % os.getpid())
+                    print('optimize_DG_GC_synaptic_integration: get_objectives: pid: %i; syn_group: %s; '
+                          'syn_condition: %s; aborting - expected compound EPSP amplitude below criterion' %
+                          (os.getpid(), syn_group, syn_condition))
                     sys.stdout.flush()
             slope, intercept, r_value, p_value, std_err = stats.linregress(this_expected[indexes], this_actual[indexes])
             integration_gain[syn_condition].append(slope)
