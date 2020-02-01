@@ -165,7 +165,7 @@ def init_context():
         num_clustered_branches = 2
         num_syns_per_clustered_branch = 30
 
-    min_expected_compound_EPSP_amp, max_expected_compound_EPSP_amp = 6., 12.  # mV
+    min_expected_compound_EPSP_amp, max_expected_compound_EPSP_amp = 8., 12.  # mV
 
     clustered_branch_names = ['clustered%i' % i for i in range(num_clustered_branches)]
 
@@ -262,20 +262,16 @@ def config_sim_env(context):
                 syn_id_dict['random'].append(this_syn_ids[0])
 
         # choose a random subset of apical branches that contain the required number of clustered synapses to tune
-        # NMDAR-R properties to match target features for spatiotemporal integration
+        # NMDA-R properties to match target features for spatiotemporal integration
         candidate_branches = [branch for branch in cell.apical if
                               50. < get_distance_to_node(cell, cell.tree.root, branch) < 150. and
                               90. < branch.sec.L < 120.]
         context.local_random.shuffle(candidate_branches)
 
         parents = set()
-        branch_count = 0
         candidate_clustered_branches = []
         candidate_clustered_branches_from_separate_subtrees = []
         candidate_syn_id_dict = dict()
-
-        # if len(candidates_from_separate_subtrees) >= context.num_clustered_branches:
-
         for branch in candidate_branches:
             this_syn_ids = syn_attrs.get_filtered_syn_ids(cell.gid, syn_sections=[branch.index],
                                                           syn_types=[env.Synapse_Types['excitatory']])
@@ -291,8 +287,6 @@ def config_sim_env(context):
                 if branch.parent not in parents:
                     candidate_clustered_branches_from_separate_subtrees.append(branch)
                     parents.add(branch.parent)
-                # branch_key = context.clustered_branch_names[branch_count]
-                # syn_id_dict[branch_key].extend()
 
         if len(candidate_clustered_branches) < context.num_clustered_branches:
             raise RuntimeError('optimize_DG_GC_synaptic_integration: problem finding required number of branches that'
@@ -301,7 +295,7 @@ def config_sim_env(context):
         elif len(candidate_clustered_branches_from_separate_subtrees) >= context.num_clustered_branches:
             candidate_clustered_branches = candidate_clustered_branches_from_separate_subtrees
         for i, branch in enumerate(candidate_clustered_branches[:context.num_clustered_branches]):
-            branch_key = context.clustered_branch_names[branch_count]
+            branch_key = context.clustered_branch_names[i]
             syn_id_dict[branch_key].extend(candidate_syn_id_dict[branch])
 
         context.syn_id_dict = syn_id_dict
@@ -745,28 +739,6 @@ def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, mode
     return result
 
 
-def filter_features_unitary_EPSP_amp(primitives, current_features, export=False):
-    """
-    :param primitives: list of dict (each dict contains results from a single simulation)
-    :param current_features: dict
-    :param export: bool
-    :return: dict
-    """
-    features = {}
-
-    model_key = None
-    for this_feature_dict in primitives:
-        this_model_key = this_feature_dict['model_key']
-        if model_key is None:
-            model_key = this_model_key
-        if this_model_key != model_key:
-            raise KeyError('filter_features_unitary_EPSP_amp: mismatched model keys')
-
-    features['model_key'] = model_key
-
-    return features
-
-
 def get_args_dynamic_compound_EPSP_amp(x, features):
     """
     A nested map operation is required to compute compound EPSP amplitude features. The arguments to be mapped include
@@ -811,7 +783,7 @@ def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, mod
     start_time = time.time()
     config_sim_env(context)
     update_source_contexts(x, context)
-    zero_na(context.cell)
+    # zero_na(context.cell)
 
     dt = context.dt
     duration = context.sim_duration['clustered']
@@ -874,6 +846,10 @@ def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, mod
 
     result = {'model_key': model_key}
 
+    spike_times = np.array(context.cell.spike_detector.get_recordvec())
+    if np.any(spike_times < equilibrate):
+        result['soma_spikes'] = True
+
     title = 'compound_EPSP_amp'
     description = 'condition: %s, group: %s, num_syns: %i, first syn_id: %i' % \
                   (syn_condition, syn_group, len(syn_ids), syn_ids[0])
@@ -892,25 +868,6 @@ def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, mod
     sim.restore_state()
 
     return result
-
-
-def filter_features_compound_EPSP_amp(primitives, current_features, export=False):
-    """
-    :param primitives: list of dict (each dict contains results from a single simulation)
-    :param current_features: dict
-    :param export: bool
-    :return: dict
-    """
-    features = {}
-    model_key = current_features['model_key']
-    for this_feature_dict in primitives:
-        this_model_key = this_feature_dict['model_key']
-        if this_model_key != model_key:
-            raise KeyError('filter_features_compound_EPSP_amp: mismatched model keys')
-
-    features['model_key'] = model_key
-
-    return features
 
 
 def get_expected_compound_EPSP_traces(unitary_traces_dict, syn_id_dict):
@@ -1025,7 +982,7 @@ def get_objectives_synaptic_integration(features, export=False):
                                            context.target_range[feature_key]) ** 2.
             initial_gain_residuals[syn_condition].append(this_initial_gain_residuals)
             indexes = np.where(this_expected <= context.max_expected_compound_EPSP_amp)[0]
-            if not np.any(indexes) or (not context.limited_branches and syn_condition == 'control' and
+            if not np.any(indexes) or (not context.limited_branches and
                                        max(this_expected) < context.min_expected_compound_EPSP_amp):
                 if context.verbose > 0:
                     print('optimize_DG_GC_synaptic_integration: get_objectives: pid: %i; aborting - expected ' \
@@ -1103,6 +1060,13 @@ def get_objectives_synaptic_integration(features, export=False):
     if context.verbose > 1:
         print('get_objectives_synaptic_integration: pid: %i; took %.3f s' % (os.getpid(), time.time() - start_time))
         sys.stdout.flush()
+
+    if 'soma_spikes' in features:
+        if context.verbose > 0:
+            print('get_objectives_synaptic_integration: pid: %i; aborting - dendritic spike propagated to soma' %
+                  (os.getpid()))
+            sys.stdout.flush()
+        return dict(), dict()
 
     return features, objectives
 
