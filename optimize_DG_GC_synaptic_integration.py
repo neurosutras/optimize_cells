@@ -986,19 +986,10 @@ def get_objectives_synaptic_integration(features, export=False):
             expected_key = 'expected_' + syn_condition
             this_actual = np.array(soma_compound_EPSP_amp[syn_group][syn_condition])
             this_expected = np.array(soma_compound_EPSP_amp[syn_group][expected_key])
-            if this_expected[1] - this_expected[0] > 0:
-                this_initial_gain = (this_actual[1] - this_actual[0]) / (this_expected[1] - this_expected[0])
-            else:
-                this_initial_gain = 0.
-            # Integration should be close to linear without gain for the first few synapses.
-            initial_gain[syn_condition].append(this_initial_gain)
-            feature_key = 'initial_gain_%s' % syn_condition
-            this_initial_gain_residuals = ((this_initial_gain - context.target_val[feature_key]) /
-                                           context.target_range[feature_key]) ** 2.
-            initial_gain_residuals[syn_condition].append(this_initial_gain_residuals)
             indexes = np.where(this_expected <= context.max_expected_compound_EPSP_amp)[0]
-            if not np.any(indexes) or (not context.limited_branches and
-                                       max(this_expected) < context.min_expected_compound_EPSP_amp):
+            if not np.any(indexes) or \
+                    (not context.limited_branches and max(this_expected) < context.min_expected_compound_EPSP_amp) or \
+                    (this_expected[1] - this_expected[0] <= 0.):
                 failed = True
                 if context.verbose > 0:
                     print('optimize_DG_GC_synaptic_integration: get_objectives: pid: %i; syn_group: %s; '
@@ -1006,6 +997,13 @@ def get_objectives_synaptic_integration(features, export=False):
                           (os.getpid(), syn_group, syn_condition))
                     sys.stdout.flush()
             else:
+                # Integration should be close to linear without gain for the first few synapses.
+                this_initial_gain = (this_actual[1] - this_actual[0]) / (this_expected[1] - this_expected[0])
+                initial_gain[syn_condition].append(this_initial_gain)
+                feature_key = 'initial_gain_%s' % syn_condition
+                this_initial_gain_residuals = ((this_initial_gain - context.target_val[feature_key]) /
+                                               context.target_range[feature_key]) ** 2.
+                initial_gain_residuals[syn_condition].append(this_initial_gain_residuals)
                 slope, intercept, r_value, p_value, std_err = \
                     stats.linregress(this_expected[indexes], this_actual[indexes])
                 integration_gain[syn_condition].append(slope)
