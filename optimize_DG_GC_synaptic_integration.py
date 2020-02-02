@@ -235,6 +235,8 @@ def config_sim_env(context):
     if not sim.has_rec('dend_local'):
         dend = sim.get_rec('dend')['node']
         sim.append_rec(cell, dend, name='dend_local', loc=0.5)
+    if 'synaptic_integration_rec_names' not in context():
+        context.synaptic_integration_rec_names = ['soma', 'dend', 'dend_local']
 
     equilibrate = context.equilibrate
     duration = context.duration
@@ -376,7 +378,7 @@ def consolidate_unitary_EPSP_traces(source_dict):
         for syn_condition in source_dict[syn_group]:
             if syn_condition not in target_dict[syn_group]:
                 target_dict[syn_group][syn_condition] = {}
-            for rec_name in context.sim.recs:
+            for rec_name in context.synaptic_integration_rec_names:
                 target_array = np.empty((num_syn_ids, trace_len))
                 for i, syn_id in enumerate(context.syn_id_dict[syn_group]):
                     target_array[i,:] = source_dict[syn_group][syn_condition][syn_id][rec_name]
@@ -402,7 +404,7 @@ def consolidate_compound_EPSP_traces(source_dict):
         for syn_condition in source_dict[syn_group]:
             if syn_condition not in target_dict[syn_group]:
                 target_dict[syn_group][syn_condition] = {}
-            for rec_name in context.sim.recs:
+            for rec_name in context.synaptic_integration_rec_names:
                 target_array = np.empty((num_syn_ids, trace_len))
                 for i in range(num_syn_ids):
                     num_syns = i + 1
@@ -463,7 +465,7 @@ def export_unitary_EPSP_traces():
                     num_syn_ids = len(context.syn_id_dict[syn_group])
                     for syn_condition in context.syn_conditions:
                         context.temp_model_data_file[group_key][description][syn_group].create_group(syn_condition)
-                        for rec_name in context.sim.recs:
+                        for rec_name in context.synaptic_integration_rec_names:
                             context.temp_model_data_file[group_key][description][syn_group][
                                 syn_condition].create_dataset(rec_name, (num_syn_ids, trace_len), dtype='f8')
 
@@ -487,9 +489,9 @@ def export_unitary_EPSP_traces():
             for syn_group in context.temp_model_data[model_key][description]:
                 for syn_condition in context.temp_model_data[model_key][description][syn_group]:
                     for rec_name in context.temp_model_data[model_key][description][syn_group][syn_condition]:
-                            context.temp_model_data_file[group_key][description][syn_group][syn_condition][
-                                rec_name][:,:] = \
-                                context.temp_model_data[model_key][description][syn_group][syn_condition][rec_name]
+                        context.temp_model_data_file[group_key][description][syn_group][syn_condition][
+                            rec_name][:,:] = \
+                            context.temp_model_data[model_key][description][syn_group][syn_condition][rec_name]
 
         context.interface.worker_comm.barrier()
         context.temp_model_data_file.flush()
@@ -552,7 +554,7 @@ def export_compound_EPSP_traces():
                     num_syn_ids = len(context.syn_id_dict[syn_group])
                     for syn_condition in context.syn_conditions:
                         context.temp_model_data_file[group_key][description][syn_group].create_group(syn_condition)
-                        for rec_name in context.sim.recs:
+                        for rec_name in context.synaptic_integration_rec_names:
                             context.temp_model_data_file[group_key][description][syn_group][
                                 syn_condition].create_dataset(rec_name, (num_syn_ids, trace_len), dtype='f8')
 
@@ -699,7 +701,7 @@ def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, mode
         trace_start = start - int(trace_baseline / dt)
         baseline_start, baseline_end = int(start - 3. / dt), int(start - 1. / dt)
         syn_id = int(syn_id)
-        for rec_name in context.sim.recs:
+        for rec_name in context.synaptic_integration_rec_names:
             this_vm = np.array(context.sim.recs[rec_name]['vec'])
             baseline = np.mean(this_vm[baseline_start:baseline_end])
             this_vm = this_vm[trace_start:end] - baseline
@@ -830,7 +832,7 @@ def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, mod
     start = int(equilibrate / dt)
     trace_start = start - int(trace_baseline / dt)
     baseline_start, baseline_end = int(start - 3. / dt), int(start - 1. / dt)
-    for rec_name in context.sim.recs:
+    for rec_name in context.synaptic_integration_rec_names:
         this_vm = np.array(context.sim.recs[rec_name]['vec'])
         baseline = np.mean(this_vm[baseline_start:baseline_end])
         this_vm = this_vm[trace_start:] - baseline
@@ -925,7 +927,7 @@ def get_objectives_synaptic_integration(features, export=False):
             syn_id_list = context.syn_id_dict[syn_group]
             for syn_condition in temp_model_data_file[group_key][description][syn_group]:
                 this_group = temp_model_data_file[group_key][description][syn_group][syn_condition]
-                for rec_name in context.sim.recs:
+                for rec_name in context.synaptic_integration_rec_names:
                     for i, syn_id in enumerate(syn_id_list):
                         unitary_EPSP_traces_dict[syn_group][syn_condition][syn_id][rec_name] = this_group[rec_name][i,:]
 
@@ -934,7 +936,7 @@ def get_objectives_synaptic_integration(features, export=False):
             num_syn_ids = len(context.syn_id_dict[syn_group])
             for syn_condition in temp_model_data_file[group_key][description][syn_group]:
                 this_group = temp_model_data_file[group_key][description][syn_group][syn_condition]
-                for rec_name in context.sim.recs:
+                for rec_name in context.synaptic_integration_rec_names:
                     for i in range(num_syn_ids):
                         num_syns = i + 1
                         compound_EPSP_traces_dict[syn_group][syn_condition][num_syns][rec_name] = \
@@ -1013,7 +1015,7 @@ def get_objectives_synaptic_integration(features, export=False):
                 integration_gain_residuals[syn_condition].append(this_integration_gain_residuals)
 
     if export:
-        with h5py.File(context.export_file_path, 'a') as f:
+        with h5py.File(context.temp_output_path, 'a') as f:
             description = 'mean_unitary_EPSP_traces'
             if description not in f:
                 f.create_group(description)
