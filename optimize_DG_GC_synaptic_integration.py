@@ -986,7 +986,10 @@ def get_objectives_synaptic_integration(features, export=False):
             expected_key = 'expected_' + syn_condition
             this_actual = np.array(soma_compound_EPSP_amp[syn_group][syn_condition])
             this_expected = np.array(soma_compound_EPSP_amp[syn_group][expected_key])
-            this_initial_gain = (this_actual[1] - this_actual[0]) / (this_expected[1] - this_expected[0])
+            if this_expected[1] - this_expected[0] > 0:
+                this_initial_gain = (this_actual[1] - this_actual[0]) / (this_expected[1] - this_expected[0])
+            else:
+                this_initial_gain = 0.
             # Integration should be close to linear without gain for the first few synapses.
             initial_gain[syn_condition].append(this_initial_gain)
             feature_key = 'initial_gain_%s' % syn_condition
@@ -1003,7 +1006,8 @@ def get_objectives_synaptic_integration(features, export=False):
                           (os.getpid(), syn_group, syn_condition))
                     sys.stdout.flush()
             else:
-                slope, intercept, r_value, p_value, std_err = stats.linregress(this_expected[indexes], this_actual[indexes])
+                slope, intercept, r_value, p_value, std_err = \
+                    stats.linregress(this_expected[indexes], this_actual[indexes])
                 integration_gain[syn_condition].append(slope)
                 feature_key = 'integration_gain_%s' % syn_condition
                 this_target = context.target_val[feature_key] * this_expected[indexes] + intercept
