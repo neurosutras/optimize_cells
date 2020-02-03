@@ -727,3 +727,22 @@ def inverse_log10_fit(y, slope, offset):
     :return: float or array
     """
     return 10. ** ((y - offset) / slope)
+
+
+def check_for_pause_in_spiking(spike_times, duration):
+    """
+
+    :param spike_times: array of float
+    :param duration: float
+    :return: bool
+    """
+    filtered_spike_times = np.array(spike_times)
+    indexes = np.where((filtered_spike_times > 0.) & (filtered_spike_times < duration))[0]
+    if len(indexes) >= 3:
+        filtered_spike_times = filtered_spike_times[indexes]
+        ISI_array = np.diff(filtered_spike_times)
+        max_ISI = np.max(ISI_array)
+        pause_dur = duration - filtered_spike_times[-1]
+        if pause_dur > 2. * max_ISI:
+            return True
+    return False

@@ -174,8 +174,8 @@ def config_sim_env(context):
     sim = context.sim
     if not sim.has_rec('soma'):
         sim.append_rec(cell, cell.tree.root, name='soma', loc=0.5)
-    if context.v_active not in context.i_holding['soma']:
-        context.i_holding['soma'][context.v_active] = 0.
+    if context.v_init not in context.i_holding['soma']:
+        context.i_holding['soma'][context.v_init] = 0.
     dend, dend_loc = get_thickest_dend_branch(context.cell, 100., terminal=False)
     if not sim.has_rec('dend'):
         sim.append_rec(cell, dend, name='dend', loc=dend_loc)
@@ -251,7 +251,7 @@ def iEPSP_amp_error(x, idx):
     dt = context.dt
     equilibrate = context.equilibrate
     sim = context.sim
-    sim.run(context.v_active)
+    sim.run(context.v_init)
 
     vm = np.array(context.sim.get_rec('soma')['vec'])
     baseline = np.mean(vm[int((equilibrate - 3.) / dt):int((equilibrate - 1.) / dt)])
@@ -305,9 +305,9 @@ def compute_features_iEPSP_i_unit(x, i_holding, dend_name, i_syn_amp=None, expor
     duration = context.duration
     equilibrate = context.equilibrate
 
-    v_active = context.v_active
+    v_init = context.v_init
     context.i_holding = i_holding
-    offset_vm('soma', context, v_active, i_history=context.i_holding, dynamic=False)
+    offset_vm('soma', context, v_init, i_history=context.i_holding, dynamic=False)
 
     sim = context.sim
     sim.modify_stim('holding', dur=duration)
@@ -330,7 +330,7 @@ def compute_features_iEPSP_i_unit(x, i_holding, dend_name, i_syn_amp=None, expor
     config_syn(context.syn_mech_name, context.env.synapse_attributes.syn_param_rules, syn=context.i_syn[idx],
                i_unit=i_EPSC)
     sim.modify_rec(name='dendlocal', node=dend['node'], loc=dend['loc'])
-    sim.run(v_active)
+    sim.run(v_init)
 
     soma_vm = np.array(sim.get_rec('soma')['vec'])
     soma_baseline = np.mean(soma_vm[int((equilibrate - 3.) / dt):int((equilibrate - 1.) / dt)])

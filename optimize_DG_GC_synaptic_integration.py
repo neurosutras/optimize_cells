@@ -354,11 +354,14 @@ def shutdown_worker():
     """
 
     """
-    if context.temp_model_data_file is not None:
-        context.temp_model_data_file.close()
-    time.sleep(2.)
-    if context.interface.global_comm.rank == 0:
-        os.remove(context.temp_model_data_file_path)
+    try:
+        if context.temp_model_data_file is not None:
+            context.temp_model_data_file.close()
+        time.sleep(2.)
+        if context.interface.global_comm.rank == 0:
+            os.remove(context.temp_model_data_file_path)
+    except Exception:
+        pass
 
 
 def consolidate_unitary_EPSP_traces(source_dict):

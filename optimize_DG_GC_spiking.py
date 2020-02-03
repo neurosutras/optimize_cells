@@ -164,6 +164,7 @@ def init_context():
     dend_th_dvdt = 30.
     v_init = -77.
     v_active = -77.
+    v_depolarized = -62.
     i_th_start = 0.2
     i_th_max = 0.4
 
@@ -510,13 +511,15 @@ def compute_features_fI(x, i_holding, spike_detector_delay, rheobase, relative_a
     sim.modify_stim('step', node=node, loc=loc, dur=stim_dur, amp=amp)
     sim.run(v_active)
 
-    spike_times = np.subtract(np.array(context.cell.spike_detector.get_recordvec()), equilibrate + spike_detector_delay)
+    spike_times = np.array(context.cell.spike_detector.get_recordvec())
+    indexes = np.where((spike_times > equilibrate) & (spike_times < equilibrate + stim_dur))[0]
+    spike_times = np.subtract(spike_times[indexes], equilibrate)
 
     result = dict()
     result['i_amp'] = amp
     vm = np.array(soma_rec)
 
-    """
+
     # Make sure spike_detector_delay is accurately transposing threshold crossing at the spike detector location to
     # spike onset time at the soma
     if plot:
@@ -524,10 +527,9 @@ def compute_features_fI(x, i_holding, spike_detector_delay, rheobase, relative_a
         plt.plot(sim.tvec, vm)
         axon_indexes = [int(spike_time / dt) for spike_time in np.array(context.cell.spike_detector.get_recordvec())]
         plt.scatter(np.array(sim.tvec)[axon_indexes], vm[axon_indexes], c='r')
-        soma_indexes = [int((spike_time + equilibrate) / dt) for spike_time in spike_times]
+        soma_indexes = [int((spike_time + equilibrate - spike_detector_delay) / dt) for spike_time in spike_times]
         plt.scatter(np.array(sim.tvec)[soma_indexes], vm[soma_indexes], c='k')
         fig.show()
-    """
 
     if extend_dur:
         vm_rest = np.mean(vm[int((equilibrate - 3.) / dt):int((equilibrate - 1.) / dt)])
@@ -535,10 +537,11 @@ def compute_features_fI(x, i_holding, spike_detector_delay, rheobase, relative_a
         vm_stability = abs(v_after - vm_rest)
         result['vm_stability'] = vm_stability
         result['rebound_firing'] = len(np.where(spike_times > stim_dur)[0])
-        last_spike_time = spike_times[np.where(spike_times < stim_dur)[0][-1]]
-        last_spike_index = int((last_spike_time + equilibrate) / dt)
+        last_spike_time = spike_times[-1]
+        last_spike_index = int((last_spike_time + equilibrate - spike_detector_delay) / dt)
         vm_th_late = np.mean(vm[last_spike_index - int(0.1 / dt):last_spike_index])
         result['vm_th_late'] = vm_th_late
+        result['pause_in_spiking'] = check_for_pause_in_spiking(spike_times, stim_dur)
 
     spike_rate = len(spike_times[np.where(spike_times < stim_dur)[0]]) / stim_dur * 1000.
     result['spike_rate'] = spike_rate
@@ -564,6 +567,8 @@ def filter_features_fI(primitives, current_features, export=False):
     :param export: bool
     :return: dict
     """
+    failed = False
+
     rheobase = current_features['rheobase']
 
     new_features = dict()
@@ -581,6 +586,11 @@ def filter_features_fI(primitives, current_features, export=False):
             new_features['rebound_firing'] = this_dict['rebound_firing']
         if 'vm_th_late' in this_dict:
             new_features['slow_depo'] = abs(this_dict['vm_th_late'] - current_features['vm_th'])
+        if 'pause_in_spiking' in this_dict and this_dict['pause_in_spiking']:
+            if context.verbose > 0:
+                print('filter_features_fI: pid: %i; aborting - excessive pause in spiking' % os.getpid())
+                sys.stdout.flush()
+            failed = True
         rate.append(this_dict['spike_rate'])
     new_features['f_I_rate'] = rate
     if 'slow_depo' not in new_features:
@@ -589,7 +599,7 @@ def filter_features_fI(primitives, current_features, export=False):
             print('filter_features_fI: pid: %i; aborting - failed to compute required feature: %s' % \
                   (os.getpid(), feature_name))
             sys.stdout.flush()
-        return dict()
+        failed = True
 
     if export:
         description = 'f_I'
@@ -603,6 +613,10 @@ def filter_features_fI(primitives, current_features, export=False):
             group.create_dataset('i_relative_amp', compression='gzip', data=i_relative_amp)
             group.create_dataset('rate', compression='gzip', data=rate)
             group.create_dataset('exp_rate', compression='gzip', data=context.exp_rate_f_I_array)
+
+    if failed:
+        return dict()
+
     return new_features
 
 
@@ -625,6 +639,7 @@ def get_args_dynamic_spike_adaptation(x, features):
         start_amp = context.i_inj_relative_amp_array_f_I[amp_index[-1]] + features['rheobase']
     else:
         start_amp = features['rheobase']
+
     spike_detector_delay = features['spike_detector_delay']
 
     return [[i_holding], [spike_detector_delay], [start_amp]]
@@ -645,9 +660,9 @@ def compute_features_spike_adaptation(x, i_holding, spike_detector_delay, start_
     config_sim_env(context)
     update_source_contexts(x, context)
 
-    v_active = context.v_active
+    v_depolarized = context.v_depolarized
     context.i_holding = i_holding
-    offset_vm('soma', context, v_active, i_history=context.i_holding, dynamic=False)
+    offset_vm('soma', context, v_depolarized, i_history=context.i_holding, dynamic=False)
     sim = context.sim
     dt = context.dt
     stim_dur = context.stim_dur_spike_adaptation
@@ -661,7 +676,7 @@ def compute_features_spike_adaptation(x, i_holding, spike_detector_delay, start_
     node = rec_dict['node']
 
     amp = start_amp
-    max_amp = start_amp + 0.1
+    max_amp = start_amp + np.max(context.i_inj_relative_amp_array_f_I)
 
     title = 'spike_adaptation'
     description = 'step current'
@@ -671,12 +686,12 @@ def compute_features_spike_adaptation(x, i_holding, spike_detector_delay, start_
     sim.backup_state()
     sim.set_state(dt=dt, tstop=duration, cvode=False)
     sim.modify_stim('step', node=node, loc=loc, dur=stim_dur, amp=amp)
-    sim.run(v_active)
+    sim.run(v_depolarized)
 
     spike_times = np.array(context.cell.spike_detector.get_recordvec())
     prev_spike_times = spike_times
     target_spike_count = len(context.exp_ISI_array) + 1
-    spike_count = len(np.where(spike_times > equilibrate + spike_detector_delay)[0])
+    spike_count = len(np.where(spike_times > equilibrate)[0])
     prev_spike_count = spike_count
     prev_amp = amp
     if spike_count > target_spike_count:
@@ -686,11 +701,11 @@ def compute_features_spike_adaptation(x, i_holding, spike_detector_delay, start_
             prev_amp = amp
             amp += i_inc
             sim.modify_stim('step', amp=amp)
-            sim.run(v_active)
+            sim.run(v_depolarized)
             prev_spike_times = spike_times
             prev_spike_count = spike_count
             spike_times = np.array(context.cell.spike_detector.get_recordvec())
-            spike_count = len(np.where(spike_times > equilibrate + spike_detector_delay)[0])
+            spike_count = len(np.where(spike_times > equilibrate)[0])
             if sim.verbose:
                 print('compute_features_spike_adaptation: pid: %i; %s; %s i_inj to %.3f nA; num_spikes: %i' % \
                       (os.getpid(), 'soma', delta_str, amp, spike_count))
@@ -711,13 +726,25 @@ def compute_features_spike_adaptation(x, i_holding, spike_detector_delay, start_
                         sys.stdout.flush()
                     return dict()
                 sim.modify_stim('step', amp=amp)
-                sim.run(v_active)
+                sim.run(v_depolarized)
                 spike_times = np.array(context.cell.spike_detector.get_recordvec())
-                spike_count = len(np.where(spike_times > equilibrate + spike_detector_delay)[0])
+                spike_count = len(np.where(spike_times > equilibrate)[0])
                 if sim.verbose:
                     print('compute_features_spike_adaptation: pid: %i; %s; %s i_inj to %.3f nA; num_spikes: %i' %
                           (os.getpid(), 'soma', delta_str, amp, spike_count))
                     sys.stdout.flush()
+
+    # Make sure spike_detector_delay is accurately transposing threshold crossing at the spike detector location to
+    # spike onset time at the soma
+    if plot:
+        fig = plt.figure()
+        vm = np.array(sim.get_rec('soma')['vec'])
+        plt.plot(sim.tvec, vm)
+        axon_indexes = [int(spike_time / dt) for spike_time in spike_times]
+        plt.scatter(np.array(sim.tvec)[axon_indexes], vm[axon_indexes], c='r')
+        soma_indexes = [int((spike_time - spike_detector_delay) / dt) for spike_time in spike_times]
+        plt.scatter(np.array(sim.tvec)[soma_indexes], vm[soma_indexes], c='k')
+        fig.show()
 
     sim.parameters['i_amp'] = amp
     result = dict()

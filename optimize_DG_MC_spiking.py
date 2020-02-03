@@ -555,22 +555,6 @@ def compute_features_fI(x, i_holding, spike_detector_delay, rheobase, relative_a
     return result
 
 
-def check_for_pause_in_spiking(spike_times, duration):
-    """
-
-    :param spike_times: array of float
-    :param duration: float
-    :return: bool
-    """
-    if len(spike_times) >= 3.:
-        ISI_array = np.diff(spike_times)
-        ISI_array.sort()
-        max_pause_dur = max(ISI_array[-1], duration - spike_times[-1])
-        if max_pause_dur > 2. * ISI_array[-2]:
-            return True
-    return False
-
-
 def filter_features_fI(primitives, current_features, export=False):
     """
 
