@@ -1,0 +1,100 @@
+bounds:
+  AMPA.tau: !!python/tuple
+  - 50.
+  - 400.
+  AMPA.slope: !!python/tuple
+  - 1.0e-7
+  - 1.0e-5
+  AMPA.g0: !!python/tuple
+  - 1.0e-4
+  - 0.001
+  NMDA.g_unit: !!python/tuple
+  - 1.0e-4
+  - 5.0e-2
+  NMDA.gamma: !!python/tuple
+  - 0.02
+  - 0.12
+  NMDA.Kd: !!python/tuple
+  - 3.
+  - 12.
+  NMDA.vshift: !!python/tuple
+    - -10.
+    - 10.
+feature_names:
+- mean_unitary_EPSP_amp
+- mean_NMDA_contribution
+- integration_gain_control
+- integration_gain_AP5
+- initial_gain_control
+- initial_gain_AP5
+update_context:
+- - optimize_DG_GC_synaptic_integration
+  - reset_syn_mechanisms
+- - optimize_DG_GC_synaptic_integration
+  - update_syn_mechanisms
+get_features_stages:
+- source: optimize_DG_GC_synaptic_integration
+  get_args_dynamic: get_args_dynamic_unitary_EPSP_amp
+  compute_features: compute_features_unitary_EPSP_amp
+  synchronize: export_unitary_EPSP_traces
+- source: optimize_DG_GC_synaptic_integration
+  get_args_dynamic: get_args_dynamic_compound_EPSP_amp
+  compute_features: compute_features_compound_EPSP_amp
+  synchronize: export_compound_EPSP_traces
+get_objectives:
+  optimize_DG_GC_synaptic_integration: get_objectives_synaptic_integration
+kwargs:
+  mech_file_path: mechanisms/20200131_DG_GC_excitability_mech.yaml
+  gid: 673410
+  cell_type: GC
+  correct_for_spines: True
+  verbose: 1
+  seed_offset: 14e6
+  daspk: False
+  config_file: Network_Clamp_GC_test_20200127.yaml
+  template_paths: ../DGC/Mateos-Aparicio2014:../dentate/templates
+  hoc_lib_path: ../dentate
+  config_prefix: ../dentate/config
+  dataset_prefix: ../dentate/datasets
+  results_path: data
+  cache_queries: True
+  debug: False  # True
+objective_names:
+- mean_unitary_EPSP_amp_residuals
+- mean_NMDA_contribution_residuals
+- integration_gain_control_residuals
+- integration_gain_AP5_residuals
+- initial_gain_control_residuals
+- initial_gain_AP5_residuals
+optimization_title: DG_GC_synaptic_integration
+param_gen: PopulationAnnealing
+param_names:
+- AMPA.tau
+- AMPA.slope
+- AMPA.g0
+- NMDA.g_unit
+- NMDA.gamma
+- NMDA.Kd
+- NMDA.vshift
+target_range:
+  mean_unitary_EPSP_amp: 0.005
+  mean_NMDA_contribution: 0.001
+  integration_gain_control: 0.005
+  integration_gain_AP5: 0.005
+  initial_gain_control: 0.005
+  initial_gain_AP5: 0.005
+target_val:
+  mean_unitary_EPSP_amp: 0.6
+  mean_NMDA_contribution: 0.2
+  integration_gain_control: 1.38
+  integration_gain_AP5: 0.8
+  initial_gain_control: 1.
+  initial_gain_AP5: 1.
+x0:
+  AMPA.tau: 1.868088E+02
+  AMPA.slope: 3.293672E-06
+  AMPA.g0: 1.464409E-04
+  NMDA.g_unit: 4.316527E-03
+  NMDA.gamma: 8.130658E-02
+  NMDA.Kd: 4.331929E+00
+  NMDA.vshift: 9.592656E+00
