@@ -118,7 +118,7 @@ def run_tests():
 
     features, objectives = context.interface.execute(get_objectives_spiking, features, model_id, context.export)
     if context.export:
-        merge_exported_data(interface=context.interface, param_arrays=[context.x0_array],
+        merge_exported_data(context, param_arrays=[context.x0_array],
                             model_ids=[model_id], model_labels=[model_label], features=[features],
                             objectives=[objectives], export_file_path=context.export_file_path,
                             verbose=context.verbose > 1)
