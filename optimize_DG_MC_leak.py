@@ -61,17 +61,27 @@ def main(cli, config_file_path, output_dir, export, export_file_path, label, ver
 
 
 def run_tests():
+    model_id = 0
+    if 'model_key' in context() and context.model_key is not None:
+        model_label = context.model_key
+    else:
+        model_label = [[]]
+
     args = context.interface.execute(get_args_static_leak)
     group_size = len(args[0])
-    sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
-                [[context.plot] * group_size]
+    sequences = [[context.x0_array] * group_size] + args + [[model_id] * group_size] + \
+                [[context.export] * group_size] + [[context.plot] * group_size]
     primitives = context.interface.map(compute_features_leak, *sequences)
     features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
-    features, objectives = context.interface.execute(get_objectives_leak, features, context.export)
+    features, objectives = context.interface.execute(get_objectives_leak, features, model_id, context.export)
+
     if context.export:
-        collect_and_merge_temp_output(context.interface, context.export_file_path, verbose=context.disp)
+        merge_exported_data(interface=context.interface, param_arrays=[context.x0_array],
+                            model_ids=[model_id], model_labels=[model_label], features=[features],
+                            objectives=[objectives], export_file_path=context.export_file_path,
+                            verbose=context.verbose > 1)
     sys.stdout.flush()
-    time.sleep(1.)
+    print('model_id: %i; model_labels: %s' % (model_id, model_label))
     print('params:')
     pprint.pprint(context.x0_dict)
     print('features:')
@@ -79,7 +89,7 @@ def run_tests():
     print('objectives:')
     pprint.pprint(objectives)
     sys.stdout.flush()
-    time.sleep(1.)
+    time.sleep(.1)
     if context.plot:
         context.interface.apply(plt.show)
     context.update(locals())
@@ -119,7 +129,7 @@ def init_context():
     context.update(locals())
 
 
-def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
+def build_sim_env(context, verbose=2, cvode=True, daspk=True, load_edges=False, set_edge_delays=False, **kwargs):
     """
 
     :param context: :class:'Context'
@@ -131,8 +141,8 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, **kwargs):
     init_context()
     context.env = Env(comm=context.comm, verbose=verbose > 1, **kwargs)
     configure_hoc_env(context.env)
-    cell = get_biophys_cell(context.env, gid=context.gid, pop_name=context.cell_type, load_edges=False,
-                            mech_file_path=context.mech_file_path)
+    cell = get_biophys_cell(context.env, gid=context.gid, pop_name=context.cell_type, load_edges=load_edges,
+                            set_edge_delays=set_edge_delays, mech_file_path=context.mech_file_path)
     init_biophysics(cell, reset_cable=True, correct_cm=context.correct_for_spines,
                     correct_g_pas=context.correct_for_spines, env=context.env, verbose=verbose > 1)
     context.sim = QuickSim(context.duration, cvode=cvode, daspk=daspk, dt=context.dt, verbose=verbose > 1)
@@ -159,7 +169,7 @@ def config_sim_env(context):
     if context.v_init not in context.i_holding['soma']:
         context.i_holding['soma'][context.v_init] = 0.
     if not sim.has_rec('dend'):
-        dend, dend_loc = get_thickest_dend_branch(context.cell, 150., terminal=False)
+        dend, dend_loc = get_thickest_dend_branch(context.cell, 100., terminal=False)
         sim.append_rec(cell, dend, name='dend', loc=dend_loc)
     if context.v_init not in context.i_holding['dend']:
         context.i_holding['dend'][context.v_init] = 0.
@@ -178,8 +188,6 @@ def config_sim_env(context):
     if not sim.has_stim('holding'):
         sim.append_stim(cell, cell.tree.root, name='holding', loc=0.5, amp=0., delay=0., dur=duration)
 
-    sim.parameters['duration'] = duration
-    sim.parameters['equilibrate'] = equilibrate
     context.previous_module = __file__
 
 
@@ -196,12 +204,13 @@ def get_args_static_leak():
     return [sections, block_h]
 
 
-def compute_features_leak(x, section, block_h, export=False, plot=False):
+def compute_features_leak(x, section, block_h, model_id=None, export=False, plot=False):
     """
     Inject a hyperpolarizing step current into the specified section, and return the steady-state input resistance.
     :param x: array
     :param section: str
     :param block_h: bool; whether or not to zero the h conductance
+    :param model_id: int or str
     :param export: bool
     :param plot: bool
     :return: dict: {str: float}
@@ -225,10 +234,12 @@ def compute_features_leak(x, section, block_h, export=False, plot=False):
         description = 'step current injection to %s (no h)' % section
     else:
         description = 'step current injection to %s' % section
+    sim.parameters = dict()
+    sim.parameters['duration'] = duration
+    sim.parameters['equilibrate'] = equilibrate
     sim.parameters['section'] = section
     sim.parameters['title'] = title
     sim.parameters['description'] = description
-    sim.parameters['duration'] = duration
     amp = -0.025
     context.sim.parameters['amp'] = amp
     vm_rest, vm_offset, context.i_holding[section][v_init] = offset_vm(section, context, v_init, dynamic=False,
@@ -258,22 +269,23 @@ def compute_features_leak(x, section, block_h, export=False, plot=False):
     else:
         result['%s R_inp' % section] = R_inp
     if context.verbose > 0:
-        print('compute_features_leak: pid: %i; %s: %s took %.1f s; R_inp: %.1f' %
-              (os.getpid(), title, description, time.time() - start_time, R_inp))
+        print('compute_features_leak: pid: %i; model_id: %s; %s: %s took %.1f s; R_inp: %.1f' % \
+              (os.getpid(), model_id, title, description, time.time() - start_time, R_inp))
         sys.stdout.flush()
     if plot:
         sim.plot()
     if export:
-        context.sim.export_to_file(context.temp_output_path)
+        context.sim.export_to_file(context.temp_output_path, model_label=model_id, category=title)
     sim.restore_state()
     sim.modify_stim('step', amp=0.)
     return result
 
 
-def get_objectives_leak(features, export=False):
+def get_objectives_leak(features, model_id=None, export=False):
     """
 
     :param features: dict
+    :param model_id: int or str
     :param export: bool
     :return: tuple of dict
     """
@@ -318,7 +330,8 @@ def update_mechanisms_leak(x, context):
     modify_mech_param(cell, 'soma', 'pas', 'e', x_dict['e_pas'])
     modify_mech_param(cell, 'apical', 'pas', 'g', origin='soma', slope=x_dict['dend.g_pas slope'],
                       tau=x_dict['dend.g_pas tau'])
-    modify_mech_param(cell, 'apical', 'pas', 'g', origin='parent', custom={'func': 'custom_filter_if_terminal'}, append=True)
+    modify_mech_param(cell, 'apical', 'pas', 'g', origin='parent', custom={'func': 'custom_filter_if_terminal'},
+                      append=True)
 #    modify_mech_param(cell, 'apical', 'h', 'ghbar', origin='soma')
     modify_mech_param(cell, 'apical', 'h', 'ghbar', x_dict['dend.ghbar'])
     for sec_type in ['hillock', 'ais', 'axon', 'apical']:

@@ -10,7 +10,6 @@ from nested.parallel import *
 from nested.optimize_utils import *
 from cell_utils import *
 import click
-import uuid
 
 context = Context()
 
@@ -72,13 +71,19 @@ def main(cli, config_file_path, output_dir, export, export_file_path, label, ver
 
 
 def run_tests():
+    model_id = 0
+    if 'model_key' in context() and context.model_key is not None:
+        model_label = context.model_key
+    else:
+        model_label = 'test'
+
     features = dict()
 
     # Stage 0:
-    args = context.interface.execute(get_args_dynamic_unitary_EPSP_amp, context.x0_array, features)
+    args = context.interface.execute(get_args_static_unitary_EPSP_amp)
     group_size = len(args[0])
-    sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
-                [[context.plot] * group_size]
+    sequences = [[context.x0_array] * group_size] + args + [[model_id] * group_size] + \
+                [[context.export] * group_size] + [[context.plot] * group_size]
     primitives = context.interface.map(compute_features_unitary_EPSP_amp, *sequences)
     this_features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
     features.update(this_features)
@@ -86,22 +91,25 @@ def run_tests():
     context.interface.apply(export_unitary_EPSP_traces)
 
     # Stage 1:
-    args = context.interface.execute(get_args_dynamic_compound_EPSP_amp, context.x0_array, features)
+    args = context.interface.execute(get_args_static_compound_EPSP_amp)
     group_size = len(args[0])
-    sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
-                [[context.plot] * group_size]
+    sequences = [[context.x0_array] * group_size] + args + [[model_id] * group_size] + \
+                [[context.export] * group_size] + [[context.plot] * group_size]
     primitives = context.interface.map(compute_features_compound_EPSP_amp, *sequences)
     this_features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
     features.update(this_features)
     context.update(locals())
     context.interface.apply(export_compound_EPSP_traces)
 
-    features, objectives = context.interface.execute(get_objectives_synaptic_integration, features, context.export)
+    features, objectives = context.interface.execute(get_objectives_synaptic_integration, features, model_id,
+                                                     context.export)
     if context.export:
-        collect_and_merge_temp_output(context.interface, context.export_file_path, verbose=context.disp)
+        merge_exported_data(interface=context.interface, param_arrays=[context.x0_array],
+                            model_ids=[model_id], model_labels=[model_label], features=[features],
+                            objectives=[objectives], export_file_path=context.export_file_path,
+                            verbose=context.verbose > 1)
     sys.stdout.flush()
-    time.sleep(1.)
-    context.interface.apply(shutdown_worker)
+    print('model_id: %i; model_labels: %s' % (model_id, model_label))
     print('params:')
     pprint.pprint(context.x0_dict)
     print('features:')
@@ -109,7 +117,7 @@ def run_tests():
     print('objectives:')
     pprint.pprint(objectives)
     sys.stdout.flush()
-    time.sleep(1.)
+    time.sleep(.1)
     if context.plot:
         context.interface.apply(plt.show)
     context.update(locals())
@@ -319,8 +327,6 @@ def config_sim_env(context):
                                  syn_ids=context.syn_id_list, insert=True, insert_netcons=True, insert_vecstims=True,
                                  verbose=context.verbose > 1, throw_error=False)
 
-    sim.parameters['duration'] = duration
-    sim.parameters['equilibrate'] = equilibrate
     context.previous_module = __file__
 
 
@@ -613,21 +619,15 @@ def export_compound_EPSP_traces():
         time.sleep(1.)
 
 
-def get_args_dynamic_unitary_EPSP_amp(x, features):
+def get_args_static_unitary_EPSP_amp():
     """
-    A nested map operation is required to compute unitary EPSP amplitude features. The arguments to be mapped include
-    a unique string key for each set of model parameters that will be used to identify temporarily stored simulation
-    output.
-    :param x: array
-    :param features: dict
+    A nested map operation is required to compute unitary EPSP amplitude features. The arguments to be mapped are the
+    same (static) for each set of parameters.
     :return: list of list
     """
-    model_key = str(uuid.uuid1())
-
     syn_group_list = []
     syn_id_lists = []
     syn_condition_list = []
-    model_key_list = []
 
     for syn_group in context.syn_id_dict:
         this_syn_id_chunk = context.syn_id_dict[syn_group]
@@ -641,9 +641,8 @@ def get_args_dynamic_unitary_EPSP_amp(x, features):
             syn_id_lists.extend(this_syn_id_lists)
             syn_group_list.extend([syn_group] * num_sims)
             syn_condition_list.extend([syn_condition] * num_sims)
-            model_key_list.extend([model_key] * num_sims)
 
-    return [syn_id_lists, syn_condition_list, syn_group_list, model_key_list]
+    return [syn_id_lists, syn_condition_list, syn_group_list]
 
 
 def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, model_key, export=False, plot=False):
@@ -653,7 +652,7 @@ def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, mode
     :param syn_ids: list of int
     :param syn_condition: str
     :param syn_group: str
-    :param model_key: str
+    :param model_key: int or str
     :param export: bool
     :param plot: bool
     :return: dict
@@ -680,9 +679,12 @@ def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, mode
     sim.modify_stim('holding', node=node, loc=loc, amp=context.i_holding['soma'][context.v_active], dur=duration)
 
     syn_attrs = context.env.synapse_attributes
-    context.sim.parameters['syn_secs'] = []
-    context.sim.parameters['swc_types'] = []
-    context.sim.parameters['syn_ids'] = syn_ids
+    sim.parameters = dict()
+    sim.parameters['duration'] = duration
+    sim.parameters['equilibrate'] = equilibrate
+    sim.parameters['syn_secs'] = []
+    sim.parameters['swc_types'] = []
+    sim.parameters['syn_ids'] = syn_ids
     for i, syn_id in enumerate(syn_ids):
         syn_id = int(syn_id)
         spike_time = context.equilibrate + i * ISI
@@ -696,8 +698,8 @@ def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, mode
         syn = syn_attrs.syn_id_attr_dict[context.cell.gid][syn_id]
         node_index = syn.syn_section
         node_type = syn.swc_type
-        context.sim.parameters['syn_secs'].append(node_index)
-        context.sim.parameters['swc_types'].append(node_type)
+        sim.parameters['syn_secs'].append(node_index)
+        sim.parameters['swc_types'].append(node_type)
         if i == 0:
             branch = context.cell.tree.get_node_with_index(node_index)
             context.sim.modify_rec('dend_local', node=branch)
@@ -733,39 +735,33 @@ def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, mode
     title = 'unitary_EPSP_amp'
     description = 'condition: %s, group: %s, num_syns: %i, first syn_id: %i' % \
                   (syn_condition, syn_group, len(syn_ids), syn_ids[0])
-    sim.parameters['duration'] = duration
     sim.parameters['title'] = title
     sim.parameters['description'] = description
 
     if context.verbose > 0:
-        print('compute_features_unitary_EPSP_amp: pid: %i; %s: %s took %.3f s' %
-              (os.getpid(), title, description, time.time() - start_time))
+        print('compute_features_unitary_EPSP_amp: pid: %i; model_id: %s; %s: %s took %.3f s' %
+              (os.getpid(), model_key, title, description, time.time() - start_time))
         sys.stdout.flush()
     if plot:
         context.sim.plot()
 
     if export:
-        context.sim.export_to_file(context.temp_output_path)
+        context.sim.export_to_file(context.temp_output_path, model_label=model_key, category=title)
 
     sim.restore_state()
 
     return result
 
 
-def get_args_dynamic_compound_EPSP_amp(x, features):
+def get_args_static_compound_EPSP_amp():
     """
-    A nested map operation is required to compute compound EPSP amplitude features. The arguments to be mapped include
-    a unique string key for each set of model parameters that will be used to identify temporarily stored simulation
-    output.
-    :param x: array
-    :param features: dict
+    A nested map operation is required to compute compound EPSP amplitude features. The arguments to be mapped are the
+    same (static) for each set of parameters.
     :return: list of list
     """
     syn_group_list = []
     syn_id_lists = []
     syn_condition_list = []
-    model_key = features['model_key']
-    model_key_list = []
     for syn_group in context.clustered_branch_names:
         this_syn_id_group = context.syn_id_dict[syn_group]
         this_syn_id_lists = []
@@ -776,9 +772,8 @@ def get_args_dynamic_compound_EPSP_amp(x, features):
             syn_id_lists.extend(this_syn_id_lists)
             syn_group_list.extend([syn_group] * num_sims)
             syn_condition_list.extend([syn_condition] * num_sims)
-            model_key_list.extend([model_key] * num_sims)
 
-    return [syn_id_lists, syn_condition_list, syn_group_list, model_key_list]
+    return [syn_id_lists, syn_condition_list, syn_group_list]
 
 
 def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, model_key, export=False, plot=False):
@@ -788,7 +783,7 @@ def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, mod
     :param syn_ids: list of int
     :param syn_condition: str
     :param syn_group: str
-    :param model_key: str
+    :param model_key: int or str
     :param export: bool
     :param plot: bool
     :return: dict
@@ -815,9 +810,12 @@ def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, mod
     sim.modify_stim('holding', node=node, loc=loc, amp=context.i_holding['soma'][context.v_active], dur=duration)
 
     syn_attrs = context.env.synapse_attributes
-    context.sim.parameters['syn_secs'] = []
-    context.sim.parameters['swc_types'] = []
-    context.sim.parameters['syn_ids'] = syn_ids
+    sim.parameters = dict()
+    sim.parameters['duration'] = duration
+    sim.parameters['equilibrate'] = equilibrate
+    sim.parameters['syn_secs'] = []
+    sim.parameters['swc_types'] = []
+    sim.parameters['syn_ids'] = syn_ids
     for i, syn_id in enumerate(syn_ids):
         spike_time = context.equilibrate + i * ISI
         for syn_name in context.syn_mech_names:
@@ -830,8 +828,8 @@ def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, mod
         syn = syn_attrs.syn_id_attr_dict[context.cell.gid][syn_id]
         node_index = syn.syn_section
         node_type = syn.swc_type
-        context.sim.parameters['syn_secs'].append(node_index)
-        context.sim.parameters['swc_types'].append(node_type)
+        sim.parameters['syn_secs'].append(node_index)
+        sim.parameters['swc_types'].append(node_type)
         if i == 0:
             branch = context.cell.tree.get_node_with_index(node_index)
             context.sim.modify_rec('dend_local', node=branch)
@@ -866,18 +864,17 @@ def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, mod
     title = 'compound_EPSP_amp'
     description = 'condition: %s, group: %s, num_syns: %i, first syn_id: %i' % \
                   (syn_condition, syn_group, len(syn_ids), syn_ids[0])
-    sim.parameters['duration'] = duration
     sim.parameters['title'] = title
     sim.parameters['description'] = description
 
     if context.verbose > 0:
-        print('compute_features_compound_EPSP_amp: pid: %i; %s: %s took %.3f s' %
-              (os.getpid(), title, description, time.time() - start_time))
+        print('compute_features_compound_EPSP_amp: pid: %i; model_id: %s; %s: %s took %.3f s' %
+              (os.getpid(), model_key, title, description, time.time() - start_time))
         sys.stdout.flush()
     if plot:
         context.sim.plot()
     if export:
-        context.sim.export_to_file(context.temp_output_path)
+        context.sim.export_to_file(context.temp_output_path, model_label=model_key, category=title)
     sim.restore_state()
 
     return result
@@ -907,10 +904,11 @@ def get_expected_compound_EPSP_traces(unitary_traces_dict, syn_id_dict):
     return traces
 
 
-def get_objectives_synaptic_integration(features, export=False):
+def get_objectives_synaptic_integration(features, model_key, export=False):
     """
 
     :param features: dict
+    :param model_key: int or str
     :param export: bool
     :return: tuple of dict
     """
@@ -921,11 +919,10 @@ def get_objectives_synaptic_integration(features, export=False):
     if 'soma_spikes' in features:
         failed = True
         if context.verbose > 0:
-            print('get_objectives_synaptic_integration: pid: %i; aborting - dendritic spike propagated to soma' %
-                  (os.getpid()))
+            print('get_objectives_synaptic_integration: pid: %i; model_id: %s; aborting - dendritic spike propagated '
+                  'to soma' % (os.getpid(), model_key))
             sys.stdout.flush()
 
-    model_key = features['model_key']
     group_key = context.temp_model_data_legend[model_key]
 
     unitary_EPSP_traces_dict = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
@@ -1002,9 +999,9 @@ def get_objectives_synaptic_integration(features, export=False):
                     (this_expected[1] - this_expected[0] <= 0.):
                 failed = True
                 if context.verbose > 0:
-                    print('optimize_DG_GC_synaptic_integration: get_objectives: pid: %i; syn_group: %s; '
+                    print('optimize_DG_GC_synaptic_integration: get_objectives: pid: %i; model_id: %s; syn_group: %s; '
                           'syn_condition: %s; aborting - expected compound EPSP amplitude below criterion' %
-                          (os.getpid(), syn_group, syn_condition))
+                          (os.getpid(), model_key, syn_group, syn_condition))
                     sys.stdout.flush()
             else:
                 # Integration should be close to linear without gain for the first few synapses.
@@ -1029,10 +1026,7 @@ def get_objectives_synaptic_integration(features, export=False):
     if export:
         with h5py.File(context.temp_output_path, 'a') as f:
             description = 'mean_unitary_EPSP_traces'
-            if description not in f:
-                f.create_group(description)
-                f[description].attrs['enumerated'] = False
-            group = f[description]
+            group = get_h5py_group(f, [model_key, description], create=True)
             t = np.arange(-context.trace_baseline, context.ISI['units'], context.dt)
             group.create_dataset('time', compression='gzip', data=t)
             data_group = group.create_group('data')
@@ -1049,10 +1043,7 @@ def get_objectives_synaptic_integration(features, export=False):
                                                   data=np.mean(this_condition_array_list, axis=0))
 
             description = 'compound_EPSP_summary'
-            if description not in f:
-                f.create_group(description)
-                f[description].attrs['enumerated'] = False
-            group = f[description]
+            group = get_h5py_group(f, [model_key, description], create=True)
             t = np.arange(-context.trace_baseline, context.sim_duration['clustered'] - context.equilibrate, context.dt)
             group.create_dataset('time', compression='gzip', data=t)
             data_group = group.create_group('traces')
@@ -1073,7 +1064,8 @@ def get_objectives_synaptic_integration(features, export=False):
                                               data=soma_compound_EPSP_amp[syn_group][syn_condition])
 
     if context.verbose > 1:
-        print('get_objectives_synaptic_integration: pid: %i; took %.3f s' % (os.getpid(), time.time() - start_time))
+        print('get_objectives_synaptic_integration: pid: %i; model_id: %s; took %.3f s' %
+              (os.getpid(), model_key, time.time() - start_time))
         sys.stdout.flush()
 
     if failed:

@@ -518,20 +518,18 @@ def plot_best_norm_features_scatter(storage, target_val, target_range):
     mpl.rcParams['font.size'] = orig_fontsize
 
 
-def plot_exported_DG_GC_spiking_features(file_path, **kwargs):
+def plot_exported_DG_GC_spiking_features(file_path, model_label=None, **kwargs):
     """
     
     :param file_path: str (path)
+    :param model_label: int or str
     """
     orig_fontsize = mpl.rcParams['font.size']
     if not os.path.isfile(file_path):
         raise IOError('plot_exported_DG_GC_spiking_features: invalid file path: %s' % file_path)
     with h5py.File(file_path, 'r') as f:
         group_name = 'f_I'
-        if group_name not in f:
-            raise AttributeError('plot_exported_DG_GC_spiking_features: provided file path: %s does not contain a '
-                                 'required group: %s' % (file_path, group_name))
-        group = f[group_name]
+        group = get_h5py_group(f, [model_label, group_name])
         fig1, axes1 = plt.subplots()
         i_relative_amp = group['i_relative_amp'][:]
         rate = group['rate'][:]
@@ -551,10 +549,7 @@ def plot_exported_DG_GC_spiking_features(file_path, **kwargs):
         plot_helper(fig1, filename_suffix='DG_GC_{!s}'.format(group_name), **kwargs)
 
         group_name = 'spike_adaptation'
-        if group_name not in f:
-            raise AttributeError('plot_exported_DG_GC_spiking_features: provided file path: %s does not contain a '
-                                 'required group: %s' % (file_path, group_name))
-        group = f[group_name]
+        group = get_h5py_group(f, [model_label, group_name])
         fig2, axes2 = plt.subplots()
         model_ISI_array = group['model_ISI_array'][:]
         exp_ISI_array = group['exp_ISI_array'][:]
@@ -574,20 +569,18 @@ def plot_exported_DG_GC_spiking_features(file_path, **kwargs):
     mpl.rcParams['font.size'] = orig_fontsize
 
 
-def plot_exported_DG_MC_spiking_features(file_path, **kwargs):
+def plot_exported_DG_MC_spiking_features(file_path, model_label=None, **kwargs):
     """
 
     :param file_path: str (path)
+    :param model_label: int or str
     """
     orig_fontsize = mpl.rcParams['font.size']
     if not os.path.isfile(file_path):
         raise IOError('plot_exported_DG_MC_spiking_features: invalid file path: %s' % file_path)
     with h5py.File(file_path, 'r') as f:
         group_name = 'f_I'
-        if group_name not in f:
-            raise AttributeError('plot_exported_DG_MC_spiking_features: provided file path: %s does not contain a '
-                                 'required group: %s' % (file_path, group_name))
-        group = f[group_name]
+        group = get_h5py_group(f, [model_label, group_name])
         fig1, axes1 = plt.subplots()
         i_relative_amp = group['i_relative_amp'][:]
         rate = group['rate'][:]
@@ -624,7 +617,7 @@ def plot_exported_DG_MC_spiking_features(file_path, **kwargs):
     mpl.rcParams['font.size'] = orig_fontsize
 
 
-def plot_exported_DG_GC_synaptic_integration_features(file_path, **kwargs):
+def plot_exported_DG_GC_synaptic_integration_features(file_path, model_label=None, **kwargs):
     """
 
     :param file_path: str (path)
@@ -635,11 +628,9 @@ def plot_exported_DG_GC_synaptic_integration_features(file_path, **kwargs):
     from matplotlib import cm
     with h5py.File(file_path, 'r') as f:
         group_name = 'mean_unitary_EPSP_traces'
-        if group_name not in f:
-            raise AttributeError('plot_exported_DG_GC_synaptic_integration_features: provided file path: {!s} does not '
-                                 'contain a required group: {!s}'.format(file_path, group_name))
-        t = f[group_name]['time'][:]
-        data_group = f[group_name]['data']
+        source = get_h5py_group(f, [model_label, group_name])
+        t = source['time'][:]
+        data_group = source['data']
 
         for syn_group in data_group:
             syn_conditions = list(data_group[syn_group].keys())
@@ -670,10 +661,7 @@ def plot_exported_DG_GC_synaptic_integration_features(file_path, **kwargs):
             plot_helper(fig, filename_suffix='DG_GC_{!s}_{!s}'.format(group_name, syn_group), **kwargs)
 
         group_name = 'compound_EPSP_summary'
-        if group_name not in f:
-            raise AttributeError('plot_exported_DG_GC_synaptic_integration_features: provided file path: {!s} does not '
-                                 'contain a required group: {!s}'.format(file_path, group_name))
-        group = f[group_name]
+        group = get_h5py_group(f, [model_label, group_name])
         t = group['time'][:]
         syn_conditions = list(next(iter(viewvalues(group['traces']))).keys())
         ordered_syn_conditions = ['expected_control', 'control']
@@ -730,20 +718,23 @@ def plot_exported_DG_GC_synaptic_integration_features(file_path, **kwargs):
     mpl.rcParams['font.size'] = orig_fontsize
 
 
-def plot_sim_from_file(file_path, group_name='sim_output', **kwargs):
+def plot_sim_from_file(file_path, model_label=None, category=None, group_name='sim_output', **kwargs):
     """
 
     :param file_path: str (path)
+    :param model_label: str
+    :param category: str
     :param group_name: str
     """
     orig_fontsize = mpl.rcParams['font.size']
     if not os.path.isfile(file_path):
         raise IOError('plot_sim_from_file: invalid file path: %s' % file_path)
     with h5py.File(file_path, 'r') as f:
-        if group_name not in f:
-            raise AttributeError('plot_sim_from_file: provided file path: {!s} does not contain required top-level '
-                                 'group with name: {!s}'.format(file_path, group_name))
-        for trial_key, trial in viewitems(f[group_name]):
+        source = get_h5py_group(f, [model_label, group_name, category])
+        if 'enumerated' not in source.attrs or not source.attrs['enumerated']:
+            raise AttributeError('plot_sim_from_file: source: %s is not enumerated; available categories: %s' %
+                                 (source, list(source.keys())))
+        for trial_key, trial in viewitems(source):
             fig, axes = plt.subplots()
             for name, rec in viewitems(trial['recs']):
                 description = get_h5py_attr(rec.attrs, 'description')
@@ -839,6 +830,7 @@ def plot_helper(fig, show=True, filename_prefix=None, filename_suffix=None, save
     :param fig_format: str
     :param output_dir: str; path to dir
     :param transparent: bool
+    :param replace: bool
     """
     if show:
         fig.show()
@@ -860,24 +852,26 @@ def plot_helper(fig, show=True, filename_prefix=None, filename_suffix=None, save
         fig.savefig(filename, format=fig_format, transparent=transparent)
 
 
-def plot_exported_DG_MC_iEPSP_attenuation(file_path, axes=None, show=True):
+def plot_exported_DG_MC_iEPSP_attenuation(file_path, model_label=None, axes=None, show=True, **kwargs):
     """
-    :param file_path: str 
+    :param file_path: str
+    :param model_label: int or str
     :param axes: :class:'Axes'
     :param show: bool
     """
     with h5py.File(file_path, 'r') as f:
         group_name = 'iEPSP_attenuation'
-        expt_att = np.array(f[group_name]['expmt_attenuation'])
-        expt_dist = np.array(f[group_name]['expmt_distance'])
-        dend_dist = np.array(f[group_name]['distance'])
-        expect_att = np.array(f[group_name]['expected_attenuations'])
-        resultant_att = np.array(f[group_name]['attenuation'])
-        gompertz_coeffs = np.array(f[group_name]['gompertz_coeffs'])
+        source = get_h5py_group(f, [model_label, group_name])
+        expt_att = np.array(source['expmt_attenuation'])
+        expt_dist = np.array(source['expmt_distance'])
+        dend_dist = np.array(source['distance'])
+        expect_att = np.array(source['expected_attenuations'])
+        resultant_att = np.array(source['attenuation'])
+        gompertz_coeffs = np.array(source['gompertz_coeffs'])
 
-        local_dend_amp = np.array(f[group_name]['local_dend_amp'])
-        ref_dend_amp = np.array(f[group_name]['ref_dend_amp'])
-        soma_amp = np.array(f[group_name]['soma_EPSP_amp'])
+        local_dend_amp = np.array(source['local_dend_amp'])
+        ref_dend_amp = np.array(source['ref_dend_amp'])
+        soma_amp = np.array(source['soma_EPSP_amp'])
 
     dist_arr = np.arange(0, 500, 5)
     gompertz_line = gompertz(dist_arr, *gompertz_coeffs)   
@@ -914,20 +908,22 @@ def plot_exported_DG_MC_iEPSP_attenuation(file_path, axes=None, show=True):
         return axes
 
 
-def plot_exported_DG_GC_iEPSP_attenuation(file_path, show=True):
+def plot_exported_DG_GC_iEPSP_attenuation(file_path, model_label=None, show=True, **kwargs):
     """
     :param file_path: str
+    :param model_label: int or str
     :param show: bool
     """
     with h5py.File(file_path, 'r') as f:
         group_name = 'iEPSP_attenuation'
-        exp_attenuation = np.array(f[group_name]['exp_attenuation'])
-        exp_distance = np.array(f[group_name]['exp_distance'])
-        distance = np.array(f[group_name]['distance'])
-        attenuation = np.array(f[group_name]['attenuation'])
-        gompertz_coeffs = np.array(f[group_name]['gompertz_coeffs'])
-        dend_local_amp = np.array(f[group_name]['dend_local_iEPSP_amp'])
-        soma_amp = np.array(f[group_name]['soma_iEPSP_amp'])
+        source = get_h5py_group(f, [model_label, group_name])
+        exp_attenuation = np.array(source['exp_attenuation'])
+        exp_distance = np.array(source['exp_distance'])
+        distance = np.array(source['distance'])
+        attenuation = np.array(source['attenuation'])
+        gompertz_coeffs = np.array(source['gompertz_coeffs'])
+        dend_local_amp = np.array(source['dend_local_iEPSP_amp'])
+        soma_amp = np.array(source['soma_iEPSP_amp'])
 
     distance_fit = np.arange(0., max(np.max(exp_distance), np.max(distance)), 5.)
     attenuation_fit = gompertz(distance_fit, *gompertz_coeffs)

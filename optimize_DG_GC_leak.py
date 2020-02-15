@@ -61,17 +61,27 @@ def main(cli, config_file_path, output_dir, export, export_file_path, label, ver
 
 
 def run_tests():
+    model_id = 0
+    if 'model_key' in context() and context.model_key is not None:
+        model_label = context.model_key
+    else:
+        model_label = [[]]
+
     args = context.interface.execute(get_args_static_leak)
     group_size = len(args[0])
-    sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
-                [[context.plot] * group_size]
+    sequences = [[context.x0_array] * group_size] + args + [[model_id] * group_size] + \
+                [[context.export] * group_size] + [[context.plot] * group_size]
     primitives = context.interface.map(compute_features_leak, *sequences)
     features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
-    features, objectives = context.interface.execute(get_objectives_leak, features, context.export)
+    features, objectives = context.interface.execute(get_objectives_leak, features, model_id, context.export)
+
     if context.export:
-        collect_and_merge_temp_output(context.interface, context.export_file_path, verbose=context.disp)
+        merge_exported_data(interface=context.interface, param_arrays=[context.x0_array],
+                            model_ids=[model_id], model_labels=[model_label], features=[features],
+                            objectives=[objectives], export_file_path=context.export_file_path,
+                            verbose=context.verbose > 1)
     sys.stdout.flush()
-    time.sleep(1.)
+    print('model_id: %i; model_labels: %s' % (model_id, model_label))
     print('params:')
     pprint.pprint(context.x0_dict)
     print('features:')
@@ -79,7 +89,7 @@ def run_tests():
     print('objectives:')
     pprint.pprint(objectives)
     sys.stdout.flush()
-    time.sleep(1.)
+    time.sleep(.1)
     if context.plot:
         context.interface.apply(plt.show)
     context.update(locals())
@@ -178,8 +188,6 @@ def config_sim_env(context):
     if not sim.has_stim('holding'):
         sim.append_stim(cell, cell.tree.root, name='holding', loc=0.5, amp=0., delay=0., dur=duration)
 
-    sim.parameters['duration'] = duration
-    sim.parameters['equilibrate'] = equilibrate
     context.previous_module = __file__
 
 
@@ -192,11 +200,12 @@ def get_args_static_leak():
     return [['soma', 'dend', 'term_dend']]
 
 
-def compute_features_leak(x, section, export=False, plot=False):
+def compute_features_leak(x, section, model_id=None, export=False, plot=False):
     """
     Inject a hyperpolarizing step current into the specified section, and return the steady-state input resistance.
     :param x: array
     :param section: str
+    :param model_id: int or str
     :param export: bool
     :param plot: bool
     :return: dict: {str: float}
@@ -215,10 +224,12 @@ def compute_features_leak(x, section, export=False, plot=False):
 
     title = 'R_inp'
     description = 'step current injection to %s' % section
+    sim.parameters = dict()
+    sim.parameters['duration'] = duration
+    sim.parameters['equilibrate'] = equilibrate
     sim.parameters['section'] = section
     sim.parameters['title'] = title
     sim.parameters['description'] = description
-    sim.parameters['duration'] = duration
     amp = -0.025
     context.sim.parameters['amp'] = amp
     vm_rest, vm_offset, context.i_holding[section][v_init] = offset_vm(section, context, v_init, dynamic=False)
@@ -241,22 +252,23 @@ def compute_features_leak(x, section, export=False, plot=False):
         result['soma vm_rest'] = vm_rest
         result['i_holding'] = context.i_holding
     if context.verbose > 0:
-        print('compute_features_leak: pid: %i; %s: %s took %.1f s; R_inp: %.1f' % \
-              (os.getpid(), title, description, time.time() - start_time, R_inp))
+        print('compute_features_leak: pid: %i; model_id: %s; %s: %s took %.1f s; R_inp: %.1f' % \
+              (os.getpid(), model_id, title, description, time.time() - start_time, R_inp))
         sys.stdout.flush()
     if plot:
         sim.plot()
     if export:
-        context.sim.export_to_file(context.temp_output_path)
+        context.sim.export_to_file(context.temp_output_path, model_label=model_id, category=title)
     sim.restore_state()
     sim.modify_stim('step', amp=0.)
     return result
 
 
-def get_objectives_leak(features, export=False):
+def get_objectives_leak(features, model_id=None, export=False):
     """
 
     :param features: dict
+    :param model_id: int or str
     :param export: bool
     :return: tuple of dict
     """

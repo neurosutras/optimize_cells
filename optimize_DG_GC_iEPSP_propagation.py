@@ -61,12 +61,18 @@ def main(cli, config_file_path, output_dir, export, export_file_path, label, ver
 
 
 def run_tests():
+    model_id = 0
+    if 'model_key' in context() and context.model_key is not None:
+        model_label = context.model_key
+    else:
+        model_label = 'test'
+
     features = dict()
     # Stage 0:
     args = context.interface.execute(get_args_dynamic_i_EPSC, context.x0_array, features)
     group_size = len(args[0])
-    sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
-                [[context.plot] * group_size]
+    sequences = [[context.x0_array] * group_size] + args + [[model_id] * group_size] + \
+                [[context.export] * group_size] + [[context.plot] * group_size]
     primitives = context.interface.map(compute_features_iEPSP_i_unit, *sequences)
     features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
     context.update(locals())
@@ -74,18 +80,23 @@ def run_tests():
     # Stage 1:
     args = context.interface.execute(get_args_dynamic_iEPSP_unit, context.x0_array, features)
     group_size = len(args[0])
-    sequences = [[context.x0_array] * group_size] + args + [[context.export] * group_size] + \
-                [[context.plot] * group_size]
+    sequences = [[context.x0_array] * group_size] + args + [[model_id] * group_size] + \
+                [[context.export] * group_size] + [[context.plot] * group_size]
     primitives = context.interface.map(compute_features_iEPSP_i_unit, *sequences)
-    this_features = context.interface.execute(filter_features_iEPSP_attenuation, primitives, features, context.export)
+    this_features = context.interface.execute(filter_features_iEPSP_attenuation, primitives, features,
+                                              model_id, context.export)
     features.update(this_features)
     context.update(locals())
 
-    features, objectives = context.interface.execute(get_objectives_iEPSP_attenuation, features, context.export)
+    features, objectives = context.interface.execute(get_objectives_iEPSP_attenuation, features, model_id,
+                                                     context.export)
     if context.export:
-        collect_and_merge_temp_output(context.interface, context.export_file_path, verbose=context.disp)
+        merge_exported_data(interface=context.interface, param_arrays=[context.x0_array],
+                            model_ids=[model_id], model_labels=[model_label], features=[features],
+                            objectives=[objectives], export_file_path=context.export_file_path,
+                            verbose=context.verbose > 1)
     sys.stdout.flush()
-    time.sleep(1.)
+    print('model_id: %i; model_labels: %s' % (model_id, model_label))
     print('params:')
     pprint.pprint(context.x0_dict)
     print('features:')
@@ -93,7 +104,7 @@ def run_tests():
     print('objectives:')
     pprint.pprint(objectives)
     sys.stdout.flush()
-    time.sleep(1.)
+    time.sleep(.1)
     if context.plot:
         context.interface.apply(plt.show)
     context.update(locals())
@@ -232,8 +243,6 @@ def config_sim_env(context):
                        i_unit=context.initial_i_EPSC, tau_rise=1., tau_decay=10.)
             context.i_syn_attrs.append(this_syn_attr_dict)
 
-    sim.parameters['duration'] = duration
-    sim.parameters['equilibrate'] = equilibrate
     context.previous_module = __file__
 
 
@@ -316,13 +325,14 @@ def get_args_dynamic_iEPSP_unit(x, features):
     return [[i_holding] * syn_count, list(range(1, syn_count + 1)), [i_EPSC] * syn_count]
 
 
-def compute_features_iEPSP_i_unit(x, i_holding, syn_index, i_EPSC=None, export=False, plot=False):
+def compute_features_iEPSP_i_unit(x, i_holding, syn_index, i_EPSC=None, model_id=None, export=False, plot=False):
     """
 
     :param x: array
     :param i_holding: defaultdict(dict: float)
     :param syn_index: int
     :param i_EPSC: float
+    :param model_id: int or str
     :param export: bool
     :param plot: bool
     :return: dict
@@ -386,25 +396,35 @@ def compute_features_iEPSP_i_unit(x, i_holding, syn_index, i_EPSC=None, export=F
 
     title = 'iEPSP_unit'
     description = '{!s} ({:d} um from soma)'.format(this_syn_name, int(this_syn_attr_dict['distance']))
+    sim.parameters = dict()
     sim.parameters['duration'] = duration
+    sim.parameters['equilibrate'] = equilibrate
     sim.parameters['title'] = title
     sim.parameters['description'] = description
 
     if context.verbose > 0:
-        print('compute_features_iEPSP_i_unit: pid: %i; %s: %s took %.3f s' %
-              (os.getpid(), title, description, time.time() - start_time))
+        print('compute_features_iEPSP_i_unit: pid: %i; model_id: %s; %s: %s took %.3f s' %
+              (os.getpid(), model_id, title, description, time.time() - start_time))
         sys.stdout.flush()
     if plot:
         context.sim.plot()
     if export:
-        context.sim.export_to_file(context.temp_output_path)
+        context.sim.export_to_file(context.temp_output_path, model_label=model_id, category=title)
     sim.restore_state()
     this_vs.play(h.Vector())
 
     return result
 
 
-def filter_features_iEPSP_attenuation(primitives, features, export=False):
+def filter_features_iEPSP_attenuation(primitives, features, model_id=None, export=False):
+    """
+
+    :param primitives: list of dict
+    :param features: dict
+    :param model_id: int or str
+    :param export: bool
+    :return: dict
+    """
 
     primitives.append({'i_EPSP_dend_ref': features['i_EPSP_dend_ref']})
 
@@ -439,26 +459,24 @@ def filter_features_iEPSP_attenuation(primitives, features, export=False):
     if export:
         description = 'iEPSP_attenuation'
         exp_distance, exp_attenuation = get_attenuation_data()
-        with h5py.File(context.export_file_path, 'a') as f:
-            if description not in f:
-                f.create_group(description)
-                f[description].attrs['enumerated'] = False
-            group = f[description]
-            group.attrs['i_EPSC'] = features['i_EPSC']
-            group.create_dataset('distance', compression='gzip', data=dist_arr)
-            group.create_dataset('attenuation', compression='gzip', data=atten_arr)
-            group.create_dataset('soma_iEPSP_amp', compression='gzip', data=soma_amp_arr)
-            group.create_dataset('dend_local_iEPSP_amp', compression='gzip', data=dend_local_amp_arr)
-            group.create_dataset('exp_distance', compression='gzip', data=exp_distance)
-            group.create_dataset('exp_attenuation', compression='gzip', data=exp_attenuation)
+        with h5py.File(context.temp_output_path, 'a') as f:
+            target = get_h5py_group(f, [model_id, description], create=True)
+            target.attrs['i_EPSC'] = features['i_EPSC']
+            target.create_dataset('distance', compression='gzip', data=dist_arr)
+            target.create_dataset('attenuation', compression='gzip', data=atten_arr)
+            target.create_dataset('soma_iEPSP_amp', compression='gzip', data=soma_amp_arr)
+            target.create_dataset('dend_local_iEPSP_amp', compression='gzip', data=dend_local_amp_arr)
+            target.create_dataset('exp_distance', compression='gzip', data=exp_distance)
+            target.create_dataset('exp_attenuation', compression='gzip', data=exp_attenuation)
 
     return new_features
 
 
-def get_objectives_iEPSP_attenuation(features, export=False):
+def get_objectives_iEPSP_attenuation(features, model_id=None, export=False):
     """
 
     :param features: dict
+    :param model_id: int or str
     :param export: bool
     :return: tuple of dict
     """
@@ -473,10 +491,12 @@ def get_objectives_iEPSP_attenuation(features, export=False):
     objectives['iEPSP_attenuation_residual'] = atten_resi
 
     if export:
-        with h5py.File(context.export_file_path, 'a') as f:
+        with h5py.File(context.temp_output_path, 'a') as f:
             description = 'iEPSP_attenuation'
-            f[description].create_dataset('gompertz_coeffs', compression='gzip', data=gompertz_coeffs)
-            f[description].attrs['gompertz_fn'] = '1+a*np.exp(-b*np.exp(-c*(t-m))), coeffs=(a,b,c,m)'
+            target = get_h5py_group(f, [model_id, description], create=True)
+            target.create_dataset('gompertz_coeffs', compression='gzip', data=gompertz_coeffs)
+            target.attrs['gompertz_fn'] = '1+a*np.exp(-b*np.exp(-c*(t-m))), coeffs=(a,b,c,m)'
+
     return features, objectives
 
 

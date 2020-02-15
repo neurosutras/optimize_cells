@@ -18,7 +18,7 @@ bounds:
   - 1.0E-9
   - 1.0E-2
   e_pas: !!python/tuple
-  - -70.0
+  - -80.0
   - -60.0
   ais.gbar_nax: !!python/tuple
   - 0.02
@@ -141,6 +141,7 @@ kwargs:
   config_prefix: ../dentate/config
   dataset_prefix: ../dentate/datasets
   results_path: data
+  km_mech_name: DGC_KM
 objective_names:
 # - dend R_inp
 - term_dend R_inp
@@ -209,7 +210,7 @@ target_val:
   ais_delay: 0.0
   rebound_firing: 0
   max_slow_depo: 5.0
-  min_slow_depo: 1.0
+  min_slow_depo: -1.0
   vm_th: -48.0
   vm_stability: 5.0
 x0:
