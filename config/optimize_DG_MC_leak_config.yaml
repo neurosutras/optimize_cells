@@ -15,8 +15,8 @@ bounds:
   - 1.0E-9
   - 1.0E-2
   dend.ghbar: !!python/tuple
-    - 1.0E-9
-    - 1.0E-2
+  - 1.0E-9
+  - 1.0E-2
 feature_names:
 - dend R_inp
 - term_dend R_inp

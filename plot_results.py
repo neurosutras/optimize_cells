@@ -852,63 +852,7 @@ def plot_helper(fig, show=True, filename_prefix=None, filename_suffix=None, save
         fig.savefig(filename, format=fig_format, transparent=transparent)
 
 
-def plot_exported_DG_MC_iEPSP_attenuation(file_path, model_label=None, axes=None, show=True, **kwargs):
-    """
-    :param file_path: str
-    :param model_label: int or str
-    :param axes: :class:'Axes'
-    :param show: bool
-    """
-    with h5py.File(file_path, 'r') as f:
-        group_name = 'iEPSP_attenuation'
-        source = get_h5py_group(f, [model_label, group_name])
-        expt_att = np.array(source['expmt_attenuation'])
-        expt_dist = np.array(source['expmt_distance'])
-        dend_dist = np.array(source['distance'])
-        expect_att = np.array(source['expected_attenuations'])
-        resultant_att = np.array(source['attenuation'])
-        gompertz_coeffs = np.array(source['gompertz_coeffs'])
-
-        local_dend_amp = np.array(source['local_dend_amp'])
-        ref_dend_amp = np.array(source['ref_dend_amp'])
-        soma_amp = np.array(source['soma_EPSP_amp'])
-
-    dist_arr = np.arange(0, 500, 5)
-    gompertz_line = gompertz(dist_arr, *gompertz_coeffs)   
-
-    if axes is None:
-        fig, axes = plt.subplots(2, sharex=True)
-
-    axes[0].plot(dist_arr, gompertz_line, label='experimental fit')
-    axes[0].scatter(expt_dist, expt_att,  label='experiment')
-
-    if dend_dist.size == expect_att.size:
-        axes[0].scatter(dend_dist, expect_att, label='model target')
-    else:
-        axes[0].scatter(dend_dist[:-1], expect_att, label='model target')
-
-    axes[0].scatter(dend_dist, resultant_att, label='model results')
-    axes[0].set_ylabel('Attenuation Ratio')
-#    axes[0].set_xlabel('Distance from soma [um]')
-    axes[0].set_title('iEPSP attenuation')
-    axes[0].legend(loc='best', frameon=False, framealpha=0.5)
-
-    axes[1].plot(dend_dist, local_dend_amp, marker='o', label='local dendrite')
-    axes[1].plot(dend_dist, ref_dend_amp, marker='x', label='reference dendrite')
-    axes[1].plot(dend_dist, soma_amp, marker='v', label='soma')
-    axes[1].set_ylabel('EPSP amplitude [mV]')
-    axes[1].set_xlabel('Distance from soma [um]')
-    axes[1].set_title('EPSP recordings')
-    axes[1].legend(loc='best', frameon=False, framealpha=0.5)
-
-    clean_axes(axes)
-    if show:
-        plt.show()
-    else:
-        return axes
-
-
-def plot_exported_DG_GC_iEPSP_attenuation(file_path, model_label=None, show=True, **kwargs):
+def plot_exported_DG_iEPSP_attenuation(file_path, model_label=None, show=True, **kwargs):
     """
     :param file_path: str
     :param model_label: int or str
@@ -951,6 +895,3 @@ def plot_exported_DG_GC_iEPSP_attenuation(file_path, model_label=None, show=True
     else:
         return axes
 
-
-def gompertz(t, a, b, c, m):
-    return 1+a*np.exp(-b*np.exp(-c*(t-m)))

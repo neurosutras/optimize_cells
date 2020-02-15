@@ -86,7 +86,6 @@ def run_tests():
     this_features = context.interface.execute(filter_features_iEPSP_attenuation, primitives, features,
                                               model_id, context.export)
     features.update(this_features)
-    context.update(locals())
 
     features, objectives = context.interface.execute(get_objectives_iEPSP_attenuation, features, model_id,
                                                      context.export)
@@ -132,12 +131,9 @@ def context_has_sim_env(context):
 
 
 def init_context():
-    """
 
-    """
     equilibrate = 250.  # time to steady-state
     stim_dur = 50.
-    num_pulses = 5
     trace_baseline = 10.
     duration = equilibrate + stim_dur
     dt = 0.025
@@ -247,16 +243,13 @@ def config_sim_env(context):
 
 
 def get_attenuation_data():
-    distance = np.array([  0.        ,  40.5904059 ,  45.29520295,  47.50922509, \
-                          77.39852399,  90.12915129,  90.68265683, 121.95571956, \
-                         126.93726937, 133.02583026, 138.83763838, 145.20295203, \
-                         150.46125461, 156.5498155 , 185.60885609, 185.88560886, \
-                         293.26568266])
+    distance = np.array([  0.        ,  40.5904059 ,  45.29520295,  47.50922509, 77.39852399,  90.12915129,
+                           90.68265683, 121.95571956, 126.93726937, 133.02583026, 138.83763838, 145.20295203,
+                           150.46125461, 156.5498155 , 185.60885609, 185.88560886, 293.26568266])
 
-    attenuation = np.array([1.        , 0.4453202 , 1.03940887, 0.16157635, 0.21871921, \
-                            0.2       , 0.14384236, 0.19014778, 0.12512315, 0.17536946, \
-                            0.23251232, 0.13300493, 0.38128079, 0.13103448, 0.0955665 , \
-                            0.13103448, 0.08571429])
+    attenuation = np.array([1.        , 0.4453202 , 1.03940887, 0.16157635, 0.21871921, 0.2       ,
+                            0.14384236, 0.19014778, 0.12512315, 0.17536946, 0.23251232, 0.13300493,
+                            0.38128079, 0.13103448, 0.0955665 , 0.13103448, 0.08571429])
     return distance, attenuation
 
 
@@ -267,10 +260,6 @@ def get_gompertz_coeffs(optimize=False):
     else:
         results = np.array([-0.87,  1.06160453,  0.06154768, 35.55592743])
     return results
-
-
-def gompertz(t, a, b, c, m):
-    return 1+a*np.exp(-b*np.exp(-c*(t-m)))
 
 
 def iEPSP_amp_error(x, syn_index):

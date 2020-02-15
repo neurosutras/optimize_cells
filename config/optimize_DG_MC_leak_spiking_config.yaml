@@ -12,8 +12,8 @@ bounds:
   - 1.0E-12
   - 1.0E-4
   dend.ghbar: !!python/tuple
-    - 1.0E-9
-    - 1.0E-2
+  - 1.0E-9
+  - 1.0E-2
   soma.ghbar: !!python/tuple
   - 1.0E-9
   - 1.0E-2

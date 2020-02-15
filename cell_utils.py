@@ -746,3 +746,7 @@ def check_for_pause_in_spiking(spike_times, duration):
         if pause_dur > 2. * max_ISI:
             return True
     return False
+
+
+def gompertz(t, a, b, c, m):
+    return 1+a*np.exp(-b*np.exp(-c*(t-m)))

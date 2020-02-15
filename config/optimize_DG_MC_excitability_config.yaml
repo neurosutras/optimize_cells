@@ -12,13 +12,13 @@ bounds:
   - 1.0E-12
   - 1.0E-4
   dend.ghbar: !!python/tuple
-    - 1.0E-9
-    - 1.0E-2
+  - 1.0E-9
+  - 1.0E-2
   soma.ghbar: !!python/tuple
   - 1.0E-9
   - 1.0E-2
   e_pas: !!python/tuple
-  - -70.0
+  - -80.0
   - -60.0
   ais.gbar_nax: !!python/tuple
   - 0.02
@@ -106,7 +106,7 @@ feature_names:
 - f_I_log10_slope
 - spike_adi_slope
 - spike_detector_delay
-- i_syn_amp
+- i_EPSC
 update_context:
 - - optimize_DG_MC_leak
   - reset_biophysics
@@ -126,23 +126,24 @@ get_features_stages:
   compute_features: compute_features_fI
   filter_features: filter_features_fI
 - source: optimize_DG_MC_iEPSP_propagation
-  get_args_dynamic: get_args_dynamic_iEPSP_unit_optimize
+  get_args_dynamic: get_args_dynamic_i_EPSC
   compute_features: compute_features_iEPSP_i_unit
 - source: optimize_DG_MC_iEPSP_propagation
   get_args_dynamic: get_args_dynamic_iEPSP_unit
   compute_features: compute_features_iEPSP_i_unit
-  filter_features: filter_features_attenuation
+  filter_features: filter_features_iEPSP_attenuation
 get_objectives:
   optimize_DG_MC_leak: get_objectives_leak
   optimize_DG_MC_spiking: get_objectives_spiking
   optimize_DG_MC_iEPSP_propagation: get_objectives_iEPSP_attenuation
 kwargs:
-  mech_file_path: mechanisms/20191029_DG_MC_excitability_mech.yaml
+  mech_file_path: mechanisms/20181127_DG_MC_only_leak_mech.yaml
+  max_i_EPSP_attenuation_distance: 300.
   gid: 1000000
   cell_type: MC
   correct_for_spines: False
   verbose: 2
-  daspk: True  # False
+  daspk: True
   cvode: False
   config_file: Small_Scale_Control_MC_BC.yaml
   template_paths: ../DGC/Mateos-Aparicio2014:../dentate/templates
@@ -150,6 +151,7 @@ kwargs:
   config_prefix: ../dentate/config
   dataset_prefix: ../dentate/datasets
   results_path: data
+  km_mech_name: DGC_KM
 objective_names:
 # - dend R_inp
 - term_dend R_inp
@@ -205,6 +207,7 @@ target_range:
   vm_stability: 0.5
   spike_rate: 0.1
   slow_depo: 0.1
+  iEPSP_attenuation: 0.001
 target_val:
   term_dend R_inp: 1000.
   dend R_inp: 117.
@@ -219,7 +222,7 @@ target_val:
   ais_delay: 0.0
   rebound_firing: 0
   max_slow_depo: 5.0
-  min_slow_depo: 1.0
+  min_slow_depo: -1.0
   vm_th: -48.0
   vm_stability: 5.0
   iEPSP_unit_amp: 1.

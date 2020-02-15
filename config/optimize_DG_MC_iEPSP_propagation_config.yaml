@@ -1,29 +1,31 @@
 bounds:
   soma.g_pas: !!python/tuple
   - 1.0E-12
-  - 1.0E-7
+  - 1.0E-4
 feature_names:
-- i_syn_amp
+- i_EPSC
 update_context:
 - - optimize_DG_MC_iEPSP_propagation
   - reset_biophysics
 get_features_stages:
 - source: optimize_DG_MC_iEPSP_propagation
-  get_args_dynamic: get_args_dynamic_iEPSP_unit_optimize 
-  compute_features: compute_features_iEPSP_i_unit 
+  get_args_dynamic: get_args_dynamic_i_EPSC
+  compute_features: compute_features_iEPSP_i_unit
 - source: optimize_DG_MC_iEPSP_propagation
-  get_args_dynamic: get_args_dynamic_iEPSP_unit 
-  compute_features: compute_features_iEPSP_i_unit 
-  filter_features: filter_features_attenuation
+  get_args_dynamic: get_args_dynamic_iEPSP_unit
+  compute_features: compute_features_iEPSP_i_unit
+  filter_features: filter_features_iEPSP_attenuation
 get_objectives:
-  optimize_DG_MC_iEPSP_propagation: get_objectives_iEPSP_attenuation 
+  optimize_DG_MC_iEPSP_propagation: get_objectives_iEPSP_attenuation
 kwargs:
-  mech_file_path: mechanisms/20191029_DG_MC_excitability_mech.yaml
+  mech_file_path: mechanisms/20181127_DG_MC_only_leak_mech.yaml
+  max_i_EPSP_attenuation_distance: 300.
   gid: 1000000
   cell_type: MC
-  correct_for_spines: False 
+  correct_for_spines: False
   verbose: 2
-  daspk: True 
+  daspk: True
+  cvode: False
   config_file: Small_Scale_Control_MC_BC.yaml
   template_paths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoc_lib_path: ../dentate
@@ -37,9 +39,8 @@ param_gen: PopulationAnnealing
 param_names:
 - soma.g_pas
 target_range:
+  iEPSP_attenuation: 0.001
 target_val:
   iEPSP_unit_amp: 1.
-  iEPSP_attenuation_short: 0.17
-  iEPSP_attenuation_long: 0.23
 x0:
   soma.g_pas: 1.050E-10

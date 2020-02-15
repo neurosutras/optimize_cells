@@ -146,7 +146,7 @@ objective_names:
 # - dend R_inp
 - term_dend R_inp
 - soma R_inp
-#- soma R_inp (no h)
+# - soma R_inp (no h)
 - soma vm_rest
 - soma vm_rest (no h)
 - vm_th
