@@ -29,6 +29,8 @@ feature_names:
 - initial_gain_AP5
 update_context:
 - - optimize_DG_GC_synaptic_integration
+  - reset_biophysics
+- - optimize_DG_GC_synaptic_integration
   - reset_syn_mechanisms
 - - optimize_DG_GC_synaptic_integration
   - update_syn_mechanisms

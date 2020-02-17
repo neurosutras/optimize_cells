@@ -704,7 +704,7 @@ def reset_syn_mechanisms(x, context=None):
     """
     if context is None:
         raise RuntimeError('reset_syn_mechanisms: missing required Context object')
-    init_syn_mech_attrs(context.cell, env=context.env, reset_mech_dict=True, update_targets=True)
+    init_syn_mech_attrs(context.cell, env=context.env, reset_mech_dict=False, update_targets=True)
 
 
 def log10_fit(x, slope, offset):
