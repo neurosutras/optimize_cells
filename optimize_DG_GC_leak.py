@@ -253,6 +253,10 @@ def compute_features_leak(x, section, model_id=None, export=False, plot=False):
     if section == 'soma':
         result['soma vm_rest'] = vm_rest
         if abs(context.i_holding[section][v_init]) > context.i_holding_max:
+            if context.verbose > 0:
+                print('compute_features_leak: pid: %i; model_id: %s; aborting - required i_holding out of range: %.1f' %
+                      (os.getpid(), model_id, context.i_holding[section][v_init]))
+                sys.stdout.flush()
             failed = True
         else:
             result['i_holding'] = context.i_holding
