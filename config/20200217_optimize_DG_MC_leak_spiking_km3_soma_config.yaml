@@ -78,14 +78,14 @@ rel_bounds:
   - '>'
   - 2.0
   - axon.gbar_nax
-- - axon.gkabar
-  - '<'
-  - 1.0
-  - soma.gkabar
-- - axon.gkdrbar
-  - '>='
-  - 1.0
-  - soma.gkdrbar
+# - - axon.gkabar
+#  - '<'
+#  - 1.0
+#  - soma.gkabar
+# - - axon.gkdrbar
+# - '>='
+#  - 1.0
+#  - soma.gkdrbar
 feature_names:
 - dend R_inp
 - term_dend R_inp
@@ -141,14 +141,14 @@ kwargs:
   config_prefix: ../dentate/config
   dataset_prefix: ../dentate/datasets
   results_path: data
-  km_mech_name: DGC_KM
+  km_mech_name: km3
 objective_names:
 # - dend R_inp
 - term_dend R_inp
 - soma R_inp
-- soma R_inp (no h)
+# - soma R_inp (no h)
 - soma vm_rest
-- soma vm_rest (no h)
+# - soma vm_rest (no h)
 - vm_th
 - ADP
 - fAHP
