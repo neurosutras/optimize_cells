@@ -126,6 +126,7 @@ def init_context():
     dt = 0.025
     v_init = -66.
     v_active = -60.
+    i_holding_max = 0.5  # nA
     context.update(locals())
 
 
@@ -166,18 +167,18 @@ def config_sim_env(context):
     sim = context.sim
     if not sim.has_rec('soma'):
         sim.append_rec(cell, cell.tree.root, name='soma', loc=0.5)
-    if context.v_init not in context.i_holding['soma']:
-        context.i_holding['soma'][context.v_init] = 0.
+    if context.v_active not in context.i_holding['soma']:
+        context.i_holding['soma'][context.v_active] = 0.
     if not sim.has_rec('dend'):
         dend, dend_loc = get_thickest_dend_branch(context.cell, 100., terminal=False)
         sim.append_rec(cell, dend, name='dend', loc=dend_loc)
-    if context.v_init not in context.i_holding['dend']:
-        context.i_holding['dend'][context.v_init] = 0.
+    if context.v_active not in context.i_holding['dend']:
+        context.i_holding['dend'][context.v_active] = 0.
     if not sim.has_rec('term_dend'):
         term_dend = get_distal_most_terminal_branch(context.cell, 250.)
         sim.append_rec(cell, term_dend, name='term_dend', loc=1.)
-    if context.v_init not in context.i_holding['term_dend']:
-        context.i_holding['term_dend'][context.v_init] = 0.
+    if context.v_active not in context.i_holding['term_dend']:
+        context.i_holding['term_dend'][context.v_active] = 0.
 
     equilibrate = context.equilibrate
     stim_dur = context.stim_dur
@@ -225,7 +226,7 @@ def compute_features_leak(x, section, block_h, model_id=None, export=False, plot
     duration = context.duration
     stim_dur = context.stim_dur
     equilibrate = context.equilibrate
-    v_init = context.v_init
+    v_active = context.v_active
     dt = context.dt
     sim = context.sim
 
@@ -242,7 +243,7 @@ def compute_features_leak(x, section, block_h, model_id=None, export=False, plot
     sim.parameters['description'] = description
     amp = -0.025
     context.sim.parameters['amp'] = amp
-    vm_rest, vm_offset, context.i_holding[section][v_init] = offset_vm(section, context, v_init, dynamic=False,
+    vm_rest, vm_offset, context.i_holding[section][v_active] = offset_vm(section, context, v_active, dynamic=False,
                                                                        cvode=context.cvode)
     sim.modify_stim('holding', dur=duration)
     rec_dict = sim.get_rec(section)
@@ -254,10 +255,11 @@ def compute_features_leak(x, section, block_h, model_id=None, export=False, plot
     sim.modify_stim('step', node=node, loc=loc, amp=amp, dur=stim_dur)
     sim.backup_state()
     sim.set_state(dt=dt, tstop=duration, cvode=context.cvode)
-    sim.run(v_init)
+    sim.run(v_active)
 
     R_inp = get_R_inp(np.array(sim.tvec), np.array(rec), equilibrate, duration, amp, dt)[2]
     result = dict()
+    failed = False
     if section == 'soma':
         if block_h:
             result['%s R_inp (no h)' % section] = R_inp
@@ -265,7 +267,10 @@ def compute_features_leak(x, section, block_h, model_id=None, export=False, plot
         else:
             result['%s R_inp' % section] = R_inp
             result['soma vm_rest'] = vm_rest
-            result['i_holding'] = context.i_holding
+            if abs(context.i_holding[section][v_active]) > context.i_holding_max:
+                failed = True
+            else:
+                result['i_holding'] = context.i_holding
     else:
         result['%s R_inp' % section] = R_inp
     if context.verbose > 0:
@@ -278,6 +283,9 @@ def compute_features_leak(x, section, block_h, model_id=None, export=False, plot
         context.sim.export_to_file(context.temp_output_path, model_label=model_id, category=title)
     sim.restore_state()
     sim.modify_stim('step', amp=0.)
+    if failed:
+        return dict()
+
     return result
 
 

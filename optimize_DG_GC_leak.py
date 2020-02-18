@@ -126,6 +126,7 @@ def init_context():
     dt = 0.025
     v_init = -77.
     v_active = -77.
+    i_holding_max = 0.5  # nA
     context.update(locals())
 
 
@@ -248,9 +249,13 @@ def compute_features_leak(x, section, model_id=None, export=False, plot=False):
     R_inp = get_R_inp(np.array(sim.tvec), np.array(rec), equilibrate, duration, amp, dt)[2]
     result = dict()
     result['%s R_inp' % section] = R_inp
+    failed = False
     if section == 'soma':
         result['soma vm_rest'] = vm_rest
-        result['i_holding'] = context.i_holding
+        if abs(context.i_holding[section][v_init]) > context.i_holding_max:
+            failed = True
+        else:
+            result['i_holding'] = context.i_holding
     if context.verbose > 0:
         print('compute_features_leak: pid: %i; model_id: %s; %s: %s took %.1f s; R_inp: %.1f' % \
               (os.getpid(), model_id, title, description, time.time() - start_time, R_inp))
@@ -261,6 +266,9 @@ def compute_features_leak(x, section, model_id=None, export=False, plot=False):
         context.sim.export_to_file(context.temp_output_path, model_label=model_id, category=title)
     sim.restore_state()
     sim.modify_stim('step', amp=0.)
+    if failed:
+        return dict()
+
     return result
 
 
