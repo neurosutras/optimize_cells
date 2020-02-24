@@ -5,6 +5,9 @@ bounds:
   dend.g_pas tau: !!python/tuple
   - 25.
   - 400.
+  dend.g_pas xhalf: !!python/tuple
+  - 25.
+  - 400.
   dend.gkabar: !!python/tuple
   - 0.005
   - 0.075
@@ -142,6 +145,7 @@ kwargs:
   dataset_prefix: ../dentate/datasets
   results_path: data
   km_mech_name: km3
+  terminal_inherits_pas: False
 objective_names:
 # - dend R_inp
 - term_dend R_inp
@@ -164,6 +168,7 @@ param_names:
 - soma.g_pas
 - dend.g_pas slope
 - dend.g_pas tau
+- dend.g_pas xhalf
 - dend.ghbar
 - dend.gkabar
 - e_pas
@@ -216,6 +221,7 @@ target_val:
 x0:
   dend.g_pas slope: 2.301342E-05
   dend.g_pas tau: 1.153835E+02
+  dend.g_pas xhalf: 1.153835E+02
   dend.ghbar: 1.e-3
   dend.gkabar: 3.166313E-02
   soma.g_pas: 3.453683E-06

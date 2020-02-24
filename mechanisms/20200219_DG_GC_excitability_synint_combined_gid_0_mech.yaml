@@ -1,7 +1,7 @@
 ais:
   DGC_KM:
     gbar:
-      value: 0.03619096
+      value: 0.02010882400706735
   cable:
     Ra:
       origin: soma
@@ -12,17 +12,17 @@ ais:
       origin: soma
   kap:
     gkabar:
-      value: 0.02006215
+      value: 0.005675807083664574
   kdr:
     gkdrbar:
-      value: 0.0749077
+      value: 0.07349575863078286
   nax:
     gbar:
-      value: 0.3751934
+      value: 0.3288847514772877
     sh:
       origin: hillock
     sha:
-      value: -3.259466
+      value: -3.706063136176014
   pas:
     e:
       origin: soma
@@ -43,26 +43,26 @@ apical:
       min_loc: 75.0
       origin: soma
       outside: 0.0
-      slope: 0.0001029575666666667
-      value: 0.0794589475
+      slope: 0.0006843214613649753
+      value: 0.06523161591522526
     - min_loc: 300.0
       origin: soma
-      value: 0.1026244
+      value: 0.2192039447223447
   kap:
     gkabar:
       max_loc: 75.0
       origin: soma
       outside: 0.0
-      slope: 0.0001029575666666667
+      slope: 0.0006843214613649753
   kdr:
     gkdrbar:
-      value: 0.001359056
+      value: 0.007366023067173429
   nas:
     gbar:
-    - value: 0.0183707
+    - value: 0.016944180528212453
     - custom:
         func: custom_filter_modify_slope_if_terminal
-      min: 0.0146289
+      min: 0.012960025046783293
       origin: parent
       slope: 0.0
     sh:
@@ -74,8 +74,8 @@ apical:
       origin: soma
     g:
       origin: soma
-      slope: 3.174126e-05
-      tau: 291.1842
+      slope: 6.0797586355382916e-05
+      tau: 309.22309515713016
   synapses:
     AMPA:
       g_unit:
@@ -83,9 +83,9 @@ apical:
           syn_types:
           - excitatory
         origin: soma
-        slope: 3.435182e-06
-        tau: 318.4192
-        value: 0.0001863348
+        slope: 4.8853351979008095e-06
+        tau: 69.37288992690708
+        value: 0.00020938119103124992
       - custom:
           func: custom_filter_if_terminal
         filters:
@@ -111,22 +111,22 @@ apical:
         filters:
           syn_types:
           - excitatory
-        value: 6.034749
+        value: 5.11520052441336
       g_unit:
         filters:
           syn_types:
           - excitatory
-        value: 0.003046559
+        value: 0.001482637648790408
       gamma:
         filters:
           syn_types:
           - excitatory
-        value: 0.08192873
+        value: 0.07049474192334064
       vshift:
         filters:
           syn_types:
           - excitatory
-        value: 6.962977
+        value: -3.2850118424061643
 axon:
   DGC_KM:
     gbar:
@@ -147,7 +147,7 @@ axon:
       origin: ais
   nax:
     gbar:
-      value: 0.06113244
+      value: 0.07000405295686614
     sh:
       origin: hillock
   pas:
@@ -158,7 +158,7 @@ axon:
 hillock:
   DGC_KM:
     gbar:
-      value: 0.03619096
+      value: 0.02010882400706735
   cable:
     Ra:
       origin: soma
@@ -175,9 +175,9 @@ hillock:
       origin: soma
   nax:
     gbar:
-      value: 0.04944154
+      value: 0.03570518945380414
     sh:
-      value: 6.907464
+      value: 7.019020166871956
   pas:
     e:
       origin: soma
@@ -186,13 +186,13 @@ hillock:
 soma:
   Ca:
     gcamult:
-      value: 0.02524325
+      value: 0.8000501195431077
   Cacum:
     tau:
-      value: 18.29317
+      value: 75.95763388932427
   CadepK:
     gcakmult:
-      value: 0.4237601
+      value: 1.3179223567377887
   cable:
     Ra:
       value: 150.0
@@ -203,17 +203,17 @@ soma:
       value: -80.0
   kap:
     gkabar:
-      value: 0.07173713
+      value: 0.013907506312852114
   kdr:
     gkdrbar:
-      value: 0.06344238
+      value: 0.0412062507242646
   nas:
     gbar:
-      value: 0.04944154
+      value: 0.03570518945380414
     sh:
-      value: 6.907464
+      value: 7.019020166871956
   pas:
     e:
-      value: -74.0057
+      value: -74.55125734497676
     g:
-      value: 2.429531e-08
+      value: 2.7522221384773962e-08
