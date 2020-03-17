@@ -159,7 +159,7 @@ objective_names:
 - spike_adaptation_residuals
 - f_I_residuals
 optimization_title: DG_MC_leak_spiking
-param_gen: PopulationAnnealing
+param_gen: Sobol
 param_names:
 - soma.g_pas
 - dend.g_pas slope
