@@ -545,10 +545,13 @@ def compute_features_fI(x, i_holding, spike_detector_delay, rheobase, relative_a
         vm_stability = abs(v_after - vm_rest)
         result['vm_stability'] = vm_stability
         result['rebound_firing'] = len(np.where(spike_times > stim_dur)[0])
-        last_spike_time = spike_times[-1]
-        last_spike_index = int((last_spike_time + equilibrate - spike_detector_delay) / dt)
-        vm_th_late = np.mean(vm[last_spike_index - int(0.1 / dt):last_spike_index])
-        result['vm_th_late'] = vm_th_late
+        if len(spike_times):
+            last_spike_time = spike_times[-1]
+            last_spike_index = int((last_spike_time + equilibrate - spike_detector_delay) / dt)
+            vm_th_late = np.mean(vm[last_spike_index - int(0.1 / dt):last_spike_index])
+            result['vm_th_late'] = vm_th_late
+        else:
+            result['vm_th_late'] = np.array([]) 
         result['pause_in_spiking'] = check_for_pause_in_spiking(spike_times, stim_dur)
 
     spike_rate = len(spike_times[np.where(spike_times < stim_dur)[0]]) / stim_dur * 1000.
