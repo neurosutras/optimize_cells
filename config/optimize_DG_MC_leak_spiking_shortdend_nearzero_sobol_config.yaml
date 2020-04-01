@@ -70,22 +70,6 @@ bounds:
   - 100.
 default_params:
 rel_bounds:
-- - axon.gbar_nax
-  - '>'
-  - 1.0
-  - soma.gbar_nas
-- - ais.gbar_nax
-  - '>'
-  - 2.0
-  - axon.gbar_nax
-- - axon.gkabar
-  - '<'
-  - 1.0
-  - soma.gkabar
-- - axon.gkdrbar
-  - '>='
-  - 1.0
-  - soma.gkdrbar
 feature_names:
 - dend R_inp
 - term_dend R_inp
