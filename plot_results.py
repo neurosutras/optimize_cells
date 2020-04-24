@@ -595,6 +595,8 @@ def plot_exported_DG_MC_spiking_features(file_path, model_label=None, **kwargs):
         axes1.set_ylim(0., axes1.get_ylim()[1])
         axes1.set_xlim(0., axes1.get_xlim()[1])
         axes1.set_title('f-I', fontsize=mpl.rcParams['font.size'])
+        if 'spe' in kwargs.keys():
+            annotate_axes(axes1, txt=kwargs['spe'])
         clean_axes(axes1)
         fig1.tight_layout()
         plot_helper(fig1, filename_suffix='DG_MC_{!s}'.format(group_name), **kwargs)
@@ -611,6 +613,8 @@ def plot_exported_DG_MC_spiking_features(file_path, model_label=None, **kwargs):
         axes2.set_ylabel('Spike adaptation (%)\n(Last ISI/First ISI)')
         axes2.set_ylim(0., axes2.get_ylim()[1])
         axes2.set_title('Spike rate adaptation', fontsize=mpl.rcParams['font.size'])
+        if 'spe' in kwargs.keys():
+            annotate_axes(axes2, txt=kwargs['spe'])
         clean_axes(axes2)
         fig2.tight_layout()
         plot_helper(fig2, filename_suffix='DG_MC_{!s}'.format(group_name), **kwargs)
@@ -746,6 +750,8 @@ def plot_sim_from_file(file_path, model_label=None, category=None, group_name='s
                 ylabel = get_h5py_attr(rec.attrs, 'ylabel')
                 units = get_h5py_attr(rec.attrs, 'units')
                 axes.set_ylabel('%s (%s)' % (ylabel, units))
+                if 'spe' in kwargs.keys():
+                    annotate_axes(axes, txt=kwargs['spe'])
             axes.legend(loc='best', frameon=False, framealpha=0.5)
             title = None
             if 'title' in trial.attrs:
@@ -894,4 +900,9 @@ def plot_exported_DG_iEPSP_attenuation(file_path, model_label=None, show=True, *
         fig.show()
     else:
         return axes
+
+def annotate_axes(ax, txt, pos=None):
+    if pos is None:
+        pos = (0.9, 0.5)
+    ax.annotate(txt, xy=pos, xycoords='axes fraction')
 
