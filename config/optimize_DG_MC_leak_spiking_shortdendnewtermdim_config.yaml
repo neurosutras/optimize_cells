@@ -6,62 +6,62 @@ bounds:
   - 25.
   - 400.
   dend.gkabar: !!python/tuple
-  - 5.0E-5
-  - 1.0E-02
+  - 0.005
+  - 0.075
   soma.g_pas: !!python/tuple
-  - 5.0E-7
-  - 1.0E-02
+  - 1.0E-12
+  - 1.0E-4
   dend.ghbar: !!python/tuple
-  - 5.0E-5
-  - 1.0E-02
+  - 1.0E-9
+  - 1.0E-2
   soma.ghbar: !!python/tuple
-  - 5.0E-5
-  - 1.0E-02
+  - 1.0E-9
+  - 1.0E-2
   e_pas: !!python/tuple
   - -80.0
   - -60.0
   ais.gbar_nax: !!python/tuple
-  - 5.0E-5
-  - 1.0E-02
+  - 0.02
+  - 0.5
   ais.gkmbar: !!python/tuple
-  - 5.0E-5
-  - 1.0E-02
+  - 0.00005
+  - 0.05
   ais.sha_nax: !!python/tuple
   - -6.0
   - -1.0
   axon.gbar_nax: !!python/tuple
-  - 5.0E-5
-  - 1.0E-02
+  - 0.02
+  - 0.1
   axon.gkabar: !!python/tuple
-  - 5.0E-5
-  - 1.0E-02
+  - 0.001
+  - 0.05
   soma.gtcabar: !!python/tuple
-  - 5.0E-5
+  - 5.0E-7
   - 2.0E-02
   soma.gncabar: !!python/tuple
-  - 5.0E-5
+  - 5.0E-7
   - 2.0E-02
   soma.glcabar: !!python/tuple
-  - 5.0E-5
+  - 5.0E-7
   - 2.0E-02
   soma.gbkbar: !!python/tuple
-  - 5.0E-5
-  - 1.0E-02
+  - 5.0E-08
+  - 1.0E-03
   soma.gskbar: !!python/tuple
-  - 5.0E-5
-  - 1.0E-02
+  - 5.0E-08
+  - 1.0E-03
   soma.gbar_nas: !!python/tuple
-  - 5.0E-5
-  - 1.0E-02
+  - 0.01
+  - 0.05
   soma.gkabar: !!python/tuple
-  - 5.0E-5
-  - 1.0E-02
+  - 0.005
+  - 0.075
   soma.gkdrbar: !!python/tuple
-  - 5.0E-5
-  - 1.0E-02
+  - 0.001
+  - 0.075
   axon.gkdrbar: !!python/tuple
-  - 5.0E-5
-  - 1.0E-02
+  - 0.001
+  - 0.075
   soma.sh_nas/x: !!python/tuple
   - 1.0
   - 8.0
@@ -70,6 +70,22 @@ bounds:
   - 100.
 default_params:
 rel_bounds:
+- - axon.gbar_nax
+  - '>'
+  - 1.0
+  - soma.gbar_nas
+- - ais.gbar_nax
+  - '>'
+  - 2.0
+  - axon.gbar_nax
+- - axon.gkabar
+  - '<'
+  - 1.0
+  - soma.gkabar
+- - axon.gkdrbar
+  - '>='
+  - 1.0
+  - soma.gkdrbar
 feature_names:
 - dend R_inp
 - term_dend R_inp
@@ -119,7 +135,7 @@ kwargs:
   verbose: 2
   daspk: True  # False
   cvode: False
-  config_file: Small_Scale_Control_MC_BC_shortdend.yaml
+  config_file: Small_Scale_Control_MC_BC_shortdendnewtermdim.yaml 
   template_paths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoc_lib_path: ../dentate
   config_prefix: ../dentate/config
@@ -130,20 +146,20 @@ objective_names:
 # - dend R_inp
 - term_dend R_inp
 - soma R_inp
-- soma R_inp (no h)
+#- soma R_inp (no h)
 - soma vm_rest
-- soma vm_rest (no h)
+#- soma vm_rest (no h)
 - vm_th
-- ADP
-- fAHP
-- rebound_firing
+#- ADP
+#- fAHP
+#- rebound_firing
 - vm_stability
 - ais_delay
 - slow_depo
-- spike_adaptation_residuals
+#- spike_adaptation_residuals
 - f_I_residuals
 optimization_title: DG_MC_leak_spiking
-param_gen: Sobol
+param_gen: PopulationAnnealing
 param_names:
 - soma.g_pas
 - dend.g_pas slope

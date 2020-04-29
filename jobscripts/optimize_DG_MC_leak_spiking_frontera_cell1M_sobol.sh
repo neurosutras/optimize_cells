@@ -1,11 +1,11 @@
 #!/bin/bash -l
 
 #SBATCH -J optimize_DG_MC_leak_spiking_shortdend_cell1000000_nearzerobounds_sobol
-#SBATCH -o /scratch1/04119/pmoolcha/HDM/optimize_cells/logs/optimize_DG_MC_excitability_cell1000000_20200316.%j.o
-#SBATCH -e /scratch1/04119/pmoolcha/HDM/optimize_cells/logs/optimize_DG_MC_excitability_cell1000000_20200316.%j.e
+#SBATCH -o /scratch1/04119/pmoolcha/HDM/optimize_cells/logs/optimize_DG_MC_leak_spiking_Sobol_resbounds_cell1000000_20200316.%j.o
+#SBATCH -e /scratch1/04119/pmoolcha/HDM/optimize_cells/logs/optimize_DG_MC_leak_spiking_Sobol_resbounds_cell1000000_20200316.%j.e
 #SBATCH -p normal 
-#SBATCH -N 22 -n 1232 
-#SBATCH -t 15:00:00
+#SBATCH -N 90 -n 5040 
+#SBATCH -t 5:00:00
 #SBATCH -A BIR20001
 #SBATCH --mail-user=pmoolcha@stanford.edu
 #SBATCH --mail-type=BEGIN,END,FAIL
@@ -30,4 +30,8 @@ cd /scratch1/04119/pmoolcha/HDM/optimize_cells
 
 #ibrun python3 -m nested.optimize --config-file-path='config/optimize_DG_MC_leak_spiking_shortdend_M_curr_soma_config.yaml' --pop_size=200 --max_iter=50 --path_length=3 --disp --output-dir=data --label=cell1000000 --export --hot-start --storage-file-path='data/20200129_1429_DG_MC_leak_spiking_cell1000000_PopulationAnnealing_optimization_history.hdf5'
 
-ibrun python3 -m nested.optimize --config-file-path='data/20200331_1820_20200327_1848_optimize_DG_MC_leak_spiking_shortdend_nearzero_sobol_config.yaml' --output-dir=data --label=cell1000000 --export --num_models=30000 --param-gen=Sobol --hot-start --storage-file-path=data/20200331_1820_DG_MC_leak_spiking_cell1000000_Sobol_optimization_history.hdf5 --pregen_param_file_path=data/20200331_1820_Sobol_sequence.hdf5 --verbose=0 --pop_size=100
+#ibrun python3 -m nested.optimize --config-file-path='data/20200331_1820_20200327_1848_optimize_DG_MC_leak_spiking_shortdend_nearzero_sobol_config.yaml' --output-dir=data --label=cell1000000 --export --num_models=30000 --param-gen=Sobol --hot-start --storage-file-path=data/20200331_1820_DG_MC_leak_spiking_cell1000000_Sobol_optimization_history.hdf5 --pregen_param_file_path=data/20200331_1820_Sobol_sequence.hdf5 --verbose=0 --pop_size=100
+
+#ibrun python3 -m nested.optimize --config-file-path='config/optimize_DG_MC_leak_spiking_shortdend_resbounds_sobol_config.yaml' --output-dir=data --label=cell1000000 --export --num_models=30240 --param-gen=Sobol --pop_size=840
+
+ibrun python3 -m nested.optimize --config-file-path='data/20200422_0849_optimize_DG_MC_leak_spiking_shortdend_resbounds_sobol_config.yaml' --output-dir=data --label=cell1000000 --export --num_models=30240 --param-gen=Sobol --hot-start --storage-file-path='data/20200422_0849_DG_MC_leak_spiking_cell1000000_Sobol_optimization_history.hdf5' --pregen_param_file_path='data/20200422_0849_Sobol_sequence.hdf5' --verbose=0 --pop_size=840

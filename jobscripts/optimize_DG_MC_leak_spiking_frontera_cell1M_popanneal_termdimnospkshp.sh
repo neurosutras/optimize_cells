@@ -1,8 +1,8 @@
 #!/bin/bash -l
 
-#SBATCH -J optimize_DG_MC_leak_spiking_shortdend_cell1000000_earlier_bounds_popanneal
-#SBATCH -o /scratch1/04119/pmoolcha/HDM/optimize_cells/logs/optimize_DG_MC_leak_spike_cell1000000_20200316.%j.o
-#SBATCH -e /scratch1/04119/pmoolcha/HDM/optimize_cells/logs/optimize_DG_MC_leak_spike_cell1000000_20200316.%j.e
+#SBATCH -J optimize_DG_MC_leak_spiking_shortdendnewtermdimnospkshp_cell1000000_earlier_bounds_popanneal
+#SBATCH -o /scratch1/04119/pmoolcha/HDM/optimize_cells/logs/optimize_DG_MC_leak_spike_cell1000000_20200427.%j.o
+#SBATCH -e /scratch1/04119/pmoolcha/HDM/optimize_cells/logs/optimize_DG_MC_leak_spike_cell1000000_20200427.%j.e
 #SBATCH -p normal 
 #SBATCH -N 22 -n 1232 
 #SBATCH -t 12:00:00
@@ -22,7 +22,7 @@ cd /scratch1/04119/pmoolcha/HDM/optimize_cells
 
 #ibrun python3 -m nested.optimize --config-file-path='config/optimize_DG_MC_leak_spiking_config.yaml' --pop_size=200 --max_iter=50 --path_length=3 --disp --output-dir=data --label=cell1000000 --export
 
-ibrun python3 -m nested.optimize --config-file-path='config/optimize_DG_MC_leak_spiking_shortdend_config.yaml' --pop_size=200 --max_iter=50 --path_length=3 --disp --output-dir=data --label=cell1000000 --export
+ibrun python3 -m nested.optimize --config-file-path='config/optimize_DG_MC_leak_spiking_frontera_cell1M_popanneal_termdimnospkshp.sh' --pop_size=200 --max_iter=50 --path_length=3 --disp --output-dir=data --label=cell1000000 --export
 
 #ibrun python3 -m nested.optimize --config-file-path='config/optimize_DG_MC_leak_spiking_shortdend_nearzero_popanneal_config.yaml' --pop_size=200 --max_iter=50 --path_length=3 --disp --output-dir=data --label=cell1000000 --export
 
