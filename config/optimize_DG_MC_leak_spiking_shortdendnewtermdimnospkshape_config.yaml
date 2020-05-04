@@ -141,18 +141,19 @@ kwargs:
   config_prefix: ../dentate/config
   dataset_prefix: ../dentate/datasets
   results_path: data
-  km_mech_name: km3 
+#  km_mech_name: km3 
+  km_mech_name: DGC_KM
 objective_names:
 # - dend R_inp
 - term_dend R_inp
 - soma R_inp
-- soma R_inp (no h)
+#- soma R_inp (no h)
 - soma vm_rest
-- soma vm_rest (no h)
+#- soma vm_rest (no h)
 - vm_th
-- ADP
-- fAHP
-- rebound_firing
+#- ADP
+#- fAHP
+#- rebound_firing
 - vm_stability
 - ais_delay
 - slow_depo
