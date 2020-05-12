@@ -151,8 +151,8 @@ kwargs:
   config_prefix: ../dentate/config
   dataset_prefix: ../dentate/datasets
   results_path: data
-#  km_mech_name: km3 
-  km_mech_name: DGC_KM
+  km_mech_name: km3
+  # km_mech_name: DGC_KM
 objective_names:
 # - dend R_inp
 - term_dend R_inp
@@ -170,7 +170,7 @@ objective_names:
 #- spike_adaptation_residuals
 - f_I_residuals
 - iEPSP_attenuation_residual
-optimization_title: DG_MC_leak_spiking
+optimization_title: DG_MC_excitability
 param_gen: PopulationAnnealing
 param_names:
 - soma.g_pas

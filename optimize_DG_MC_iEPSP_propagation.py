@@ -337,7 +337,7 @@ def compute_features_iEPSP_i_unit(x, i_holding, syn_index, i_EPSC=None, model_id
 
     v_init = context.v_init
     context.i_holding = i_holding
-    offset_vm('soma', context, v_init, i_history=context.i_holding, dynamic=False)
+    offset_vm('soma', context, v_init, i_history=context.i_holding, dynamic=False, cvode=context.cvode)
 
     sim = context.sim
     sim.modify_stim('holding', dur=duration)
@@ -358,7 +358,7 @@ def compute_features_iEPSP_i_unit(x, i_holding, syn_index, i_EPSC=None, model_id
         bounds = [(-0.3, -0.005)]
         i_EPSC_result = scipy.optimize.minimize(iEPSP_amp_error, [i_EPSC], args=(syn_index,), method='L-BFGS-B',
                                                 bounds=bounds, options={'ftol': 1e-3, 'disp': context.verbose > 1,
-                                                                        'maxiter': 5})
+                                                                        'maxiter': 3})
         i_EPSC = i_EPSC_result.x[0]
 
     config_syn(context.syn_mech_name, context.env.synapse_attributes.syn_param_rules, syn=this_syn, nc=this_nc,

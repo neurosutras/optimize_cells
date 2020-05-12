@@ -141,8 +141,8 @@ kwargs:
   config_prefix: ../dentate/config
   dataset_prefix: ../dentate/datasets
   results_path: data
-#  km_mech_name: km3 
-  km_mech_name: DGC_KM
+  km_mech_name: km3
+  # km_mech_name: DGC_KM
 objective_names:
 # - dend R_inp
 - term_dend R_inp

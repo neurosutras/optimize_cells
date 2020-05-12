@@ -18,7 +18,7 @@ get_features_stages:
 get_objectives:
   optimize_DG_MC_iEPSP_propagation: get_objectives_iEPSP_attenuation
 kwargs:
-  mech_file_path: mechanisms/20181127_DG_MC_only_leak_mech.yaml
+  mech_file_path: mechanisms/20200511_0641_DG_MC_leak_spiking_mech.yaml
   max_i_EPSP_attenuation_distance: 300.
   gid: 1000000
   cell_type: MC
@@ -26,7 +26,7 @@ kwargs:
   verbose: 2
   daspk: True
   cvode: False
-  config_file: Small_Scale_Control_MC_BC.yaml
+  config_file: Small_Scale_Control_MC_BC_shortdendnewtermdim.yaml
   template_paths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoc_lib_path: ../dentate
   config_prefix: ../dentate/config
