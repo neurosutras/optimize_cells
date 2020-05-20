@@ -145,19 +145,14 @@ kwargs:
   verbose: 2
   daspk: True  # False
   cvode: False
-  config_file: Small_Scale_Control_MC_BC_shortdendnewtermdim.yaml 
+  config_file:  Small_Scale_Control_MC_BC_NewMorph.yaml 
   template_paths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoc_lib_path: ../dentate
   config_prefix: ../dentate/config
   dataset_prefix: ../dentate/datasets
   results_path: data
-<<<<<<< Updated upstream
-  km_mech_name: km3
-  # km_mech_name: DGC_KM
-=======
   km_mech_name: km3 
 #  km_mech_name: DGC_KM
->>>>>>> Stashed changes
 objective_names:
 # - dend R_inp
 - term_dend R_inp
