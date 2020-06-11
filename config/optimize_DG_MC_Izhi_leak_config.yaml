@@ -1,0 +1,72 @@
+bounds:
+  soma.C: !!python/tuple
+  - 0.1 
+  - 2.0
+  soma.k: !!python/tuple
+  - 0.2 
+  - 1.6
+  soma.a: !!python/tuple
+  - 0.04
+  - 0.01 
+  soma.b: !!python/tuple
+  - -3.0
+  - -1.0 
+  soma.c: !!python/tuple
+  - -65.0
+  - -40.0 
+  soma.d: !!python/tuple
+  - 10.0 
+  - 150.0
+default_params:
+rel_bounds:
+feature_names:
+- soma R_inp
+- vm_stability
+update_context:
+- - optimize_DG_MC_Izhi_leak
+  - update_mechanisms_leak
+get_features_stages:
+- source: optimize_DG_MC_Izhi_leak
+  get_args_static: get_args_static_leak
+  compute_features: compute_features_leak
+get_objectives:
+  optimize_DG_MC_leak: get_objectives_leak
+kwargs:
+  mech_file_path: mechanisms/20200611_DG_MC_only_Izhi_leak_mech.yaml 
+  gid: 1000000
+  cell_type: MC
+  correct_for_spines: False
+  verbose: 2
+  daspk: True  # False
+  cvode: False
+  config_file: Small_Scale_Control_MC_BC_NewMorph.yaml 
+  template_paths: ../DGC/Mateos-Aparicio2014:../dentate/templates
+  hoc_lib_path: ../dentate
+  config_prefix: ../dentate/config
+  dataset_prefix: ../dentate/datasets
+  results_path: data
+objective_names:
+- soma R_inp
+- vm_stability
+optimization_title: DG_MC_leak_leak
+param_gen: PopulationAnnealing
+param_names:
+- soma.C
+- soma.k
+- soma.a
+- soma.b
+- soma.c
+- soma.d
+target_range:
+  soma R_inp: 0.5
+  vm_stability: 0.5
+target_val:
+  soma R_inp: 126.
+  vm_stability: 5.0
+x0:
+  soma.C: 1.0
+  soma.k: 0.7
+  soma.a: 0.03
+  soma.b: -2
+  soma.c: -65
+  soma.d: 100

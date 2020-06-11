@@ -755,7 +755,7 @@ def gompertz(t, a, b, c, m):
 class IzhiCell(object):
     # Integrate-and-fire-like neuronal cell models with additional tunable dynamic parameters (e.g. adaptation).
     # Derived from http://modeldb.yale.edu/39948
-    def __init__(self, pop_name=None, gid=None, cell_type=None, cell_type_param_dict=None):
+    def __init__(self, pop_name=None, gid=None, cell_type=None, cell_type_param_dict=None, sec_name='soma'):
         """
 
         :param pop_name: str
@@ -781,7 +781,7 @@ class IzhiCell(object):
 
         self.cell_type_dict = type_def_dict
 
-        self.sec = h.Section(cell=self)
+        self.sec = h.Section(cell=self, name=sec_name)
         self.sec.L, self.sec.diam = 10., 10.
         self.izh = h.Izhi2019(.5, sec=self.sec)
         self.base_cm = 31.831  # Produces membrane time constant of 8 ms for a RS cell with izh.C = 1. and izi.k = 0.7
