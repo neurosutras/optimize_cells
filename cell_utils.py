@@ -750,3 +750,77 @@ def check_for_pause_in_spiking(spike_times, duration):
 
 def gompertz(t, a, b, c, m):
     return 1+a*np.exp(-b*np.exp(-c*(t-m)))
+
+
+class IzhiCell(object):
+    # Integrate-and-fire-like neuronal cell models with additional tunable dynamic parameters (e.g. adaptation).
+    # Derived from http://modeldb.yale.edu/39948
+    def __init__(self, pop_name=None, gid=None, cell_type=None, cell_type_param_dict=None):
+        """
+
+        :param pop_name: str
+        :param gid: int
+        :param cell_type: str
+        """
+
+        self.izhi_cell_type_param_names = ['C', 'k', 'vr', 'vt', 'vpeak', 'a', 'b', 'c', 'd', 'celltype']
+
+        if cell_type is not None:
+            type_def_dict = self.get_type_def_dict(cell_type)
+            self.cell_type = cell_type
+            if type(cell_type_param_dict)==dict:
+                type_def_dict.update(cell_type_param_dict)    
+        else:
+            if type(cell_type_param_dict)==dict and set(self.izhi_cell_type_param_names).issubset(list(cell_type_param_dict.keys())):
+                type_def_dict = cell_type_param_dict
+                self.cell_type = 'custom' 
+            else:
+                print('Incompatible combination of cell type and param dict - defaulting to RS Izhi')
+                type_def_dict = self.get_type_def_dict('RS')
+                self.cell_type = 'RS' 
+
+        self.cell_type_dict = type_def_dict
+
+        self.sec = h.Section(cell=self)
+        self.sec.L, self.sec.diam = 10., 10.
+        self.izh = h.Izhi2019(.5, sec=self.sec)
+        self.base_cm = 31.831  # Produces membrane time constant of 8 ms for a RS cell with izh.C = 1. and izi.k = 0.7
+        if pop_name is None:
+            pop_name = self.cell_type
+        self.pop_name = pop_name
+        if gid is None:
+            gid = 0
+        self.gid = gid
+        self.name = '{!s}{!s}'.format(pop_name, gid)
+
+        for cell_type_param in self.izhi_cell_type_param_names:
+            setattr(self.izh, cell_type_param, self.cell_type_dict[cell_type_param])
+
+        self.sec.cm = self.base_cm * self.izh.C
+        self.syns = defaultdict(dict)
+        self.spike_detector = self.connect2target()
+
+    def connect2target(self, target=None):
+        nc = h.NetCon(self.sec(1)._ref_v, target, sec=self.sec)
+        nc.threshold = self.cell_type_dict['vpeak'] - 1.
+        return nc
+
+    def is_art(self):
+        return 0
+
+    def get_type_def_dict(self, cell_type):   
+
+        izhi_cell_type_param_dict = {
+            'RS': dict(C=1., k=0.7, vr=-65., vt=-50., vpeak=35., a=0.03, b=-2., c=-55., d=100., celltype=1),
+            'IB': dict(C=1.5, k=1.2, vr=-75., vt=-45., vpeak=50., a=0.01, b=5., c=-56., d=130., celltype=2),
+            'CH': dict(C=0.5, k=1.5, vr=-60., vt=-40., vpeak=25., a=0.03, b=1., c=-40., d=150., celltype=3),
+            'LTS': dict(C=1.0, k=1.0, vr=-56., vt=-42., vpeak=40., a=0.03, b=8., c=-53., d=20., celltype=4),
+            'FS': dict(C=0.2, k=1., vr=-55., vt=-40., vpeak=25., a=0.2, b=-2., c=-45., d=-55., celltype=5),
+            'TC': dict(C=2.0, k=1.6, vr=-60., vt=-50., vpeak=35., a=0.01, b=15., c=-60., d=10., celltype=6),
+            'RTN': dict(C=0.4, k=0.25, vr=-65., vt=-45., vpeak=0., a=0.015, b=10., c=-55., d=50., celltype=7),
+        }
+        izhi_cell_types = list(izhi_cell_type_param_dict.keys())
+        if cell_type not in izhi_cell_types:
+            raise ValueError('Undefined Izhi Cell type: {!s}'.format(cell_type))
+        else:
+            return izhi_cell_type_param_dict[cell_type]
