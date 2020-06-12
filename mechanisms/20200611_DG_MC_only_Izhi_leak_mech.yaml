@@ -1,0 +1,6 @@
+soma:
+  cable:
+    Ra:
+      value: 150.0
+    cm:
+      value: 1.0
