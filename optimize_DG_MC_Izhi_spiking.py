@@ -730,6 +730,7 @@ def update_mechanisms_spiking(x, context=None):
     cell.spike_detector = cell.connect2target()
     context.spike_output_vec = h.Vector()
     cell.spike_detector.record(context.spike_output_vec)
+    cell.sec.cm = cell.base_cm * cell.izh.C
 
 #    modify_mech_param(cell, 'soma', 'nas', 'gbar', x_dict['soma.gbar_nas'])
 #    modify_mech_param(cell, 'soma', 'kdr', 'gkdrbar', x_dict['soma.gkdrbar'])

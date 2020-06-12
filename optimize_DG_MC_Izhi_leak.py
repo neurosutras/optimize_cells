@@ -346,6 +346,7 @@ def update_mechanisms_leak(x, context):
     cell.spike_detector = cell.connect2target()
     context.spike_output_vec = h.Vector()
     cell.spike_detector.record(context.spike_output_vec)
+    cell.sec.cm = cell.base_cm * cell.izh.C
 
   #  modify_mech_param(cell, 'soma', 'pas', 'g', x_dict['soma.g_pas'])
   #  modify_mech_param(cell, 'soma', 'h', 'ghbar', x_dict['soma.ghbar'])
