@@ -16,7 +16,7 @@ context = Context()
 
 @click.command(context_settings=dict(ignore_unknown_options=True, allow_extra_args=True, ))
 @click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='config/optimize_DG_MC_spiking_config.yaml')
+              default='config/optimize_DG_MC_Izhi_spiking_config.yaml')
 @click.option("--output-dir", type=click.Path(exists=True, file_okay=False, dir_okay=True), default='data')
 @click.option("--export", is_flag=True)
 @click.option("--export-file-path", type=str, default=None)
@@ -25,10 +25,8 @@ context = Context()
 @click.option("--plot", is_flag=True)
 @click.option("--interactive", is_flag=True)
 @click.option("--debug", is_flag=True)
-@click.option("--diagnostic-recordings", is_flag=True)
 @click.pass_context
-def main(cli, config_file_path, output_dir, export, export_file_path, label, verbose, plot, interactive, debug,
-         diagnostic_recordings):
+def main(cli, config_file_path, output_dir, export, export_file_path, label, verbose, plot, interactive, debug):
     """
 
     :param cli: contains unrecognized args as list of str
@@ -41,7 +39,6 @@ def main(cli, config_file_path, output_dir, export, export_file_path, label, ver
     :param plot: bool
     :param interactive: bool
     :param debug: bool
-    :param diagnostic_recordings: bool
     """
     # requires a global variable context: :class:'Context'
     context.update(locals())
@@ -55,9 +52,6 @@ def main(cli, config_file_path, output_dir, export, export_file_path, label, ver
                                 export=export, export_file_path=export_file_path, label=label,
                                 disp=context.disp, interface=context.interface, verbose=verbose, plot=plot,
                                 debug=debug, **kwargs)
-
-    if diagnostic_recordings:
-        add_diagnostic_recordings()
 
     if not debug:
         run_tests()
@@ -152,6 +146,7 @@ def init_context():
     v_active = -60.
     i_th_start = 0.2
     i_th_max = 0.4
+    i_inc = 0.005
 
     # MC experimental f-I and ISI data from:
     # Howard, A.L., Neu, A., Morgan, R.J., Echegoyen, J.C., & Soltesz, I.(2007). Opposing modifications in intrinsic
@@ -202,7 +197,9 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, load_edges=False, 
     init_context()
     context.env = Env(comm=context.comm, verbose=verbose > 1, **kwargs)
     configure_hoc_env(context.env)
-    cell = IzhiCell(cell_type_param_dict=dict(C=1., k=0.7, vr=-66., vt=-48., vpeak=35., a=0.03, b=-2., c=-55., d=100., celltype=1))  
+    context.celltype = int(context.celltype)
+    cell = IzhiCell(cell_type_param_dict=dict(C=1., k=0.7, vr=context.vr, vt=context.vt, vpeak=35., a=0.03, b=-2.,
+                                              c=-55., d=100., celltype=context.celltype))
     context.sim = QuickSim(context.duration, cvode=cvode, daspk=daspk, dt=context.dt, verbose=verbose>1)
     context.spike_output_vec = h.Vector()
     cell.spike_detector.record(context.spike_output_vec)
@@ -336,7 +333,7 @@ def compute_features_spike_shape(x, i_holding, model_id=None, export=False, plot
 
     spike = np.any(spike_times > equilibrate)
     if spike:
-        i_inc = -0.01
+        i_inc = -context.i_inc
         delta_str = 'decreased'
         while spike and i_th > 0.:
             i_th += i_inc
@@ -355,7 +352,7 @@ def compute_features_spike_shape(x, i_holding, model_id=None, export=False, plot
             sys.stdout.flush()
         return dict()
 
-    i_inc = 0.01
+    i_inc = context.i_inc
     delta_str = 'increased'
     while not spike:  # Increase step current until spike. Resting Vm is v_active.
         i_th += i_inc
@@ -672,8 +669,8 @@ def get_objectives_spiking(features, model_id=None, export=False):
             objectives[target] = 0.
 
     # only penalize certain features outside target range:
-#    for target in ['fAHP', 'ADP', 'slow_depo']:
-    for target in ['slow_depo']:
+    for target in ['fAHP', 'ADP', 'slow_depo']:
+    # for target in ['slow_depo']:
         min_val_key = 'min_' + target
         max_val_key = 'max_' + target
         if features[target] < context.target_val[min_val_key]:
@@ -729,6 +726,11 @@ def update_mechanisms_spiking(x, context=None):
         if param in x_dict:
             setattr(cell.izh, cell_type_param, x_dict[param])
 
+    # need to reconfigure the spike_detector when vpeak changes
+    cell.spike_detector = cell.connect2target()
+    context.spike_output_vec = h.Vector()
+    cell.spike_detector.record(context.spike_output_vec)
+
 #    modify_mech_param(cell, 'soma', 'nas', 'gbar', x_dict['soma.gbar_nas'])
 #    modify_mech_param(cell, 'soma', 'kdr', 'gkdrbar', x_dict['soma.gkdrbar'])
 #    modify_mech_param(cell, 'soma', 'kap', 'gkabar', x_dict['soma.gkabar'])
@@ -781,33 +783,6 @@ def update_mechanisms_spiking(x, context=None):
 #    modify_mech_param(cell, 'ais', 'nax', 'gbar', x_dict['ais.gbar_nax'])
 #    for sec_type in ['apical', 'hillock', 'ais', 'axon']:
 #        modify_mech_param(cell, sec_type, 'ions', 'ek', origin='soma')
-
-
-def add_diagnostic_recordings():
-    """
-
-    """
-    cell = context.cell
-    sim = context.sim
-    #if not sim.has_rec('ica'):
-    #    sim.append_rec(cell, cell.tree.root, name='ica', param='_ref_ica', loc=0.5)
-    #if not sim.has_rec('isk'):
-    #    sim.append_rec(cell, cell.tree.root, name='isk', param='_ref_isk_CadepK', loc=0.5)
-    #if not sim.has_rec('ibk'):
-    #    sim.append_rec(cell, cell.tree.root, name='ibk', param='_ref_ibk_CadepK', loc=0.5)
-    #if not sim.has_rec('ika'):
-    #    sim.append_rec(cell, cell.tree.root, name='ika', param='_ref_ik_kap', loc=0.5)
-    #if not sim.has_rec('ikdr'):
-    #    sim.append_rec(cell, cell.tree.root, name='ikdr', param='_ref_ik_kdr', loc=0.5)
-    #if not sim.has_rec('ikm'):
-    #    sim.append_rec(cell, cell.tree.root, name='ikm', param='_ref_ik_km3', loc=0.5)
-    #if not sim.has_rec('cai'):
-    #    sim.append_rec(cell, cell.tree.root, name='cai', param='_ref_cai', loc=0.5)
-    #if not sim.has_rec('ina'):
-    #    sim.append_rec(cell, cell.tree.root, name='ina', param='_ref_ina', loc=0.5)
-    if not sim.has_rec('axon_end'):
-        axon_seg_locs = [seg.x for seg in cell.axon[0].sec]
-        sim.append_rec(cell, cell.axon[0], name='axon_end', loc=axon_seg_locs[-1])
 
 
 if __name__ == '__main__':

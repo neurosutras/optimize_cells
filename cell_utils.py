@@ -802,7 +802,7 @@ class IzhiCell(object):
 
     def connect2target(self, target=None):
         nc = h.NetCon(self.sec(1)._ref_v, target, sec=self.sec)
-        nc.threshold = self.cell_type_dict['vpeak'] - 1.
+        nc.threshold = self.izh.vpeak - 1.
         return nc
 
     def is_art(self):

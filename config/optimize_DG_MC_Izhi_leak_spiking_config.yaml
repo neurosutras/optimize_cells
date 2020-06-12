@@ -5,26 +5,37 @@ bounds:
   soma.k: !!python/tuple
   - 0.2 
   - 1.6
+  soma.v_peak: !!python/tuple
+  - 0.0
+  - 50.0
   soma.a: !!python/tuple
   - 0.01 
-  - 0.04
+  - 0.2
   soma.b: !!python/tuple
-  - -3.0
-  - -1.0 
+  - -2.0
+  - 15.0
   soma.c: !!python/tuple
   - -70.0
-  - -40.0 
+  - -40.0
   soma.d: !!python/tuple
-  - 10.0 
+  - -60.0
   - 150.0
 default_params:
 rel_bounds:
 feature_names:
 - soma R_inp
+- soma vm_rest
+- ADP
+- fAHP
+- mAHP
+- rebound_firing
 - vm_stability
+- slow_depo
+- rheobase
+- f_I_log10_slope
+- spike_adi_slope
+- spike_detector_delay
 update_context:
-- - optimize_DG_MC_Izhi_leak
-  - update_mechanisms_leak
 - - optimize_DG_MC_Izhi_spiking
   - update_mechanisms_spiking
 get_features_stages:
@@ -55,14 +66,17 @@ kwargs:
   config_prefix: ../dentate/config
   dataset_prefix: ../dentate/datasets
   results_path: data
+  vr: -66.
+  vt: -48.
+  celltype: 1
 objective_names:
 - soma R_inp
+- rebound_firing
 - vm_stability
 - slow_depo
-- f_I_residuals
 - spike_adaptation_residuals
-- rebound_firing
-optimization_title: DG_MC_leak_leak
+- f_I_residuals
+optimization_title: DG_MC_Izhi_leak_spiking
 param_gen: PopulationAnnealing
 param_names:
 - soma.C
@@ -71,22 +85,30 @@ param_names:
 - soma.b
 - soma.c
 - soma.d
+- soma.v_peak
 target_range:
-  soma R_inp: 2 
-  vm_stability: 0.5
+  soma R_inp: 0.5
+  ADP: 0.05
+  fAHP: 0.07
   rebound_firing: 0.002
+  vm_stability: 0.5
   spike_rate: 0.1
   slow_depo: 0.1
 target_val:
   soma R_inp: 126.
-  vm_stability: 5.0
+  min_ADP: 1.
+  max_ADP: 10.
+  min_fAHP: 3.0
+  max_fAHP: 15.
   rebound_firing: 0
   max_slow_depo: 5.0
   min_slow_depo: -1.0
+  vm_stability: 5.0
 x0:
-  soma.C: 1.0
-  soma.k: 0.7
+  soma.C: 0.5
+  soma.k: 1.0
   soma.a: 0.03
   soma.b: -2.0
   soma.c: -65.0
   soma.d: 100
+  soma.v_peak: 35.

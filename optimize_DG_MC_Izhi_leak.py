@@ -143,7 +143,9 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, load_edges=False, 
     init_context()
     context.env = Env(comm=context.comm, verbose=verbose > 1, **kwargs)
     configure_hoc_env(context.env)
-    cell = IzhiCell(cell_type_param_dict=dict(C=1., k=0.7, vr=-66., vt=-48., vpeak=35., a=0.03, b=-2., c=-55., d=100., celltype=1))
+    context.celltype = int(context.celltype)
+    cell = IzhiCell(cell_type_param_dict=dict(C=1., k=0.7, vr=context.vr, vt=context.vt, vpeak=35., a=0.03, b=-2.,
+                                              c=-55., d=100., celltype=context.celltype))
     context.sim = QuickSim(context.duration, cvode=cvode, daspk=daspk, dt=context.dt, verbose=verbose > 1)
     context.spike_output_vec = h.Vector()
     cell.spike_detector.record(context.spike_output_vec)
@@ -242,8 +244,8 @@ def compute_features_leak(x, section, model_id=None, export=False, plot=False):
     sim.parameters['description'] = description
     amp = -0.025
     context.sim.parameters['amp'] = amp
-    vm_rest, vm_offset, context.i_holding[section][v_active] = offset_vm(section, context, context.cell.izh.vr,  
-                                                                       v_active, dynamic=False, cvode=context.cvode)
+    vm_rest, vm_offset, context.i_holding[section][v_active] = \
+        offset_vm(section, context, v_active, dynamic=False, cvode=context.cvode)
     sim.modify_stim('holding', dur=duration)
     rec_dict = sim.get_rec(section)
 
@@ -339,6 +341,11 @@ def update_mechanisms_leak(x, context):
         param = 'soma.{!s}'.format(cell_type_param)
         if param in x_dict:
             setattr(cell.izh, cell_type_param, x_dict[param])
+
+    # need to reconfigure the spike_detector when vpeak changes
+    cell.spike_detector = cell.connect2target()
+    context.spike_output_vec = h.Vector()
+    cell.spike_detector.record(context.spike_output_vec)
 
   #  modify_mech_param(cell, 'soma', 'pas', 'g', x_dict['soma.g_pas'])
   #  modify_mech_param(cell, 'soma', 'h', 'ghbar', x_dict['soma.ghbar'])
