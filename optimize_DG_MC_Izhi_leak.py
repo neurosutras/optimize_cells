@@ -143,7 +143,7 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, load_edges=False, 
     init_context()
     context.env = Env(comm=context.comm, verbose=verbose > 1, **kwargs)
     configure_hoc_env(context.env)
-    cell = IzhiCell(cell_type='RS')
+    cell = IzhiCell(cell_type_param_dict=dict(C=1., k=0.7, vr=-66., vt=-48., vpeak=35., a=0.03, b=-2., c=-55., d=100., celltype=1))
     context.sim = QuickSim(context.duration, cvode=cvode, daspk=daspk, dt=context.dt, verbose=verbose > 1)
     context.spike_output_vec = h.Vector()
     cell.spike_detector.record(context.spike_output_vec)
@@ -177,8 +177,6 @@ def config_sim_env(context):
     equilibrate = context.equilibrate
     stim_dur = context.stim_dur
     duration = context.duration
-
-    print(cell)
 
     if not sim.has_stim('step'):
         sim.append_stim(cell=cell, node=cell, name='step', amp=0., delay=equilibrate, dur=stim_dur)
@@ -226,7 +224,6 @@ def compute_features_leak(x, section, model_id=None, export=False, plot=False):
     start_time = time.time()
     config_sim_env(context)
     update_source_contexts(x, context)
-    zero_na(context.cell)
 
     duration = context.duration
     stim_dur = context.stim_dur
@@ -245,8 +242,8 @@ def compute_features_leak(x, section, model_id=None, export=False, plot=False):
     sim.parameters['description'] = description
     amp = -0.025
     context.sim.parameters['amp'] = amp
-    vm_rest, vm_offset, context.i_holding[section][v_active] = offset_vm(section, context, v_active, dynamic=False,
-                                                                       cvode=context.cvode)
+    vm_rest, vm_offset, context.i_holding[section][v_active] = offset_vm(section, context, context.cell.izh.vr,  
+                                                                       v_active, dynamic=False, cvode=context.cvode)
     sim.modify_stim('holding', dur=duration)
     rec_dict = sim.get_rec(section)
 
@@ -338,8 +335,10 @@ def update_mechanisms_leak(x, context):
     cell = context.cell
     x_dict = param_array_to_dict(x, context.param_names)
 
-    for cell_type_param in self.izhi_cell_type_param_names:
-        setattr(cell.izh, cell_type_param, x_dict['soma.{!s}'.format(cell_type_param)])
+    for cell_type_param in cell.izhi_cell_type_param_names:
+        param = 'soma.{!s}'.format(cell_type_param)
+        if param in x_dict:
+            setattr(cell.izh, cell_type_param, x_dict[param])
 
   #  modify_mech_param(cell, 'soma', 'pas', 'g', x_dict['soma.g_pas'])
   #  modify_mech_param(cell, 'soma', 'h', 'ghbar', x_dict['soma.ghbar'])
