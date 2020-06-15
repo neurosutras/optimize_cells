@@ -4,7 +4,7 @@ Uses nested.optimize to tune somatodendritic spike shape, f-I curve, and spike a
 Requires a YAML file to specify required configuration parameters.
 Requires use of a nested.parallel interface.
 """
-__author__ = 'Aaron D. Milstein, Grace Ng and Prannath Moolchand'
+__author__ = 'Aaron D. Milstein and Prannath Moolchand'
 from dentate.biophysics_utils import *
 from nested.parallel import *
 from nested.optimize_utils import *
@@ -25,8 +25,10 @@ context = Context()
 @click.option("--plot", is_flag=True)
 @click.option("--interactive", is_flag=True)
 @click.option("--debug", is_flag=True)
+@click.option("--add-diagnostic-recordings", is_flag=True)
 @click.pass_context
-def main(cli, config_file_path, output_dir, export, export_file_path, label, verbose, plot, interactive, debug):
+def main(cli, config_file_path, output_dir, export, export_file_path, label, verbose, plot, interactive, debug,
+         add_diagnostic_recordings):
     """
 
     :param cli: contains unrecognized args as list of str
@@ -39,6 +41,7 @@ def main(cli, config_file_path, output_dir, export, export_file_path, label, ver
     :param plot: bool
     :param interactive: bool
     :param debug: bool
+    :param add_diagnostic_recordings: bool
     """
     # requires a global variable context: :class:'Context'
     context.update(locals())
@@ -115,6 +118,10 @@ def config_worker():
     """
     if 'verbose' in context():
         context.verbose = int(context.verbose)
+    if 'plot' not in context():
+        context.plot = False
+    if 'add_diagnostic_recordings' not in context():
+        context.add_diagnostic_recordings = False
     if not context_has_sim_env(context):
         build_sim_env(context, **context.kwargs)
     else:
@@ -198,8 +205,9 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, load_edges=False, 
     context.env = Env(comm=context.comm, verbose=verbose > 1, **kwargs)
     configure_hoc_env(context.env)
     context.celltype = int(context.celltype)
-    cell = IzhiCell(cell_type_param_dict=dict(C=1., k=0.7, vr=context.vr, vt=context.vt, vpeak=35., a=0.03, b=-2.,
-                                              c=-55., d=100., celltype=context.celltype))
+    cell = IzhiCell(gid=context.gid, pop_name=context.cell_type, env=context.env,
+                    cell_attrs=IzhiCellAttrs(C=1., k=0.7, vr=context.vr, vt=context.vt, vpeak=35., a=0.03, b=-2.,
+                                             c=-55., d=100., celltype=context.celltype))
     context.sim = QuickSim(context.duration, cvode=cvode, daspk=daspk, dt=context.dt, verbose=verbose>1)
     context.spike_output_vec = h.Vector()
     cell.spike_detector.record(context.spike_output_vec)
@@ -253,16 +261,16 @@ def config_sim_env(context):
     duration = context.duration
 
     if not sim.has_stim('step'):
-        sim.append_stim(cell=cell, node=cell, name='step', amp=0., delay=equilibrate, dur=stim_dur)
+        sim.append_stim(cell=cell, node=cell.tree.root, name='step', amp=0., delay=equilibrate, dur=stim_dur)
     if not sim.has_stim('holding'):
-        sim.append_stim(cell=cell, node=cell, name='holding', amp=0., delay=0., dur=duration)
+        sim.append_stim(cell=cell, node=cell.tree.root, name='holding', amp=0., delay=0., dur=duration)
     if not sim.has_rec('soma'):
-        sim.append_rec(cell=cell, node=cell, name='soma', loc=0.5, param='_ref_v')
+        sim.append_rec(cell=cell, node=cell.tree.root, name='soma', loc=0.5, param='_ref_v')
 
-    if not sim.has_rec('cell_i'):
-        sim.append_rec(cell=cell, node=cell, name='cell_i', object=cell.izh, loc=0.5, param='_ref_i')
-    if not sim.has_rec('cell_u'):
-        sim.append_rec(name='cell_u', cell=cell, node=cell, object=cell.izh, param='_ref_u')
+    if not sim.has_rec('izh_i') and context.add_diagnostic_recordings:
+        sim.append_rec(cell=cell, node=cell.tree.root, name='izh_i', object=cell.izh, loc=0.5, param='_ref_i')
+    if not sim.has_rec('izh_u') and context.add_diagnostic_recordings:
+        sim.append_rec(name='izh_u', cell=cell, node=cell.tree.root, object=cell.izh, param='_ref_u')
 
     if context.v_active not in context.i_holding['soma']:
         context.i_holding['soma'][context.v_active] = 0.
@@ -720,70 +728,13 @@ def update_mechanisms_spiking(x, context=None):
         raise RuntimeError('update_mechanisms_spiking: missing required Context object')
     cell = context.cell
     x_dict = param_array_to_dict(x, context.param_names)
+    izhi_cell_attr_dict = {}
 
-    for cell_type_param in cell.izhi_cell_type_param_names:
-        param = 'soma.{!s}'.format(cell_type_param)
-        if param in x_dict:
-            setattr(cell.izh, cell_type_param, x_dict[param])
-
-    # need to reconfigure the spike_detector when vpeak changes
-    cell.spike_detector = cell.connect2target()
-    context.spike_output_vec = h.Vector()
-    cell.spike_detector.record(context.spike_output_vec)
-    cell.sec.cm = cell.base_cm * cell.izh.C
-
-#    modify_mech_param(cell, 'soma', 'nas', 'gbar', x_dict['soma.gbar_nas'])
-#    modify_mech_param(cell, 'soma', 'kdr', 'gkdrbar', x_dict['soma.gkdrbar'])
-#    modify_mech_param(cell, 'soma', 'kap', 'gkabar', x_dict['soma.gkabar'])
-#    modify_mech_param(cell, 'soma', 'ions', 'ek', -80.)
-#    modify_mech_param(cell, 'soma', 'nas', 'sh', x_dict['soma.sh_nas/x'])
-#    modify_mech_param(cell, 'soma', 'Ca', 'gtcabar', x_dict['soma.gtcabar'])
-#    modify_mech_param(cell, 'soma', 'Ca', 'gncabar', x_dict['soma.gncabar'])
-#    modify_mech_param(cell, 'soma', 'Ca', 'glcabar', x_dict['soma.glcabar'])
-#    modify_mech_param(cell, 'soma', 'CadepK', 'gskbar', x_dict['soma.gskbar'])
-#    modify_mech_param(cell, 'soma', 'CadepK', 'gbkbar', x_dict['soma.gbkbar'])
-#    modify_mech_param(cell, 'soma', 'Cacum', 'tau', x_dict['soma.tau_Cacum'])
-#    if 'soma.gkmbar' in x_dict:
-#        if context.km_mech_name == 'DGC_KM':
-#            modify_mech_param(cell, 'soma', 'DGC_KM', 'gbar', x_dict['soma.gkmbar'])
-#        elif context.km_mech_name == 'km3':
-#            modify_mech_param(cell, 'soma', 'km3', 'gkmbar', x_dict['soma.gkmbar'])
-#        else:
-#            raise KeyError('optimize_DG_MC_spiking: update_mechanisms_spiking: invalid km_mech_name: %s' %
-#                           context.km_mech_name)
-#    for sec_type in ['apical']:
-#        if 'dend.gkabar' in x_dict:
-#            modify_mech_param(cell, sec_type, 'kap', 'gkabar', x_dict['dend.gkabar'])
-#        else:
-#            modify_mech_param(cell, sec_type, 'kap', 'gkabar', origin='soma')
-#        modify_mech_param(cell, sec_type, 'kdr', 'gkdrbar', origin='soma')
-#    modify_mech_param(cell, 'hillock', 'kap', 'gkabar', origin='soma')
-#    modify_mech_param(cell, 'hillock', 'kdr', 'gkdrbar', origin='soma')
-#    modify_mech_param(cell, 'ais', 'kdr', 'gkdrbar', x_dict['axon.gkdrbar'])
-#    modify_mech_param(cell, 'ais', 'kap', 'gkabar', x_dict['axon.gkabar'])
-#    modify_mech_param(cell, 'axon', 'kdr', 'gkdrbar', origin='ais')
-#    modify_mech_param(cell, 'axon', 'kap', 'gkabar', origin='ais')
-#    modify_mech_param(cell, 'hillock', 'nax', 'sh', x_dict['soma.sh_nas/x'])
-#    modify_mech_param(cell, 'hillock', 'nax', 'gbar', x_dict['soma.gbar_nas'])
-#    modify_mech_param(cell, 'axon', 'nax', 'gbar', x_dict['axon.gbar_nax'])
-#    for sec_type in ['ais', 'axon']:
-#        modify_mech_param(cell, sec_type, 'nax', 'sh', origin='hillock')
-#    if 'ais.gkmbar' in x_dict:
-#        if context.km_mech_name == 'DGC_KM':
-#            modify_mech_param(cell, 'ais', 'DGC_KM', 'gbar', x_dict['ais.gkmbar'])
-#            modify_mech_param(cell, 'hillock', 'DGC_KM', 'gbar', x_dict['ais.gkmbar'])
-#            modify_mech_param(cell, 'axon', 'DGC_KM', 'gbar', origin='ais')
-#        elif context.km_mech_name == 'km3':
-#            modify_mech_param(cell, 'ais', 'km3', 'gkmbar', x_dict['ais.gkmbar'])
-#            modify_mech_param(cell, 'hillock', 'km3', 'gkmbar', x_dict['ais.gkmbar'])
-#            modify_mech_param(cell, 'axon', 'km3', 'gkmbar', origin='ais')
-#        else:
-#            raise KeyError('optimize_DG_MC_spiking: update_mechanisms_spiking: invalid km_mech_name: %s' %
-#                           context.km_mech_name)
-#    modify_mech_param(cell, 'ais', 'nax', 'sha', x_dict['ais.sha_nax'])
-#    modify_mech_param(cell, 'ais', 'nax', 'gbar', x_dict['ais.gbar_nax'])
-#    for sec_type in ['apical', 'hillock', 'ais', 'axon']:
-#        modify_mech_param(cell, sec_type, 'ions', 'ek', origin='soma')
+    for izhi_cell_attr_name in IzhiCellAttrs._fields:
+        param_name = 'soma.{!s}'.format(izhi_cell_attr_name)
+        if param_name in x_dict:
+            izhi_cell_attr_dict[izhi_cell_attr_name] = x_dict[param_name]
+    cell.update_cell_attrs(**izhi_cell_attr_dict)
 
 
 if __name__ == '__main__':

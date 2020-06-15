@@ -26,8 +26,10 @@ context = Context()
 @click.option("--plot", is_flag=True)
 @click.option("--interactive", is_flag=True)
 @click.option("--debug", is_flag=True)
+@click.option("--add-diagnostic-recordings", is_flag=True)
 @click.pass_context
-def main(cli, config_file_path, output_dir, export, export_file_path, label, verbose, plot, interactive, debug):
+def main(cli, config_file_path, output_dir, export, export_file_path, label, verbose, plot, interactive, debug,
+         add_diagnostic_recordings):
     """
 
     :param cli: contains unrecognized args as list of str
@@ -40,6 +42,7 @@ def main(cli, config_file_path, output_dir, export, export_file_path, label, ver
     :param plot: bool
     :param interactive: bool
     :param debug: bool
+    :param add_diagnostic_recordings: bool
     """
     # requires a global variable context: :class:'Context'
     context.update(locals())
@@ -102,6 +105,10 @@ def config_worker():
     """
     if 'verbose' in context():
         context.verbose = int(context.verbose)
+    if 'plot' not in context():
+        context.plot = False
+    if 'add_diagnostic_recordings' not in context():
+        context.add_diagnostic_recordings = False
     if not context_has_sim_env(context):
         build_sim_env(context, **context.kwargs)
     else:
@@ -144,8 +151,9 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, load_edges=False, 
     context.env = Env(comm=context.comm, verbose=verbose > 1, **kwargs)
     configure_hoc_env(context.env)
     context.celltype = int(context.celltype)
-    cell = IzhiCell(cell_type_param_dict=dict(C=1., k=0.7, vr=context.vr, vt=context.vt, vpeak=35., a=0.03, b=-2.,
-                                              c=-55., d=100., celltype=context.celltype))
+    cell = IzhiCell(gid=context.gid, pop_name=context.cell_type, env=context.env,
+                    cell_attrs=IzhiCellAttrs(C=1., k=0.7, vr=context.vr, vt=context.vt, vpeak=35., a=0.03, b=-2.,
+                                             c=-55., d=100., celltype=context.celltype))
     context.sim = QuickSim(context.duration, cvode=cvode, daspk=daspk, dt=context.dt, verbose=verbose > 1)
     context.spike_output_vec = h.Vector()
     cell.spike_detector.record(context.spike_output_vec)
@@ -181,16 +189,16 @@ def config_sim_env(context):
     duration = context.duration
 
     if not sim.has_stim('step'):
-        sim.append_stim(cell=cell, node=cell, name='step', amp=0., delay=equilibrate, dur=stim_dur)
+        sim.append_stim(cell=cell, node=cell.tree.root, name='step', amp=0., delay=equilibrate, dur=stim_dur)
     if not sim.has_stim('holding'):
-        sim.append_stim(cell=cell, node=cell, name='holding', amp=0., delay=0., dur=duration)
+        sim.append_stim(cell=cell, node=cell.tree.root, name='holding', amp=0., delay=0., dur=duration)
     if not sim.has_rec('soma'):
-        sim.append_rec(cell=cell, node=cell, name='soma', loc=0.5, param='_ref_v')
+        sim.append_rec(cell=cell, node=cell.tree.root, name='soma', loc=0.5, param='_ref_v')
 
-    if not sim.has_rec('cell_i'):
-        sim.append_rec(cell=cell, node=cell, name='cell_i', object=cell.izh, loc=0.5, param='_ref_i')
-    if not sim.has_rec('cell_u'):
-        sim.append_rec(name='cell_u', cell=cell, node=cell, object=cell.izh, param='_ref_u')
+    if not sim.has_rec('izh_i') and context.add_diagnostic_recordings:
+        sim.append_rec(cell=cell, node=cell.tree.root, name='izh_i', object=cell.izh, loc=0.5, param='_ref_i')
+    if not sim.has_rec('izh_u') and context.add_diagnostic_recordings:
+        sim.append_rec(name='izh_u', cell=cell, node=cell.tree.root, object=cell.izh, param='_ref_u')
 
     if context.v_active not in context.i_holding['soma']:
         context.i_holding['soma'][context.v_active] = 0.
@@ -336,36 +344,13 @@ def update_mechanisms_leak(x, context):
         raise RuntimeError('update_mechanisms_leak: missing required Context object')
     cell = context.cell
     x_dict = param_array_to_dict(x, context.param_names)
+    izhi_cell_attr_dict = {}
 
-    for cell_type_param in cell.izhi_cell_type_param_names:
-        param = 'soma.{!s}'.format(cell_type_param)
-        if param in x_dict:
-            setattr(cell.izh, cell_type_param, x_dict[param])
-
-    # need to reconfigure the spike_detector when vpeak changes
-    cell.spike_detector = cell.connect2target()
-    context.spike_output_vec = h.Vector()
-    cell.spike_detector.record(context.spike_output_vec)
-    cell.sec.cm = cell.base_cm * cell.izh.C
-
-  #  modify_mech_param(cell, 'soma', 'pas', 'g', x_dict['soma.g_pas'])
-  #  modify_mech_param(cell, 'soma', 'h', 'ghbar', x_dict['soma.ghbar'])
-  #  modify_mech_param(cell, 'soma', 'pas', 'e', x_dict['e_pas'])
-  #  if 'dend.g_pas xhalf' in x_dict:
-  #      modify_mech_param(cell, 'apical', 'pas', 'g', origin='soma', slope=x_dict['dend.g_pas slope'],
-  #                        tau=x_dict['dend.g_pas tau'], xhalf=x_dict['dend.g_pas xhalf'])
-  #  else:
-  #      modify_mech_param(cell, 'apical', 'pas', 'g', origin='soma', slope=x_dict['dend.g_pas slope'],
-  #                        tau=x_dict['dend.g_pas tau'])
-  #  if 'terminal_inherits_pas' not in context() or context.terminal_inherits_pas:
-  #      modify_mech_param(cell, 'apical', 'pas', 'g', origin='parent', custom={'func': 'custom_filter_if_terminal'},
-  #                        append=True)
-# #   modify_mech_param(cell, 'apical', 'h', 'ghbar', origin='soma')
-  #  modify_mech_param(cell, 'apical', 'h', 'ghbar', x_dict['dend.ghbar'])
-  #  for sec_type in ['hillock', 'ais', 'axon', 'apical']:
-  #      update_mechanism_by_sec_type(cell, sec_type, 'pas')
-  #  if context.correct_for_spines:
-  #      correct_cell_for_spines_g_pas(cell, context.env, context.verbose > 1)
+    for izhi_cell_attr_name in IzhiCellAttrs._fields:
+        param_name = 'soma.{!s}'.format(izhi_cell_attr_name)
+        if param_name in x_dict:
+            izhi_cell_attr_dict[izhi_cell_attr_name] = x_dict[param_name]
+    cell.update_cell_attrs(**izhi_cell_attr_dict)
 
 
 if __name__ == '__main__':
