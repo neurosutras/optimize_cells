@@ -161,18 +161,15 @@ def init_context():
     num_increments_f_I = 6
     rate_at_rheobase = 1.  # Hz, corresponds to 1 spike in a 1000 ms current injection
 
-    exp_i_inj_amp_f_I_0 = [0.131, 134.93150685, 150.91324201, 166.89497717, 185.15981735, 204.56621005, 226.25570776, 249.08675799,
-       273.05936073, 293.60730594, 319.8630137 , 343.83561644, 365.52511416, 387.21461187, 412.32876712, 442.00913242,
-       469.40639269, 497.94520548, 521.91780822, 549.31506849, 571.00456621, 592.69406393] # nA
-    exp_rate_f_I_0 = [1.0, 14.08560311,  25.91439689,  36.49805447, 46.45914397,  55.79766537,  65.44747082,  75.71984436,
-        85.36964981,  94.08560311, 103.73540856, 113.07392996, 121.16731518, 129.88326848, 138.59922179, 148.24902724,
-       157.89883268, 166.92607004, 176.57587549, 184.98054475, 192.14007782, 198.6770428 ] # from 1000 ms current injections
-    fit_params_f_I_0 = [300., -600.]
+    exp_i_inj_amp_f_I_0 = [0.135, 0.151, 0.167, 0.185, 0.205, 0.226, 0.249, 0.273, 0.294, 0.32 , 0.344, 0.366, 0.387,
+                           0.412, 0.442, 0.469, 0.498, 0.522, 0.549, 0.571, 0.593]  # nA
+    exp_rate_f_I_0 = [14.09, 25.91, 36.5, 46.46, 55.8, 65.45, 75.72, 85.37, 94.09, 103.74, 113.07, 121.17, 129.88,
+                      138.6, 148.25, 157.9, 166.93, 176.58, 184.98, 192.14, 198.68]  # Hz, from 1000 ms current injections
+    fit_params_f_I_0 = [250., 250.]
 
     exp_fit_params_f_I, pcov = scipy.optimize.curve_fit(log10_fit, exp_i_inj_amp_f_I_0, exp_rate_f_I_0,
                                                         fit_params_f_I_0)
-#    exp_rheobase = inverse_log10_fit(rate_at_rheobase, *exp_fit_params_f_I)
-    exp_rheobase = 0.131 
+    exp_rheobase = inverse_log10_fit(rate_at_rheobase, *exp_fit_params_f_I)
     i_inj_relative_amp_array = np.array([i_inj_increment_f_I * i for i in range(1, num_increments_f_I + 1)])
     exp_i_inj_amp_array = np.add(exp_rheobase, i_inj_relative_amp_array)
     exp_rate_f_I_array = log10_fit(exp_i_inj_amp_array, *exp_fit_params_f_I)
