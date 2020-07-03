@@ -36,26 +36,26 @@ feature_names:
 - spike_adi_slope
 - spike_detector_delay
 update_context:
-- - optimize_DG_MC_Izhi_spiking
+- - optimize_DG_BC_Izhi_spiking
   - update_mechanisms_spiking
 get_features_stages:
-- source: optimize_DG_MC_Izhi_leak
+- source: optimize_DG_BC_Izhi_leak
   get_args_static: get_args_static_leak
   compute_features: compute_features_leak
-- source: optimize_DG_MC_Izhi_spiking
+- source: optimize_DG_BC_Izhi_spiking
   get_args_dynamic: get_args_dynamic_i_holding
   compute_features: compute_features_spike_shape
-- source: optimize_DG_MC_Izhi_spiking
+- source: optimize_DG_BC_Izhi_spiking
   get_args_dynamic: get_args_dynamic_fI
   compute_features: compute_features_fI
   filter_features: filter_features_fI
 get_objectives:
-  optimize_DG_MC_Izhi_leak: get_objectives_leak
-  optimize_DG_MC_Izhi_spiking: get_objectives_spiking
+  optimize_DG_BC_Izhi_leak: get_objectives_leak
+  optimize_DG_BC_Izhi_spiking: get_objectives_spiking
 kwargs:
   mech_file_path: mechanisms/20200611_DG_MC_only_Izhi_leak_mech.yaml 
-  gid: 1000000
-  cell_type: MC
+  gid: 1039000
+  cell_type: BC
   correct_for_spines: False
   verbose: 2
   daspk: True  # False
@@ -76,7 +76,7 @@ objective_names:
 - slow_depo
 #- spike_adaptation_residuals
 - f_I_residuals
-optimization_title: DG_MC_Izhi_leak_spiking
+optimization_title: DG_BC_Izhi_leak_spiking
 param_gen: PopulationAnnealing
 param_names:
 - soma.C

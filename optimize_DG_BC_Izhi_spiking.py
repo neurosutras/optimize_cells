@@ -152,7 +152,7 @@ def init_context():
     v_init = -62.
     v_active = -60.
     i_th_start = 0.15
-    i_th_max = 054
+    i_th_max = 0.5
     i_inc = 0.005
 
     # doi: 10.3389/fncom.2013.00144, Fig. 4/ p. 3
