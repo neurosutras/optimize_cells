@@ -16,7 +16,7 @@ context = Context()
 
 @click.command(context_settings=dict(ignore_unknown_options=True, allow_extra_args=True, ))
 @click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='config/optimize_DG_MC_Izhi_spiking_config.yaml')
+              default='config/optimize_DG_BC_Izhi_spiking_config.yaml')
 @click.option("--output-dir", type=click.Path(exists=True, file_okay=False, dir_okay=True), default='data')
 @click.option("--export", is_flag=True)
 @click.option("--export-file-path", type=str, default=None)
@@ -152,7 +152,7 @@ def init_context():
     v_init = -62.
     v_active = -60.
     i_th_start = 0.15
-    i_th_max = 054
+    i_th_max = 0.4
     i_inc = 0.005
 
     # doi: 10.3389/fncom.2013.00144, Fig. 4/ p. 3

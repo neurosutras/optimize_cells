@@ -66,10 +66,10 @@ param_names:
 target_range:
   soma R_inp: 0.5
 target_val:
-  soma R_inp: 55.
+  soma R_inp: 222.
 x0:
   soma.C: 0.5
-  soma.k: 1.0
+  soma.k: 1.6
   soma.a: 0.03
   soma.b: -2.0
   soma.c: -65.0
