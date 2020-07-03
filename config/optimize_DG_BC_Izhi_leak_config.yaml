@@ -48,8 +48,8 @@ kwargs:
   config_prefix: ../dentate/config
   dataset_prefix: ../dentate/datasets
   results_path: data
-  vr: -70.
-  vt: -50.
+  vr: -62.
+  vt: -40.
   celltype: 5
 objective_names:
 - soma R_inp
