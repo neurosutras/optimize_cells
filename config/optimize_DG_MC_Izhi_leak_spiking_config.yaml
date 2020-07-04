@@ -5,7 +5,7 @@ bounds:
   soma.k: !!python/tuple
   - 0.2 
   - 1.6
-  soma.v_peak: !!python/tuple
+  soma.vpeak: !!python/tuple
   - 0.0
   - 50.0
   soma.a: !!python/tuple
@@ -85,7 +85,7 @@ param_names:
 - soma.b
 - soma.c
 - soma.d
-- soma.v_peak
+- soma.vpeak
 target_range:
   soma R_inp: 0.5
   ADP: 0.05
@@ -111,4 +111,4 @@ x0:
   soma.b: -2.0
   soma.c: -65.0
   soma.d: 100
-  soma.v_peak: 35.
+  soma.vpeak: 35.
