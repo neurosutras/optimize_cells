@@ -177,8 +177,10 @@ def init_context():
     exp_i_inj_amp_spike_adaptation_0 = [0.0786927, 0.11918506, 0.15969864, 0.20034486, 0.23995649, 0.2803958,
                                         0.32106324, 0.35967742, 0.40113009]  # nA
     # last ISI / first ISI (%)
-    exp_spike_adaptation_array_0 = [120.4301075, 123.655914, 129.0322581, 147.8494624, 161.827957, 159.6774194,
-                                    180.6451613, 193.5483871, 194.0860215]
+#    exp_spike_adaptation_array_0 = [120.4301075, 123.655914, 129.0322581, 147.8494624, 161.827957, 159.6774194,
+#                                    180.6451613, 193.5483871, 194.0860215]
+
+    exp_spike_adaptation_array_0 = [100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0]
 
     exp_fit_spike_adaptation_results = stats.linregress(exp_i_inj_amp_spike_adaptation_0, exp_spike_adaptation_array_0)
 

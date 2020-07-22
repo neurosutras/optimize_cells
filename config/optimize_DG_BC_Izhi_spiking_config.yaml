@@ -67,7 +67,7 @@ objective_names:
 - rebound_firing
 - vm_stability
 - slow_depo
-#- spike_adaptation_residuals
+- spike_adaptation_residuals
 - f_I_residuals
 optimization_title: DG_BC_Izhi_spiking
 param_gen: PopulationAnnealing

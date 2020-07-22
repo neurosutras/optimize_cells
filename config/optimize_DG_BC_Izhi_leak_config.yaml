@@ -66,7 +66,7 @@ param_names:
 target_range:
   soma R_inp: 0.5
 target_val:
-  soma R_inp: 222.
+  soma R_inp: 43.
 x0:
   soma.C: 0.5
   soma.k: 1.6
