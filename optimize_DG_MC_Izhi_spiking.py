@@ -627,6 +627,11 @@ def filter_features_fI(primitives, current_features, model_id=None, export=False
                 sys.stdout.flush()
             failed = True
         adi.append(this_adi)
+        spike_ISI = np.diff(spike_times)
+        first_ISI = spike_ISI[0]
+        max_ISI = spike_ISI.max()
+        if first_ISI < 10.0 or max_ISI > 200.0:
+            failed = True  
     new_features['f_I_rate'] = rate
     new_features['spike_adi'] = adi
 
