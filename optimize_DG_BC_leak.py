@@ -302,28 +302,30 @@ def get_objectives_leak(features, model_id=None, export=False):
     :return: tuple of dict
     """
     objectives = {}
-    for feature_name in ['soma R_inp', 'dend R_inp', 'soma vm_rest']:
+#    for feature_name in ['soma R_inp', 'dend R_inp', 'soma vm_rest']:
+    for feature_name in ['soma R_inp', 'soma vm_rest']:
         objective_name = feature_name
         objectives[objective_name] = ((context.target_val[objective_name] - features[feature_name]) /
                                                   context.target_range[objective_name]) ** 2.
 
     for base_feature_name in ['soma R_inp', 'soma vm_rest']:
-        feature_name = base_feature_name + ' (no h)'
+#        feature_name = base_feature_name + ' (no h)'
+        feature_name = base_feature_name 
         objective_name = feature_name
         objectives[objective_name] = ((context.target_val[objective_name] - features[feature_name]) /
                                       context.target_range[base_feature_name]) ** 2.
 
-    delta_term_dend_R_inp = None
-    if features['term_dend R_inp'] < features['dend R_inp']:
-        delta_term_dend_R_inp = features['term_dend R_inp'] - features['dend R_inp']
-    elif features['term_dend R_inp'] > context.target_val['term_dend R_inp']:
-        delta_term_dend_R_inp = features['term_dend R_inp'] - context.target_val['term_dend R_inp']
-
-    objective_name = 'term_dend R_inp'
-    if delta_term_dend_R_inp is not None:
-        objectives[objective_name] = (delta_term_dend_R_inp / context.target_range['dend R_inp']) ** 2.
-    else:
-        objectives[objective_name] = 0.
+#    delta_term_dend_R_inp = None
+#    if features['term_dend R_inp'] < features['dend R_inp']:
+#        delta_term_dend_R_inp = features['term_dend R_inp'] - features['dend R_inp']
+#    elif features['term_dend R_inp'] > context.target_val['term_dend R_inp']:
+#        delta_term_dend_R_inp = features['term_dend R_inp'] - context.target_val['term_dend R_inp']
+#
+#    objective_name = 'term_dend R_inp'
+#    if delta_term_dend_R_inp is not None:
+#        objectives[objective_name] = (delta_term_dend_R_inp / context.target_range['dend R_inp']) ** 2.
+#    else:
+#        objectives[objective_name] = 0.
     return features, objectives
 
 
