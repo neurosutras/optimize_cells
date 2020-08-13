@@ -1,7 +1,7 @@
 bounds:
   soma.C: !!python/tuple
-  - 0.1 
-  - 2.0
+  - 0.01 
+  - 20.0
   soma.k: !!python/tuple
   - 0.2 
   - 1.6
@@ -89,8 +89,8 @@ target_range:
 target_val:
   min_ADP: 1.
   max_ADP: 10.
-  min_fAHP: -18.8 
-  max_fAHP: -18.4 
+  min_fAHP: 17 
+  max_fAHP: 19 
   rebound_firing: 0
   max_slow_depo: 5.0
   min_slow_depo: -1.0

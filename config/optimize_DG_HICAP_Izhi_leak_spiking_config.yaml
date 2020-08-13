@@ -95,20 +95,20 @@ target_range:
   spike_rate: 0.1
   slow_depo: 0.1
 target_val:
-  soma R_inp: -60.5 
+  soma R_inp: 182.2 
   min_ADP: 1.
   max_ADP: 10.
-  min_fAHP: -18.8
-  max_fAHP: -18.4
+  min_fAHP: 17 
+  max_fAHP: 19
   rebound_firing: 0
   max_slow_depo: 5.0
   min_slow_depo: -1.0
   vm_stability: 5.0
 x0:
-  soma.C: 1.
+  soma.C: 1. 
   soma.k: 1.6
   soma.a: 0.03
   soma.b: -2.0
   soma.c: -65.0
   soma.d: 100
-  soma.vpeak: 35.
+  soma.vpeak: 35. 
