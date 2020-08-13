@@ -17,7 +17,7 @@ context = Context()
 
 @click.command(context_settings=dict(ignore_unknown_options=True, allow_extra_args=True, ))
 @click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='config/optimize_DG_HIPP_Izhi_leak_config.yaml')
+              default='config/optimize_DG_LPP_Izhi_leak_config.yaml')
 @click.option("--output-dir", type=click.Path(exists=True, file_okay=False, dir_okay=True), default='data')
 @click.option("--export", is_flag=True)
 @click.option("--export-file-path", type=str, default=None)
@@ -129,11 +129,11 @@ def init_context():
 
     """
     equilibrate = 250.  # time to steady-state
-    stim_dur = 600.
+    stim_dur = 500.
     duration = equilibrate + stim_dur
     dt = 0.025
-    v_init = -60.5
-    v_active = -60.5
+    v_init = -66.
+    v_active = -60.
     i_holding_max = 0.5  # nA
     context.update(locals())
 

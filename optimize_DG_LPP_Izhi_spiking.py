@@ -16,7 +16,7 @@ context = Context()
 
 @click.command(context_settings=dict(ignore_unknown_options=True, allow_extra_args=True, ))
 @click.option("--config-file-path", type=click.Path(exists=True, file_okay=True, dir_okay=False),
-              default='config/optimize_DG_HIPP_Izhi_spiking_config.yaml')
+              default='config/optimize_DG_LPP_Izhi_spiking_config.yaml')
 @click.option("--output-dir", type=click.Path(exists=True, file_okay=False, dir_okay=True), default='data')
 @click.option("--export", is_flag=True)
 @click.option("--export-file-path", type=str, default=None)
@@ -141,31 +141,31 @@ def init_context():
     """
 
     """
-    equilibrate = 200.  # time to steady-state
+    equilibrate = 250.  # time to steady-state
     default_stim_dur = 200.  # ms
-    stim_dur_f_I = 600.
+    stim_dur_f_I = 1000.
     duration = equilibrate + default_stim_dur
 
     dt = 0.025
     th_dvdt = 20.
     dend_th_dvdt = 30.
-    v_init = -60.5
-    v_active = -60.5
-    i_th_start = 0.075
+    v_init = -62.
+    v_active = -60.
+    i_th_start = 0.15
     i_th_max = 0.5
     i_inc = 0.005
 
-    # Han 1993 and f_I derived from Izhi model on hippocampome.org
+    # doi: 10.3389/fncom.2013.00144, Fig. 4/ p. 3
 
-    i_inj_increment_f_I = 0.025
+    i_inj_increment_f_I = 0.06
     num_increments_f_I = 6
     rate_at_rheobase = 1.  # Hz, corresponds to 1 spike in a 1000 ms current injection
 
-    exp_i_inj_amp_f_I_0 = np.array([65, 65.5, 67.5, 70, 72.5, 75, 77.5, 80, 82.5, 85, 87.5, 90, 92.5, 95, 97.5,
-                           105, 115, 125, 135, 145, 155, 165, 175, 185, 195,205, 215, 225])/1000  # nA
-    exp_rate_f_I_0 = np.array([0, 1, 2, 3, 4, 4, 5, 6, 6, 7, 8, 8, 9, 9, 10, 
-                      12, 14, 16, 18, 20, 22, 23, 25, 27, 29, 30, 32, 33])/ 0.6  # Hz, from 600 ms current injections
-    fit_params_f_I_0 = [200., 200.]
+    exp_i_inj_amp_f_I_0 = [0.135, 0.151, 0.167, 0.185, 0.205, 0.226, 0.249, 0.273, 0.294, 0.32 , 0.344, 0.366, 0.387,
+                           0.412, 0.442, 0.469, 0.498, 0.522, 0.549, 0.571, 0.593]  # nA
+    exp_rate_f_I_0 = [14.09, 25.91, 36.5, 46.46, 55.8, 65.45, 75.72, 85.37, 94.09, 103.74, 113.07, 121.17, 129.88,
+                      138.6, 148.25, 157.9, 166.93, 176.58, 184.98, 192.14, 198.68]  # Hz, from 1000 ms current injections
+    fit_params_f_I_0 = [250., 250.]
 
     exp_fit_params_f_I, pcov = scipy.optimize.curve_fit(log10_fit, exp_i_inj_amp_f_I_0, exp_rate_f_I_0,
                                                         fit_params_f_I_0)

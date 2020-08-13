@@ -1,0 +1,114 @@
+bounds:
+  soma.C: !!python/tuple
+  - 0.1 
+  - 2.0
+  soma.k: !!python/tuple
+  - 0.2 
+  - 1.6
+  soma.vpeak: !!python/tuple
+  - 0.0
+  - 50.0
+  soma.a: !!python/tuple
+  - 0.01 
+  - 0.2
+  soma.b: !!python/tuple
+  - -2.0
+  - 15.0
+  soma.c: !!python/tuple
+  - -70.0
+  - -40.0
+  soma.d: !!python/tuple
+  - -60.0
+  - 150.0
+default_params:
+rel_bounds:
+feature_names:
+- soma R_inp
+- soma vm_rest
+- ADP
+- fAHP
+- mAHP
+- rebound_firing
+- vm_stability
+- slow_depo
+- rheobase
+- f_I_log10_slope
+- spike_adi_slope
+- spike_detector_delay
+update_context:
+- - optimize_DG_NGFC_Izhi_spiking
+  - update_mechanisms_spiking
+get_features_stages:
+- source: optimize_DG_NGFC_Izhi_leak
+  get_args_static: get_args_static_leak
+  compute_features: compute_features_leak
+- source: optimize_DG_NGFC_Izhi_spiking
+  get_args_dynamic: get_args_dynamic_i_holding
+  compute_features: compute_features_spike_shape
+- source: optimize_DG_NGFC_Izhi_spiking
+  get_args_dynamic: get_args_dynamic_fI
+  compute_features: compute_features_fI
+  filter_features: filter_features_fI
+get_objectives:
+  optimize_DG_NGFC_Izhi_leak: get_objectives_leak
+  optimize_DG_NGFC_Izhi_spiking: get_objectives_spiking
+kwargs:
+  mech_file_path: mechanisms/20200611_DG_MC_only_Izhi_leak_mech.yaml 
+  gid: 1044650
+  cell_type: NGFC
+  correct_for_spines: False
+  verbose: 2
+  daspk: True  # False
+  cvode: False
+  config_file: Small_Scale_Control_MC_BC_NewMorph.yaml 
+  template_paths: ../DGC/Mateos-Aparicio2014:../dentate/templates
+  hoc_lib_path: ../dentate
+  config_prefix: ../dentate/config
+  dataset_prefix: ../dentate/datasets
+  results_path: data
+  vr: -62.
+  vt: -40.
+  celltype: 5
+objective_names:
+- soma R_inp
+- rebound_firing
+- vm_stability
+- slow_depo
+- spike_adaptation_residuals
+- f_I_residuals
+optimization_title: DG_NGFC_Izhi_leak_spiking
+param_gen: PopulationAnnealing
+param_names:
+- soma.C
+- soma.k
+- soma.a
+- soma.b
+- soma.c
+- soma.d
+- soma.vpeak
+target_range:
+  soma R_inp: 0.5
+  ADP: 0.05
+  fAHP: 0.07
+  rebound_firing: 0.002
+  vm_stability: 0.5
+  spike_rate: 0.1
+  slow_depo: 0.1
+target_val:
+  soma R_inp: 43. 
+  min_ADP: 1.
+  max_ADP: 10.
+  min_fAHP: -24.9 
+  max_fAHP: -14.9
+  rebound_firing: 0
+  max_slow_depo: 5.0
+  min_slow_depo: -1.0
+  vm_stability: 5.0
+x0:
+  soma.C: 1.
+  soma.k: 1.6
+  soma.a: 0.03
+  soma.b: -2.0
+  soma.c: -65.0
+  soma.d: 100
+  soma.vpeak: 35.
