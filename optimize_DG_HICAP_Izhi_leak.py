@@ -128,7 +128,7 @@ def init_context():
     """
 
     """
-    equilibrate = 250.  # time to steady-state
+    equilibrate = 200.  # time to steady-state
     stim_dur = 600.
     duration = equilibrate + stim_dur
     dt = 0.025

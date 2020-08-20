@@ -88,11 +88,11 @@ rel_bounds:
   - soma.gkdrbar
 feature_names:
 - dend R_inp
-- term_dend R_inp
+#- term_dend R_inp
 - soma R_inp
-- soma R_inp (no h)
+#- soma R_inp (no h)
 - soma vm_rest
-- soma vm_rest (no h)
+#- soma vm_rest (no h)
 - vm_th
 - ADP
 - fAHP
@@ -186,8 +186,8 @@ param_names:
 - soma.tau_Cacum
 target_range:
   dend R_inp: 1.
-  soma R_inp: 0.5
-  soma vm_rest: 0.1
+  soma R_inp: 2. 
+  soma vm_rest: 2.
   ADP: 0.05
   fAHP: 0.07
   ais_delay: 0.0005
@@ -199,14 +199,14 @@ target_range:
 target_val:
 #  term_dend R_inp: 1000.
 #  dend R_inp: 117.
-  soma R_inp: 126.
+  soma R_inp: 43.
 #  soma R_inp (no h): 144.
-  soma vm_rest: -66.0
+  soma vm_rest: -62.0
 #  soma vm_rest (no h): -70.0
   min_ADP: 1.
   max_ADP: 10.
-  min_fAHP: -24.9 
-  max_fAHP: -14.9
+  min_fAHP: 14.9 
+  max_fAHP: 24.9
   ais_delay: 0.0
   rebound_firing: 0
   max_slow_depo: 5.0
