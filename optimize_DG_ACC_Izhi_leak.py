@@ -132,8 +132,8 @@ def init_context():
     stim_dur = 500.
     duration = equilibrate + stim_dur
     dt = 0.025
-    v_init = -66.
-    v_active = -60.
+    v_init = -65.
+    v_active = -64.
     i_holding_max = 0.5  # nA
     context.update(locals())
 

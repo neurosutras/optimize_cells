@@ -161,10 +161,16 @@ def init_context():
     num_increments_f_I = 6
     rate_at_rheobase = 1.  # Hz, corresponds to 1 spike in a 1000 ms current injection
 
-    exp_i_inj_amp_f_I_0 = [0.135, 0.151, 0.167, 0.185, 0.205, 0.226, 0.249, 0.273, 0.294, 0.32 , 0.344, 0.366, 0.387,
-                           0.412, 0.442, 0.469, 0.498, 0.522, 0.549, 0.571, 0.593]  # nA
-    exp_rate_f_I_0 = [14.09, 25.91, 36.5, 46.46, 55.8, 65.45, 75.72, 85.37, 94.09, 103.74, 113.07, 121.17, 129.88,
-                      138.6, 148.25, 157.9, 166.93, 176.58, 184.98, 192.14, 198.68]  # Hz, from 1000 ms current injections
+    exp_i_inj_amp_f_I_0 = [0.0412844 , 0.04318022, 0.04766124, 0.05030912, 0.05410703,
+       0.05702544, 0.0621384 , 0.06669777, 0.07140537, 0.07613682,
+       0.08304164, 0.09072887, 0.09800575, 0.10995242, 0.05988024] # nA
+                           
+
+    exp_rate_f_I_0 = [1.15450949,  3.11552061,  5.5593994 ,  7.40193046, 10.14027211,
+       11.90168673, 14.7894659 , 17.45296999, 19.77638812, 21.9614375 ,
+       24.60194163, 26.76482041, 28.62380102, 30.52683567, 13.63196126]
+                      
+
     fit_params_f_I_0 = [250., 250.]
 
     exp_fit_params_f_I, pcov = scipy.optimize.curve_fit(log10_fit, exp_i_inj_amp_f_I_0, exp_rate_f_I_0,
@@ -174,13 +180,13 @@ def init_context():
     exp_i_inj_amp_array = np.add(exp_rheobase, i_inj_relative_amp_array)
     exp_rate_f_I_array = log10_fit(exp_i_inj_amp_array, *exp_fit_params_f_I)
 
-    exp_i_inj_amp_spike_adaptation_0 = [0.0786927, 0.11918506, 0.15969864, 0.20034486, 0.23995649, 0.2803958,
-                                        0.32106324, 0.35967742, 0.40113009]  # nA
+    exp_i_inj_amp_spike_adaptation_0 = [0.0412844 , 0.05030912, 0.05702544, 0.07140537, 0.08304164, 0.09800575, 0.10995242, 0.05988024]
+                                        
     # last ISI / first ISI (%)
 #    exp_spike_adaptation_array_0 = [120.4301075, 123.655914, 129.0322581, 147.8494624, 161.827957, 159.6774194,
 #                                    180.6451613, 193.5483871, 194.0860215]
 
-    exp_spike_adaptation_array_0 = [100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0]
+    exp_spike_adaptation_array_0 = [100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0]
 
     exp_fit_spike_adaptation_results = stats.linregress(exp_i_inj_amp_spike_adaptation_0, exp_spike_adaptation_array_0)
 

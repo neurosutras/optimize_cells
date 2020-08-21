@@ -1,10 +1,10 @@
 bounds:
   soma.C: !!python/tuple
   - 0.1 
-  - 2.0
+  - 20.0
   soma.k: !!python/tuple
-  - 0.2 
-  - 1.6
+  - 0.1 
+  - 4.0
   soma.vpeak: !!python/tuple
   - 0.0
   - 50.0
@@ -66,8 +66,8 @@ kwargs:
   config_prefix: ../dentate/config
   dataset_prefix: ../dentate/datasets
   results_path: data
-  vr: -62.
-  vt: -40.
+  vr: -65.
+  vt: -42.
   celltype: 5
 objective_names:
 - soma R_inp
@@ -87,7 +87,7 @@ param_names:
 - soma.d
 - soma.vpeak
 target_range:
-  soma R_inp: 0.5
+  soma R_inp: 1.0 
   ADP: 0.05
   fAHP: 0.07
   rebound_firing: 0.002
@@ -95,11 +95,11 @@ target_range:
   spike_rate: 0.1
   slow_depo: 0.1
 target_val:
-  soma R_inp: 43. 
+  soma R_inp: 52.3 
   min_ADP: 1.
   max_ADP: 10.
-  min_fAHP: -24.9 
-  max_fAHP: -14.9
+  min_fAHP: 5.0 
+  max_fAHP: 7.0
   rebound_firing: 0
   max_slow_depo: 5.0
   min_slow_depo: -1.0
