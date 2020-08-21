@@ -159,7 +159,7 @@ def init_context():
 
     i_inj_increment_f_I = 0.06
     num_increments_f_I = 6
-    rate_at_rheobase = 0.2.  # Hz, corresponds to 1 spike in a 200 ms current injection
+    rate_at_rheobase = 0.2  # Hz, corresponds to 1 spike in a 200 ms current injection
 
     exp_i_inj_amp_f_I_0 = np.array([102.27101885840013, 109.03134043823086, 115.58925718034207, 122.30909779262892,  128.86701453474018,  135.2225264391319,  141.9828480189626,
                             148.50028379353,  155.0655607115583, 161.65659824529638, 169.76291199596164, 177.68706139267937, 184.0628137808431,  212.66261735060596,
@@ -181,7 +181,7 @@ def init_context():
     exp_i_inj_amp_array = np.add(exp_rheobase, i_inj_relative_amp_array)
     exp_rate_f_I_array = log10_fit(exp_i_inj_amp_array, *exp_fit_params_f_I)
 
-    exp_i_inj_amp_spike_adaptation_0 = np.array([109.03134043823086, 135.2225264391319, 155.0655607115583, 177.68706139267937, 212.66261735060596, 236.34398336378547 277.51312735592825,
+    exp_i_inj_amp_spike_adaptation_0 = np.array([109.03134043823086, 135.2225264391319, 155.0655607115583, 177.68706139267937, 212.66261735060596, 236.34398336378547, 277.51312735592825,
                                         199.15611814345988, 261.6033755274261])/1000  # nA
     # last ISI / first ISI (%)
 #    exp_spike_adaptation_array_0 = [120.4301075, 123.655914, 129.0322581, 147.8494624, 161.827957, 159.6774194,
