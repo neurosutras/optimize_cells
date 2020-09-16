@@ -745,7 +745,7 @@ def plot_sim_from_file(file_path, model_label=None, category=None, group_name='s
                 sec_type = get_h5py_attr(rec.attrs, 'type')
                 node_name = '%s%i' % (sec_type, rec.attrs['index'])
                 label = '%s: %s(%.2f) %s' % (name, node_name, rec.attrs['loc'], description)
-                axes.plot(trial['time'], rec, label=label)
+                axes.plot(trial['time'][:], rec[:], label=label)
                 axes.set_xlabel('Time (ms)')
                 ylabel = get_h5py_attr(rec.attrs, 'ylabel')
                 units = get_h5py_attr(rec.attrs, 'units')
@@ -900,6 +900,7 @@ def plot_exported_DG_iEPSP_attenuation(file_path, model_label=None, show=True, *
         fig.show()
     else:
         return axes
+
 
 def annotate_axes(ax, txt, pos=None):
     if pos is None:
