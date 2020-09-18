@@ -54,7 +54,7 @@ get_objectives:
   optimize_DG_HICAP_Izhi_spiking: get_objectives_spiking
 kwargs:
   mech_file_path: mechanisms/20200611_DG_MC_only_Izhi_leak_mech.yaml 
-  gid: 1039000
+  gid: 1043250
   cell_type: HICAP
   correct_for_spines: False
   verbose: 2
