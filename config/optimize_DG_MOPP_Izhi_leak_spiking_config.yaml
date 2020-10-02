@@ -68,7 +68,7 @@ kwargs:
   results_path: data
   vr: -62.
   vt: -40.
-  celltype: 5
+  celltype: 1
 objective_names:
 - soma R_inp
 - rebound_firing

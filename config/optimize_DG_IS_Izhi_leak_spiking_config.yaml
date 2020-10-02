@@ -66,9 +66,9 @@ kwargs:
   config_prefix: ../dentate/config
   dataset_prefix: ../dentate/datasets
   results_path: data
-  vr: -74.2
-  vt: -44.6
-  celltype: 5
+  vr: -69.7
+  vt: -44.34
+  celltype: 1
 objective_names:
 - soma R_inp
 - rebound_firing
@@ -95,11 +95,11 @@ target_range:
   spike_rate: 0.1
   slow_depo: 0.1
 target_val:
-  soma R_inp: 497
+  soma R_inp: 411.8
   min_ADP: 1.
   max_ADP: 10.
-  min_fAHP: 14.9 
-  max_fAHP: 24.9
+  min_fAHP: 5.88 
+  max_fAHP: 7.88
   rebound_firing: 0
   max_slow_depo: 5.0
   min_slow_depo: -1.0
