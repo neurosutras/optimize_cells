@@ -66,14 +66,14 @@ kwargs:
   config_prefix: ../dentate/config
   dataset_prefix: ../dentate/datasets
   results_path: data
-  vr: -60.5
+  vr: -65.0
   vt: -36.6
   celltype: 1
 objective_names:
 - soma R_inp
-- rebound_firing
-- vm_stability
-- slow_depo
+#- rebound_firing
+#- vm_stability
+#- slow_depo
 - spike_adaptation_residuals
 - f_I_residuals
 optimization_title: DG_HICAP_Izhi_leak_spiking
@@ -87,7 +87,7 @@ param_names:
 - soma.d
 - soma.vpeak
 target_range:
-  soma R_inp: 5
+  soma R_inp: 9
   ADP: 0.05
   fAHP: 0.07
   rebound_firing: 0.002
@@ -95,7 +95,7 @@ target_range:
   spike_rate: 0.1
   slow_depo: 0.1
 target_val:
-  soma R_inp: 233.9 
+  soma R_inp: 220.0
   min_ADP: 1.
   max_ADP: 10.
   min_fAHP: 17 

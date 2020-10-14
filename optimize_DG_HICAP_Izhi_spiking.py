@@ -141,7 +141,7 @@ def init_context():
     """
 
     """
-    equilibrate = 200.  # time to steady-state
+    equilibrate = 250.  # time to steady-state
     default_stim_dur = 200.  # ms
     stim_dur_f_I = 1000.
     duration = equilibrate + default_stim_dur
@@ -150,14 +150,14 @@ def init_context():
     th_dvdt = 20.
     dend_th_dvdt = 30.
     v_init = -60.5
-    v_active = -60.5
+    v_active = -60.0
     i_th_start = 0.075
     i_th_max = 0.5
     i_inc = 0.005
 
     # Han 1993 and f_I derived from Izhi model on hippocampome.org
 
-    i_inj_increment_f_I = 0.025
+    i_inj_increment_f_I = 0.1
     num_increments_f_I = 6
     rate_at_rheobase = 1.  # Hz, corresponds to 1 spike in a 1000 ms current injection
 
@@ -165,14 +165,22 @@ def init_context():
 #                           105, 115, 125, 135, 145, 155, 165, 175, 185, 195,205, 215, 225])/1000  # nA
 #    exp_rate_f_I_0 = np.array([0, 1, 2, 3, 4, 4, 5, 6, 6, 7, 8, 8, 9, 9, 10, 
 #                      12, 14, 16, 18, 20, 22, 23, 25, 27, 29, 30, 32, 33])/ 0.6  # Hz, from 600 ms current injections
-    exp_i_inj_amp_f_I_0 = np.array([20.08733624, 16.50655022, 23.40611354, 26.02620087, 29.08296943,
-       31.44104803, 33.27510917, 35.28384279, 36.94323144, 38.86462882,
-       40.        , 42.09606987, 45.15283843, 48.20960699, 51.1790393 ,
-       54.14847162, 56.33187773, 58.25327511, 60.08733624])/1000 #nA
-    exp_rate_f_I_0 = np.array([0.        ,  0.        ,  1.49538588,  2.80500558,  4.23580786,
-        5.18145589,  6.0787722 ,  6.87893048,  7.67923008,  8.43088001,
-        9.03721683,  9.57034949, 10.27299642, 11.02418705, 11.84822854,
-       12.52663897, 13.0597363 , 13.54439592, 13.98054719])
+
+#Bezaire
+ #   exp_i_inj_amp_f_I_0 = np.array([20.08733624, 16.50655022, 23.40611354, 26.02620087, 29.08296943,
+ #      31.44104803, 33.27510917, 35.28384279, 36.94323144, 38.86462882,
+ #      40.        , 42.09606987, 45.15283843, 48.20960699, 51.1790393 ,
+ #      54.14847162, 56.33187773, 58.25327511, 60.08733624])/1000 #nA
+ #   exp_rate_f_I_0 = np.array([0.        ,  0.        ,  1.49538588,  2.80500558,  4.23580786,
+ #       5.18145589,  6.0787722 ,  6.87893048,  7.67923008,  8.43088001,
+ #       9.03721683,  9.57034949, 10.27299642, 11.02418705, 11.84822854,
+ #      12.52663897, 13.0597363 , 13.54439592, 13.98054719])
+
+
+#McBain
+    exp_i_inj_amp_f_I_0 = np.array([0.1, 0.2, 0.3, 0.4, 0.5]) #nA
+    exp_rate_f_I_0  = np.array([128, 331, 459, 550, 610])/700 * 60 # Hz for 1000 ms
+
 
     fit_params_f_I_0 = [200., 200.]
 
@@ -183,14 +191,19 @@ def init_context():
     exp_i_inj_amp_array = np.add(exp_rheobase, i_inj_relative_amp_array)
     exp_rate_f_I_array = log10_fit(exp_i_inj_amp_array, *exp_fit_params_f_I)
 
-    exp_i_inj_amp_spike_adaptation_0 = [0.0786927, 0.11918506, 0.15969864, 0.20034486, 0.23995649, 0.2803958,
-                                        0.32106324, 0.35967742, 0.40113009]  # nA
+ #   exp_i_inj_amp_spike_adaptation_0 = [0.0786927, 0.11918506, 0.15969864, 0.20034486, 0.23995649, 0.2803958,
+ #                                       0.32106324, 0.35967742, 0.40113009]  # nA
+#    exp_i_inj_amp_spike_adaptation_0 = [0.05, 0.1]
     # last ISI / first ISI (%)
 #    exp_spike_adaptation_array_0 = [120.4301075, 123.655914, 129.0322581, 147.8494624, 161.827957, 159.6774194,
 #                                    180.6451613, 193.5483871, 194.0860215]
 
 #    exp_spike_adaptation_array_0 = [100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0]
-    exp_spike_adaptation_array_0 = [130.0, 130.0, 130.0, 130.0, 130.0, 130.0, 130.0, 130.0, 130.0]
+#    exp_spike_adaptation_array_0 = [130.0, 200] 
+
+    exp_i_inj_amp_spike_adaptation_0 = np.array([0.1,  0.5])
+    exp_spike_adaptation_array_0 = 70000/np.array([306, 270]) #%  
+
 
     exp_fit_spike_adaptation_results = stats.linregress(exp_i_inj_amp_spike_adaptation_0, exp_spike_adaptation_array_0)
 

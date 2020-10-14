@@ -1,25 +1,25 @@
 bounds:
   soma.C: !!python/tuple
   - 0.1 
-  - 20.0
+  - 30.0
   soma.k: !!python/tuple
-  - 0.1 
-  - 4.0
+  - 0.01 
+  - 1.0 
   soma.vpeak: !!python/tuple
   - 0.0
   - 50.0
   soma.a: !!python/tuple
-  - 0.01 
-  - 0.2
+  - 0.05 
+  - 0.15
   soma.b: !!python/tuple
-  - -2.0
-  - 15.0
+  - 0.1
+  - 0.4
   soma.c: !!python/tuple
-  - -70.0
-  - -40.0
+  - -67.5
+  - -62.5
   soma.d: !!python/tuple
-  - -60.0
-  - 150.0
+  - 1 
+  - 3 
 default_params:
 rel_bounds:
 feature_names:
@@ -66,15 +66,15 @@ kwargs:
   config_prefix: ../dentate/config
   dataset_prefix: ../dentate/datasets
   results_path: data
-  vr: -75.6
-  vt: -30.0
-  celltype: 1
+  vr: -60.0
+  vt: -27.8
+  celltype: 7
 objective_names:
 - soma R_inp
-- rebound_firing
-- vm_stability
+#- rebound_firing
+#- vm_stability
 - slow_depo
-- spike_adaptation_residuals
+#- spike_adaptation_residuals
 - f_I_residuals
 optimization_title: DG_NGFC_Izhi_leak_spiking
 param_gen: PopulationAnnealing
@@ -95,7 +95,7 @@ target_range:
   spike_rate: 0.1
   slow_depo: 0.1
 target_val:
-  soma R_inp: 147.0 
+  soma R_inp: 100.8 
   min_ADP: 1.
   max_ADP: 10.
   min_fAHP: 13.6 
@@ -106,9 +106,9 @@ target_val:
   vm_stability: 5.0
 x0:
   soma.C: 1.
-  soma.k: 1.6
-  soma.a: 0.03
-  soma.b: -2.0
+  soma.k: 0.04 
+  soma.a: 0.1
+  soma.b: 0.25
   soma.c: -65.0
-  soma.d: 100
+  soma.d: 2
   soma.vpeak: 35.

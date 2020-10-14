@@ -141,7 +141,7 @@ def init_context():
     """
 
     """
-    equilibrate = 200.  # time to steady-state
+    equilibrate = 250.  # time to steady-state
     default_stim_dur = 200.  # ms
     stim_dur_f_I = 1000.
     duration = equilibrate + default_stim_dur
@@ -150,7 +150,7 @@ def init_context():
     th_dvdt = 20.
     dend_th_dvdt = 30.
     v_init = -60.5
-    v_active = -60.5
+    v_active = -60.0
     i_th_start = 0.075
     i_th_max = 0.5
     i_inc = 0.005
@@ -165,10 +165,10 @@ def init_context():
 #                           105, 115, 125, 135, 145, 155, 165, 175, 185, 195,205, 215, 225])/1000  # nA
 #    exp_rate_f_I_0 = np.array([0, 1, 2, 3, 4, 4, 5, 6, 6, 7, 8, 8, 9, 9, 10, 
 #                      12, 14, 16, 18, 20, 22, 23, 25, 27, 29, 30, 32, 33])/ 0.6  # Hz, from 600 ms current injections
-    exp_i_inj_amp_f_I_0 = np.array([242.0230102, 299.4976432, 274.8677669, 315.877205 , 327.2176965,
-       337.9247978, 348.6333755, 216.7449792])/1000 #nA
-    exp_rate_f_I_0 = np.array([0,  4.03011188,  1.70804989, 11.96446961, 17.33167727,
-       22.93289975, 28.30047652,  0.        ])
+    exp_i_inj_amp_f_I_0 = np.array([274.8677669, 299.4976432, 315.877205 , 327.2176965,
+       337.9247978, 348.6333755])/1000 #nA
+    exp_rate_f_I_0 = np.array([1.70804989, 4.03011188, 11.96446961, 17.33167727,
+       22.93289975, 28.30047652        ])
     fit_params_f_I_0 = [200., 200.]
 
     exp_fit_params_f_I, pcov = scipy.optimize.curve_fit(log10_fit, exp_i_inj_amp_f_I_0, exp_rate_f_I_0,
@@ -178,12 +178,12 @@ def init_context():
     exp_i_inj_amp_array = np.add(exp_rheobase, i_inj_relative_amp_array)
     exp_rate_f_I_array = log10_fit(exp_i_inj_amp_array, *exp_fit_params_f_I)
 
-    exp_i_inj_amp_spike_adaptation_0 = [0.0786927, 0.11918506, 0.15969864, 0.20034486 ]
+    exp_i_inj_amp_spike_adaptation_0 = [0.1, 0.35 ]
     # last ISI / first ISI (%)
 #    exp_spike_adaptation_array_0 = [120.4301075, 123.655914, 129.0322581, 147.8494624, 161.827957, 159.6774194,
 #                                    180.6451613, 193.5483871, 194.0860215]
 
-    exp_spike_adaptation_array_0 = [121.4, 121.4, 121.4, 121.4]
+    exp_spike_adaptation_array_0 = [121.4, 150]
 
     exp_fit_spike_adaptation_results = stats.linregress(exp_i_inj_amp_spike_adaptation_0, exp_spike_adaptation_array_0)
 

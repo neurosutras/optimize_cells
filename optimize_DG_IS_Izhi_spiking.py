@@ -157,15 +157,15 @@ def init_context():
 
     # doi: 10.3389/fncom.2013.00144, Fig. 4/ p. 3
 
-    i_inj_increment_f_I = 0.06
+    i_inj_increment_f_I = 0.01
     num_increments_f_I = 6
     rate_at_rheobase = 2.  # Hz, corresponds to 1 spike in a 500 ms current injection
 
-    exp_i_inj_amp_f_I_0 = [0.0225, 0.023 , 0.024 , 0.025 , 0.026 , 0.029 , 0.033 ,
+    exp_i_inj_amp_f_I_0 = [0.023 , 0.0245 , 0.026 , 0.029 , 0.033 ,
        0.039 , 0.045 , 0.055 , 0.065 , 0.077 , 0.095 , 0.12  , 0.15  ,
        0.175 , 0.2   , 0.225 , 0.25  , 0.275 , 0.3   , 0.325 , 0.35  ] 
                           
-    exp_rate_f_I_0 = [ 0,  2,  4,  4,  6,  8, 10, 12, 14, 16, 18, 20, 22, 24, 28, 30,
+    exp_rate_f_I_0 = [2,  4,  6,  8, 10, 12, 14, 16, 18, 20, 22, 24, 28, 30,
                        32, 34, 38, 40, 44, 48, 52]  # Hz, from 500 ms current injections
 
     fit_params_f_I_0 = [250., 250.]
