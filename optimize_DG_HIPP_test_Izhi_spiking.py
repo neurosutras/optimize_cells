@@ -209,8 +209,8 @@ def init_context():
 
 #   Testing single new adaptation objective
 #    freq_target_single_adaptation = 1.0 
-    sa_spike_times_target = np.array([5, 7, 11, 19, 35, 67])
-    freq_tol_ratio = 0.1 
+    sa_spike_times_target = np.array([100, 250, 550, 900])
+    freq_tol_ratio = 100 
     ISI_tol_ratio = 0.1 
 #    I_freq_tsa = inverse_log10_fit(freq_target_single_adaptation, *exp_fit_params_f_I)
     I_freq_tsa = 0.3 # nA 
@@ -737,7 +737,7 @@ def filter_features_fI(primitives, current_features, model_id=None, export=False
         target_spk_count =  target_spike_times.size 
         model_spike_times = current_features['sa_spike_times'] 
         model_spk_count = model_spike_times.size
-        if abs(model_spk_count - target_spk_count)/target_spk_count > context.freq_tol_ratio:
+        if not model_spike_times.size or abs(model_spk_count - target_spk_count)/target_spk_count > context.freq_tol_ratio:
             if context.verbose > 0:
                 print('filter_features_fI: pid: %i; model_id: %s; aborting - failed to match spike frequency for single adaptation' %
                       (os.getpid(), model_id))
@@ -764,12 +764,12 @@ def filter_features_fI(primitives, current_features, model_id=None, export=False
         rate.append(this_dict['spike_rate'])
         spike_times = this_dict['spike_times']
         this_adi = get_spike_adaptation_indexes(spike_times)
-        if 'pause_in_spiking' in this_dict and this_dict['pause_in_spiking']:
-            if context.verbose > 0:
-                print('filter_features_fI: pid: %i; model_id: %s; aborting - excessive pause in spiking' %
-                      (os.getpid(), model_id))
-                sys.stdout.flush()
-            failed = True
+     #   if 'pause_in_spiking' in this_dict and this_dict['pause_in_spiking']:
+     #       if context.verbose > 0:
+     #           print('filter_features_fI: pid: %i; model_id: %s; aborting - excessive pause in spiking' %
+     #                 (os.getpid(), model_id))
+     #           sys.stdout.flush()
+     #       failed = True
         adi.append(this_adi)
     new_features['f_I_rate'] = rate
     new_features['spike_adi'] = adi
@@ -845,6 +845,8 @@ def get_objectives_spiking(features, model_id=None, export=False):
     model_spike_times = features['sa_spike_times'] 
     model_spk_count = model_spike_times.size
     model_ISI = np.diff(model_spike_times)
+
+    print('\ndiag\n', target_spike_times, model_spike_times, '\n')
 
     min_ISI_cnt = min(target_ISI.size, model_ISI.size)
     all_idx = np.where((model_ISI[:min_ISI_cnt] < lower_target_ISI[:min_ISI_cnt]) & (model_ISI[:min_ISI_cnt] > upper_target_ISI[:min_ISI_cnt]))[0]
