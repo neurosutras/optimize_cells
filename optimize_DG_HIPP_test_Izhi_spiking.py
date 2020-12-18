@@ -209,7 +209,7 @@ def init_context():
 
 #   Testing single new adaptation objective
 #    freq_target_single_adaptation = 1.0 
-    sa_spike_times_target = np.array([100, 250, 550, 900])
+    sa_spike_times_target = np.array([20, 170, 470, 920])
     freq_tol_ratio = 100 
     ISI_tol_ratio = 0.1 
 #    I_freq_tsa = inverse_log10_fit(freq_target_single_adaptation, *exp_fit_params_f_I)
