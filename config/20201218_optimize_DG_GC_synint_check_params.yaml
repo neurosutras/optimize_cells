@@ -1,0 +1,8 @@
+0:
+  AMPA.tau: 6.937289E+01
+  AMPA.slope: 4.885335E-06
+  AMPA.g0: 2.093812E-04
+  NMDA.g_unit: 1.482638E-03
+  NMDA.gamma: 7.049474E-02
+  NMDA.Kd: 5.115201E+00
+  NMDA.vshift: -3.285012E+00
