@@ -20,5 +20,5 @@ cd $WORK/optimize_cells
 ibrun -n 2016 python3 -m nested.optimize \
     --config-file-path=config/optimize_DG_GC_excitability_synint_combined_gid_0_config.yaml \
     --output-dir=$SCRATCH/data/optimize_cells --pop_size=200 --max_iter=1 --path_length=1 --disp \
-    --label=gid_0 --verbose=1
+    --label=gid_0 --verbose=1 --dataset_prefix=$SCRATCH/data/dentate
 EOT
