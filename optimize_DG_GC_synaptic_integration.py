@@ -828,7 +828,7 @@ def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, mod
     result = {'model_key': model_key}
 
     spike_times = np.array(context.cell.spike_detector.get_recordvec())
-    if np.any(spike_times < equilibrate):
+    if np.any(spike_times > equilibrate):
         result['soma_spikes'] = True
 
     title = 'compound_EPSP_amp'

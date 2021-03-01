@@ -175,7 +175,7 @@ def config_sim_env(context):
     if context.v_active not in context.i_holding['dend']:
         context.i_holding['dend'][context.v_active] = 0.
     if not sim.has_rec('term_dend'):
-        term_dend = get_distal_most_terminal_branch(context.cell, 250.)
+        term_dend = get_distal_most_terminal_branch(context.cell)  # , 250.)
         sim.append_rec(cell, term_dend, name='term_dend', loc=1.)
     if context.v_active not in context.i_holding['term_dend']:
         context.i_holding['term_dend'][context.v_active] = 0.
