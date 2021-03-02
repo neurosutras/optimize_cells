@@ -211,7 +211,7 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, load_edges=False, 
     context.env = Env(comm=context.comm, verbose=verbose > 1, **kwargs)
     configure_hoc_env(context.env)
     context.celltype = int(context.celltype)
-    cell = IzhiCell(gid=context.gid, pop_name=context.cell_type, env=context.env,
+    cell = IzhiCell(gid=int(context.gid), pop_name=context.cell_type, env=context.env,
                     cell_attrs=IzhiCellAttrs(C=1., k=0.7, vr=context.vr, vt=context.vt, vpeak=35., a=0.03, b=-2.,
                                              c=-55., d=100., celltype=context.celltype))
     context.sim = QuickSim(context.duration, cvode=cvode, daspk=daspk, dt=context.dt, verbose=verbose>1)
