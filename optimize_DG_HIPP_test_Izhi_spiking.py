@@ -209,7 +209,7 @@ def init_context():
 
 #   Testing single new adaptation objective
 #    freq_target_single_adaptation = 1.0 
-    sa_spike_times_target = np.array([100, 250, 550, 900])
+    sa_spike_times_target = np.array([20, 170, 470, 920])
     freq_tol_ratio = 100 
     ISI_tol_ratio = 0.1 
 #    I_freq_tsa = inverse_log10_fit(freq_target_single_adaptation, *exp_fit_params_f_I)
@@ -231,7 +231,7 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, load_edges=False, 
     context.env = Env(comm=context.comm, verbose=verbose > 1, **kwargs)
     configure_hoc_env(context.env)
     context.celltype = int(context.celltype)
-    cell = IzhiCell(gid=context.gid, pop_name=context.cell_type, env=context.env,
+    cell = IzhiCell(gid=int(context.gid), pop_name=context.cell_type, env=context.env,
                     cell_attrs=IzhiCellAttrs(C=1., k=0.7, vr=context.vr, vt=context.vt, vpeak=35., a=0.03, b=-2.,
                                              c=-55., d=100., celltype=context.celltype))
     context.sim = QuickSim(context.duration, cvode=cvode, daspk=daspk, dt=context.dt, verbose=verbose>1)

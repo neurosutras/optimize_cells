@@ -142,7 +142,7 @@ def build_sim_env(context, verbose=2, cvode=True, daspk=True, load_edges=False, 
     init_context()
     context.env = Env(comm=context.comm, verbose=verbose > 1, **kwargs)
     configure_hoc_env(context.env)
-    cell = get_biophys_cell(context.env, gid=context.gid, pop_name=context.cell_type, load_edges=load_edges,
+    cell = get_biophys_cell(context.env, gid=int(context.gid), pop_name=context.cell_type, load_edges=load_edges,
                             set_edge_delays=set_edge_delays, mech_file_path=context.mech_file_path)
     init_biophysics(cell, reset_cable=True, correct_cm=context.correct_for_spines,
                     correct_g_pas=context.correct_for_spines, env=context.env, verbose=verbose > 1)
@@ -175,7 +175,7 @@ def config_sim_env(context):
     if context.v_active not in context.i_holding['dend']:
         context.i_holding['dend'][context.v_active] = 0.
     if not sim.has_rec('term_dend'):
-        term_dend = get_distal_most_terminal_branch(context.cell, 250.)
+        term_dend = get_distal_most_terminal_branch(context.cell)  # , 250.)
         sim.append_rec(cell, term_dend, name='term_dend', loc=1.)
     if context.v_active not in context.i_holding['term_dend']:
         context.i_holding['term_dend'][context.v_active] = 0.
