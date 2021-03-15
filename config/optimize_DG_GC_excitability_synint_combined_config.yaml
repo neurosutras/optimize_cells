@@ -66,14 +66,14 @@ bounds:
   - 50.
   - 400.
   AMPA.slope: !!python/tuple
-  - 1.0e-7
-  - 1.0e-5
+  - 5.0e-7
+  - 0.01
   AMPA.g0: !!python/tuple
-  - 1.0e-4
-  - 0.001
+  - 5.0e-5
+  - 0.005
   NMDA.g_unit: !!python/tuple
-  - 1.0e-4
-  - 5.0e-2
+  - 1.0e-5
+  - 0.01
   NMDA.gamma: !!python/tuple
   - 0.02
   - 0.12
@@ -117,6 +117,10 @@ rel_bounds:
   - '<'
   - 1.0
   - soma.gkdrbar
+- - NMDA.g_unit
+  - '<'
+  - 2.0
+  - AMPA.g0
 feature_names:
 - dend R_inp
 - term_dend R_inp
@@ -232,8 +236,8 @@ objective_names:
 - mean_NMDA_contribution_residuals
 - integration_gain_control_residuals
 - integration_gain_AP5_residuals
-- initial_gain_control_residuals
-- initial_gain_AP5_residuals
+# - initial_gain_control_residuals
+# - initial_gain_AP5_residuals
 optimization_title: DG_GC_excitability_synint_combined
 param_gen: PopulationAnnealing
 param_names:
@@ -308,32 +312,32 @@ target_val:
   initial_gain_control: 1.
   initial_gain_AP5: 1.
 x0:
-  soma.gCa factor: 3.386286E-01
-  soma.tau_Cacum: 5.783834E+01
-  dend.gbar_nas min: 2.316494E-02
-  soma.gkdrbar: 4.012674E-02
-  soma.g_pas: 2.362825E-08
-  axon.gkabar: 1.229288E-02
-  soma.gkabar: 1.787941E-02
-  dend.gbar_nas: 3.650910E-02
-  ais.sha_nax: -3.882716E+00
-  axon.gkdrbar: 5.814910E-02
-  soma.sh_nas/x: 6.443239E+00
-  dend.gkabar: 1.555928E-01
-  ais.gbar_nax: 1.993188E-01
-  dend.gkdrbar: 7.635090E-03
-  dend.g_pas slope: 3.829971E-05
-  dend.g_pas tau: 3.053399E+02
-  axon.gbar_nax: 6.364521E-02
-  soma.gbar_nas: 3.925494E-02
-  soma.gCadepK factor: 8.701312E+00
-  ais.gkmbar: 1.305485E-02
-  e_pas: -7.444863E+01
-  AMPA.tau: 1.868088E+02
-  AMPA.slope: 3.293672E-06
-  AMPA.g0: 1.464409E-04
-  NMDA.g_unit: 4.316527E-03
-  NMDA.gamma: 8.130658E-02
-  NMDA.Kd: 4.331929E+00
-  NMDA.vshift: 9.592656E+00
+  AMPA.g0: 2.504168E-04
+  AMPA.slope: 2.504168E-04
+  AMPA.tau: 2.259072E+02
+  NMDA.Kd: 8.348923E+00
+  NMDA.g_unit: 2.504168E-04
+  NMDA.gamma: 1.076359E-01
+  NMDA.vshift: 4.601420E+00
+  ais.gbar_nax: 4.250939E-01
+  ais.gkmbar: 1.557645E-02
+  ais.sha_nax: -2.687115E+00
+  axon.gbar_nax: 7.429200E-02
+  axon.gkabar: 1.787669E-02
+  axon.gkdrbar: 5.515052E-02
+  dend.g_pas slope: 6.571772E-05
+  dend.g_pas tau: 2.229911E+02
+  dend.gbar_nas: 3.284828E-02
+  dend.gbar_nas min: 1.116134E-02
+  dend.gkabar: 2.043516E-01
+  dend.gkdrbar: 4.891021E-03
+  e_pas: -7.527794E+01
+  soma.gCa factor: 5.861495E-01
+  soma.gCadepK factor: 7.464573E-01
+  soma.g_pas: 5.220526E-08
+  soma.gbar_nas: 4.110657E-02
+  soma.gkabar: 5.337368E-02
+  soma.gkdrbar: 3.960060E-02
+  soma.sh_nas/x: 7.153966E+00
+  soma.tau_Cacum: 2.834898E+01
 

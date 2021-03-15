@@ -919,18 +919,26 @@ def get_objectives_synaptic_integration(features, model_key, export=False):
                         compound_EPSP_traces_dict[syn_group][syn_condition][num_syns][rec_name] = \
                             this_group[rec_name][i,:]
 
+    syn_id_attr_dict = context.env.synapse_attributes.syn_id_attr_dict[context.cell.gid]
     control_EPSP_amp_list = []
+    syn_soma_distance_list = []
     NMDA_contribution_list = []
     for syn_id in context.syn_id_dict['random']:
         control_soma_trace = np.array(unitary_EPSP_traces_dict['random']['control'][syn_id]['soma'][:])
         control_soma_amp = np.max(control_soma_trace)
         control_EPSP_amp_list.append(control_soma_amp)
+        syn_section = syn_id_attr_dict[syn_id].syn_section
+        syn_loc = syn_id_attr_dict[syn_id].syn_loc
+        this_distance = get_distance_to_node(context.cell, context.cell.tree.root,
+                                             context.cell.tree.get_node_with_index(syn_section),
+                                             loc=syn_loc)
+        syn_soma_distance_list.append(this_distance)
         AP5_soma_trace = np.array(unitary_EPSP_traces_dict['random']['AP5'][syn_id]['soma'][:])
         AP5_soma_amp = np.max(AP5_soma_trace)
         NMDA_contribution_list.append((control_soma_amp - AP5_soma_amp) / control_soma_amp)
 
     mean_unitary_EPSP_amp_residuals = \
-        np.mean(((np.array(control_EPSP_amp_list) - context.target_val['mean_unitary_EPSP_amp']) /
+        np.sum(((np.array(control_EPSP_amp_list) - context.target_val['mean_unitary_EPSP_amp']) /
                  context.target_range['mean_unitary_EPSP_amp']) ** 2.)
     mean_NMDA_contribution_residuals = \
         np.mean(((np.array(NMDA_contribution_list) - context.target_val['mean_NMDA_contribution']) /
@@ -1011,6 +1019,11 @@ def get_objectives_synaptic_integration(features, model_key, export=False):
                                 unitary_EPSP_traces_dict[syn_group][syn_condition][syn_id][rec_name])
                         this_group.create_dataset(rec_name, compression='gzip',
                                                   data=np.mean(this_condition_array_list, axis=0))
+
+            description = 'unitary_EPSP_summary'
+            group = get_h5py_group(f, [model_key, description], create=True)
+            group.create_dataset('soma_distance', compression='gzip', data=syn_soma_distance_list)
+            group.create_dataset('soma_unitary_EPSP_amp', compression='gzip', data=control_EPSP_amp_list)
 
             description = 'compound_EPSP_summary'
             group = get_h5py_group(f, [model_key, description], create=True)
