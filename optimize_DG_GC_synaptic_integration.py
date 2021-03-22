@@ -9,6 +9,7 @@ from dentate.biophysics_utils import *
 from nested.parallel import *
 from nested.optimize_utils import *
 from cell_utils import *
+import uuid
 import click
 
 context = Context()
@@ -451,9 +452,10 @@ def export_unitary_EPSP_traces():
 
     if context.temp_model_data_file_path is None:
         if context.interface.global_comm.rank == 0:
-            context.temp_model_data_file_path = '%s/%s_%s_temp_model_data.hdf5' % \
+            context.temp_model_data_file_path = '%s/%s_%s_uuid%i_temp_model_data.hdf5' % \
                                                 (context.output_dir,
                                                  datetime.datetime.today().strftime('%Y%m%d_%H%M'),
+                                                 uuid.uuid1(),
                                                  context.optimization_title)
         context.temp_model_data_file_path = \
             context.interface.global_comm.bcast(context.temp_model_data_file_path, root=0)
