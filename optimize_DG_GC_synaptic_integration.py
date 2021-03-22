@@ -452,7 +452,7 @@ def export_unitary_EPSP_traces():
 
     if context.temp_model_data_file_path is None:
         if context.interface.global_comm.rank == 0:
-            context.temp_model_data_file_path = '%s/%s_%s_uuid%i_temp_model_data.hdf5' % \
+            context.temp_model_data_file_path = '%s/%s_uuid%i_%s_temp_model_data.hdf5' % \
                                                 (context.output_dir,
                                                  datetime.datetime.today().strftime('%Y%m%d_%H%M'),
                                                  uuid.uuid1(),
