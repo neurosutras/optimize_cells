@@ -201,7 +201,7 @@ kwargs:
   max_i_EPSP_attenuation_distance: 300.
   gid: 0
   cell_type: GC
-  correct_for_spines: True
+  correct_for_spines: False  # True
   verbose: 1
   seed_offset: 14e6
   daspk: False
