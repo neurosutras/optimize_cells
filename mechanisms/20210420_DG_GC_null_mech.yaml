@@ -1,0 +1,52 @@
+apical:
+  synapses:
+    AMPA:
+      g_unit:
+      - filters:
+          syn_types:
+          - excitatory
+        origin: soma
+        slope: 4.8853351979008095e-06
+        tau: 69.37288992690708
+        value: 0.00020938119103124992
+      - custom:
+          func: custom_filter_if_terminal
+        filters:
+          syn_types:
+          - excitatory
+        origin: parent
+        origin_filters:
+          syn_types:
+          - excitatory
+      - filters:
+          layers:
+          - OML
+          syn_types:
+          - excitatory
+        origin: apical
+        origin_filters:
+          layers:
+          - MML
+          syn_types:
+          - excitatory
+    NMDA:
+      Kd:
+        filters:
+          syn_types:
+          - excitatory
+        value: 5.11520052441336
+      g_unit:
+        filters:
+          syn_types:
+          - excitatory
+        value: 0.001482637648790408
+      gamma:
+        filters:
+          syn_types:
+          - excitatory
+        value: 0.07049474192334064
+      vshift:
+        filters:
+          syn_types:
+          - excitatory
+        value: -3.2850118424061643
