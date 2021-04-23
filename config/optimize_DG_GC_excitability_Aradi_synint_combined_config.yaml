@@ -154,7 +154,7 @@ update_context:
 #   - update_mechanisms_leak
 # - - optimize_DG_GC_spiking
 #   - update_mechanisms_spiking
-# - - optimize_DG_GC_synaptic_integration
+- - optimize_DG_GC_synaptic_integration
   - reset_syn_mechanisms
 - - optimize_DG_GC_synaptic_integration
   - update_syn_mechanisms
