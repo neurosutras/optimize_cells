@@ -51,6 +51,7 @@ def main(cli, config_file_path, output_dir, export, export_file_path, label, ver
     context.interface = get_parallel_interface(source_file=__file__, source_package=__package__, **kwargs)
     context.interface.start(disp=context.disp)
     context.interface.ensure_controller()
+
     config_optimize_interactive(__file__, config_file_path=config_file_path, output_dir=output_dir,
                                 export=export, export_file_path=export_file_path, label=label,
                                 disp=context.disp, interface=context.interface, verbose=verbose, plot=plot,
@@ -559,7 +560,8 @@ def compute_features_fI(x, i_holding, spike_detector_delay, rheobase, relative_a
         last_spike_index = int((last_spike_time + equilibrate - spike_detector_delay) / dt)
         vm_th_late = np.mean(vm[last_spike_index - int(0.1 / dt):last_spike_index])
         result['vm_th_late'] = vm_th_late
-        result['pause_in_spiking'] = check_for_pause_in_spiking(spike_times, stim_dur)
+
+    result['pause_in_spiking'] = check_for_pause_in_spiking(spike_times, stim_dur)
 
     spike_rate = len(spike_times[np.where(spike_times < stim_dur)[0]]) / stim_dur * 1000.
     result['spike_rate'] = spike_rate
