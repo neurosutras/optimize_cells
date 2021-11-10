@@ -17,7 +17,7 @@ sbatch <<EOT
 
 set -x
 
-cd $WORK/optimize_cells
+cd $WORK2/optimize_cells
 
 ibrun -n 2016 python3 -m nested.optimize \
     --config-file-path=$CONFIG_FILE_PATH \
