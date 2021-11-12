@@ -72,7 +72,7 @@ def run_tests():
     args = context.interface.execute(get_args_dynamic_i_EPSC, context.x0_array, features)
     group_size = len(args[0])
     sequences = [[context.x0_array] * group_size] + args + [[model_id] * group_size] + \
-                [[context.export] * group_size] + [[context.plot] * group_size]
+                [[context.export] * group_size]
     primitives = context.interface.map(compute_features_iEPSP_i_unit, *sequences)
     features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
     context.update(locals())
@@ -81,7 +81,7 @@ def run_tests():
     args = context.interface.execute(get_args_dynamic_iEPSP_unit, context.x0_array, features)
     group_size = len(args[0])
     sequences = [[context.x0_array] * group_size] + args + [[model_id] * group_size] + \
-                [[context.export] * group_size] + [[context.plot] * group_size]
+                [[context.export] * group_size]
     primitives = context.interface.map(compute_features_iEPSP_i_unit, *sequences)
     this_features = context.interface.execute(filter_features_iEPSP_attenuation, primitives, features,
                                               model_id, context.export)
@@ -314,7 +314,7 @@ def get_args_dynamic_iEPSP_unit(x, features):
     return [[i_holding] * syn_count, list(range(1, syn_count + 1)), [i_EPSC] * syn_count]
 
 
-def compute_features_iEPSP_i_unit(x, i_holding, syn_index, i_EPSC=None, model_id=None, export=False, plot=False):
+def compute_features_iEPSP_i_unit(x, i_holding, syn_index, i_EPSC=None, model_id=None, export=False):
     """
 
     :param x: array
@@ -323,7 +323,6 @@ def compute_features_iEPSP_i_unit(x, i_holding, syn_index, i_EPSC=None, model_id
     :param i_EPSC: float
     :param model_id: int or str
     :param export: bool
-    :param plot: bool
     :return: dict
     """
     start_time = time.time()
@@ -395,7 +394,7 @@ def compute_features_iEPSP_i_unit(x, i_holding, syn_index, i_EPSC=None, model_id
         print('compute_features_iEPSP_i_unit: pid: %i; model_id: %s; %s: %s took %.3f s' %
               (os.getpid(), model_id, title, description, time.time() - start_time))
         sys.stdout.flush()
-    if plot:
+    if context.plot:
         context.sim.plot()
     if export:
         context.sim.export_to_file(context.temp_output_path, model_label=model_id, category=title)

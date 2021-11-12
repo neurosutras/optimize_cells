@@ -84,7 +84,7 @@ def run_tests():
     args = context.interface.execute(get_args_static_unitary_EPSP_amp)
     group_size = len(args[0])
     sequences = [[context.x0_array] * group_size] + args + [[model_id] * group_size] + \
-                [[context.export] * group_size] + [[context.plot] * group_size]
+                [[context.export] * group_size]
     primitives = context.interface.map(compute_features_unitary_EPSP_amp, *sequences)
     this_features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
     features.update(this_features)
@@ -95,7 +95,7 @@ def run_tests():
     args = context.interface.execute(get_args_static_compound_EPSP_amp)
     group_size = len(args[0])
     sequences = [[context.x0_array] * group_size] + args + [[model_id] * group_size] + \
-                [[context.export] * group_size] + [[context.plot] * group_size]
+                [[context.export] * group_size]
     primitives = context.interface.map(compute_features_compound_EPSP_amp, *sequences)
     this_features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
     features.update(this_features)
@@ -617,7 +617,7 @@ def get_args_static_unitary_EPSP_amp():
     return [syn_id_lists, syn_condition_list, syn_group_list]
 
 
-def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, model_key, export=False, plot=False):
+def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, model_key, export=False):
     """
 
     :param x: array
@@ -626,7 +626,6 @@ def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, mode
     :param syn_group: str
     :param model_key: int or str
     :param export: bool
-    :param plot: bool
     :return: dict
     """
     start_time = time.time()
@@ -714,7 +713,7 @@ def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, mode
         print('compute_features_unitary_EPSP_amp: pid: %i; model_id: %s; %s: %s took %.3f s' %
               (os.getpid(), model_key, title, description, time.time() - start_time))
         sys.stdout.flush()
-    if plot:
+    if context.plot:
         context.sim.plot()
 
     if export:
@@ -748,7 +747,7 @@ def get_args_static_compound_EPSP_amp():
     return [syn_id_lists, syn_condition_list, syn_group_list]
 
 
-def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, model_key, export=False, plot=False):
+def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, model_key, export=False):
     """
 
     :param x: array
@@ -757,7 +756,6 @@ def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, mod
     :param syn_group: str
     :param model_key: int or str
     :param export: bool
-    :param plot: bool
     :return: dict
     """
     start_time = time.time()
@@ -843,7 +841,7 @@ def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, mod
         print('compute_features_compound_EPSP_amp: pid: %i; model_id: %s; %s: %s took %.3f s' %
               (os.getpid(), model_key, title, description, time.time() - start_time))
         sys.stdout.flush()
-    if plot:
+    if context.plot:
         context.sim.plot()
     if export:
         context.sim.export_to_file(context.temp_output_path, model_label=model_key, category=title)

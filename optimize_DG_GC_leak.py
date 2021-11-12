@@ -70,7 +70,7 @@ def run_tests():
     args = context.interface.execute(get_args_static_leak)
     group_size = len(args[0])
     sequences = [[context.x0_array] * group_size] + args + [[model_id] * group_size] + \
-                [[context.export] * group_size] + [[context.plot] * group_size]
+                [[context.export] * group_size]
     primitives = context.interface.map(compute_features_leak, *sequences)
     features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
     features, objectives = context.interface.execute(get_objectives_leak, features, model_id, context.export)
@@ -201,14 +201,13 @@ def get_args_static_leak():
     return [['soma', 'dend', 'term_dend']]
 
 
-def compute_features_leak(x, section, model_id=None, export=False, plot=False):
+def compute_features_leak(x, section, model_id=None, export=False):
     """
     Inject a hyperpolarizing step current into the specified section, and return the steady-state input resistance.
     :param x: array
     :param section: str
     :param model_id: int or str
     :param export: bool
-    :param plot: bool
     :return: dict: {str: float}
     """
     start_time = time.time()
@@ -264,7 +263,7 @@ def compute_features_leak(x, section, model_id=None, export=False, plot=False):
         print('compute_features_leak: pid: %i; model_id: %s; %s: %s took %.1f s; R_inp: %.1f' % \
               (os.getpid(), model_id, title, description, time.time() - start_time, R_inp))
         sys.stdout.flush()
-    if plot:
+    if context.plot:
         sim.plot()
     if export:
         context.sim.export_to_file(context.temp_output_path, model_label=model_id, category=title)

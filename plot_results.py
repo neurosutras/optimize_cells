@@ -719,6 +719,20 @@ def plot_exported_DG_GC_synaptic_integration_features(file_path, model_label=Non
         fig.tight_layout()
         plot_helper(fig, filename_suffix='DG_GC_{!s}'.format(group_name), **kwargs)
 
+        group_name = 'unitary_EPSP_summary'
+        source = get_h5py_group(f, [model_label, group_name])
+        distances = source['soma_distance'][:]
+        EPSP_amp = source['soma_unitary_EPSP_amp'][:]
+
+        fig, axes = plt.subplots(1)
+        axes.scatter(distances, EPSP_amp, c='k')
+        axes.set_ylabel('EPSP amplitude')
+        axes.set_xlabel('Distance from soma (um)')
+        axes.set_title('Somatic EPSP amplitude', fontsize=mpl.rcParams['font.size'])
+
+        clean_axes(axes)
+        plot_helper(fig, filename_suffix='DG_GC_{!s}'.format(group_name), **kwargs)
+
     mpl.rcParams['font.size'] = orig_fontsize
 
 
