@@ -856,8 +856,6 @@ def compute_features_dend_spike(x, i_holding, amp, model_id=None, export=False):
     result = dict()
     result['i_amp'] = amp
     vm = np.array(dend_rec)
-    # dvdt = np.gradient(vm, dt)
-    # dvdt2 = np.gradient(dvdt, dt)
     start = int((equilibrate + 0.2) / dt)
     end = int((equilibrate + stim_dur) / dt)
     peak_index = np.argmax(vm[start:end]) + start
@@ -865,7 +863,11 @@ def compute_features_dend_spike(x, i_holding, amp, model_id=None, export=False):
     dend_spike_amp_by_vm_late = peak_vm - np.mean(vm[end - int(0.1 / dt):end])
 
     if peak_index < end:
-        min_vm = np.min(vm[peak_index:end])
+        dvdt = np.gradient(vm, dt)
+        dvdt2 = np.gradient(dvdt, dt)
+        peak_acc_index = np.argmax(dvdt2[start:peak_index]) + start
+        min_vm = np.mean(vm[peak_acc_index - int(0.1 / dt):peak_acc_index])
+        # min_vm = np.min(vm[peak_index:end])
         dend_spike_amp_from_min = peak_vm - min_vm
         dend_spike_amp = max(dend_spike_amp_from_min, dend_spike_amp_by_vm_late)
     else:
@@ -1014,7 +1016,7 @@ def update_mechanisms_spiking(x, context=None):
                                   'branch_order': x_dict['dend.gbar_nas bo']}, append=True)
         """
         modify_mech_param(cell, sec_type, 'nas', 'gbar', origin='parent', slope=0., min=x_dict['dend.gbar_nas min'],
-                          custom={'func': 'custom_filter_modify_slope_if_terminal'}, append=True)
+                          custom={'func': 'custom_filter_modify_slope_if_terminal', 'distance_th': 100.}, append=True)
     modify_mech_param(cell, 'hillock', 'kap', 'gkabar', origin='soma')
     modify_mech_param(cell, 'hillock', 'kdr', 'gkdrbar', origin='soma')
     modify_mech_param(cell, 'ais', 'kdr', 'gkdrbar', x_dict['axon.gkdrbar'])
