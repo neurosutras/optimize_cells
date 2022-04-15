@@ -124,7 +124,7 @@ def run_tests():
                             objectives=[objectives], export_file_path=context.export_file_path,
                             verbose=context.verbose > 1)
     sys.stdout.flush()
-    print('model_id: %i; model_labels: %s' % (model_id, model_label))
+    print('model_id: %s; model_labels: %s' % (model_id, model_label))
     print('params:')
     pprint.pprint(context.x0_dict)
     print('features:')
@@ -360,7 +360,7 @@ def compute_features_spike_shape(x, i_holding, model_id=None, export=False):
         i_th += i_inc
         if i_th > context.i_th_max:
             if context.verbose > 0:
-                print('compute_features_spike_shape: pid: %i; model_id: %i; aborting - rheobase outside target range' %
+                print('compute_features_spike_shape: pid: %i; model_id: %s; aborting - rheobase outside target range' %
                       (os.getpid(), model_id))
                 sys.stdout.flush()
             return dict()

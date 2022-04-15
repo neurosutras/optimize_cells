@@ -81,7 +81,7 @@ def run_tests():
                             objectives=[objectives], export_file_path=context.export_file_path,
                             verbose=context.verbose > 1)
     sys.stdout.flush()
-    print('model_id: %i; model_labels: %s' % (model_id, model_label))
+    print('model_id: %s; model_labels: %s' % (model_id, model_label))
     print('params:')
     pprint.pprint(context.x0_dict)
     print('features:')

@@ -95,7 +95,7 @@ def run_tests():
                             objectives=[objectives], export_file_path=context.export_file_path,
                             verbose=context.verbose > 1)
     sys.stdout.flush()
-    print('model_id: %i; model_labels: %s' % (model_id, model_label))
+    print('model_id: %s; model_labels: %s' % (model_id, model_label))
     print('params:')
     pprint.pprint(context.x0_dict)
     print('features:')
@@ -216,7 +216,7 @@ def config_sim_env(context):
         this_syn_attr_dict['vs'] = this_vs
         this_syn_attr_dict['distance'] = get_distance_to_node(context.cell, context.cell.tree.root, node, loc)
         config_syn(context.syn_mech_name, context.env.synapse_attributes.syn_param_rules, syn=this_syn, nc=this_nc,
-                   i_unit=context.initial_i_EPSC, tau_rise=1., tau_decay=10.)
+                   i_unit=context.initial_i_EPSC, tau_rise=1., tau_decay=10., weight=1.)
         context.i_syn_attrs.append(this_syn_attr_dict)
 
         node_arr_list = get_dend_segments(context.cell, ref_seg=dend, all_seg=True, dist_bounds=[0, 300])
@@ -236,7 +236,7 @@ def config_sim_env(context):
             this_syn_attr_dict['vs'] = this_vs
             this_syn_attr_dict['distance'] = get_distance_to_node(context.cell, context.cell.tree.root, node, loc)
             config_syn(context.syn_mech_name, context.env.synapse_attributes.syn_param_rules, syn=this_syn, nc=this_nc,
-                       i_unit=context.initial_i_EPSC, tau_rise=1., tau_decay=10.)
+                       i_unit=context.initial_i_EPSC, tau_rise=1., tau_decay=10., weight=1.)
             context.i_syn_attrs.append(this_syn_attr_dict)
 
     context.previous_module = __file__

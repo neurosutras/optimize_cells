@@ -61,7 +61,11 @@ def main(cli, config_file_path, output_dir, export, export_file_path, label, ver
         from dentate.plot import plot_synaptic_attribute_distribution
         plot_synaptic_attribute_distribution(context.cell, context.env, context.NMDA_type, 'g_unit',
                                              from_mech_attrs=True, from_target_attrs=True, show=True)
+        plot_synaptic_attribute_distribution(context.cell, context.env, context.NMDA_type, 'weight',
+                                             from_mech_attrs=True, from_target_attrs=True, show=True)
         plot_synaptic_attribute_distribution(context.cell, context.env, context.AMPA_type, 'g_unit',
+                                             from_mech_attrs=True, from_target_attrs=True, show=True)
+        plot_synaptic_attribute_distribution(context.cell, context.env, context.AMPA_type, 'weight',
                                              from_mech_attrs=True, from_target_attrs=True, show=True)
 
     if not debug:
@@ -110,7 +114,7 @@ def run_tests():
                             objectives=[objectives], export_file_path=context.export_file_path,
                             verbose=context.verbose > 1)
     sys.stdout.flush()
-    print('model_id: %i; model_labels: %s' % (model_id, model_label))
+    print('model_id: %s; model_labels: %s' % (model_id, model_label))
     print('params:')
     pprint.pprint(context.x0_dict)
     print('features:')
@@ -323,6 +327,12 @@ def config_sim_env(context):
         for group_key in syn_id_dict:
             syn_id_set.update(context.syn_id_dict[group_key])
         context.syn_id_list = list(syn_id_set)
+
+        for syn_id in context.syn_id_list:
+            syn_attrs.modify_mech_attrs(context.cell.pop_name, context.cell.gid, syn_id, 'AMPA',
+                                        params={'weight': 1.})
+            syn_attrs.modify_mech_attrs(context.cell.pop_name, context.cell.gid, syn_id, 'NMDA',
+                                        params={'weight': 1.})
 
         config_biophys_cell_syns(env=context.env, gid=context.cell.gid, postsyn_name=context.cell.pop_name,
                                  syn_ids=context.syn_id_list, insert=True, insert_netcons=True, insert_vecstims=True,
