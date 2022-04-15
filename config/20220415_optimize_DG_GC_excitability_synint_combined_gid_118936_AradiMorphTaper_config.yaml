@@ -1,0 +1,340 @@
+bounds:
+  dend.g_pas slope: !!python/tuple
+  - 1.0E-9
+  - 1.0E-4
+  dend.g_pas tau: !!python/tuple
+  - 25.
+  - 400.
+  soma.g_pas: !!python/tuple
+  - 1.0E-12
+  - 1.0E-7
+  e_pas: !!python/tuple
+  - -77.0
+  - -70.0
+  ais.gbar_nax: !!python/tuple
+  - 0.02
+  - 0.5
+  ais.gkmbar: !!python/tuple
+  - 0.00005
+  - 0.05
+  ais.sha_nax: !!python/tuple
+  - -6.0
+  - -1.0
+  axon.gbar_nax: !!python/tuple
+  - 0.02
+  - 0.1
+  axon.gkabar: !!python/tuple
+  - 0.001
+  - 0.05
+  dend.gbar_nas: !!python/tuple
+  - 0.01
+  - 0.05
+  dend.gbar_nas min: !!python/tuple
+  - 0.0
+  - 0.05
+  dend.gkabar: !!python/tuple
+  - 0.001
+  - 0.25
+  soma.gCa factor: !!python/tuple
+  - 0.005
+  - 2.0
+  soma.gCadepK factor: !!python/tuple
+  - 0.0005
+  - 10.
+  soma.gbar_nas: !!python/tuple
+  - 0.01
+  - 0.05
+  soma.gkabar: !!python/tuple
+  - 0.005
+  - 0.075
+  soma.gkdrbar: !!python/tuple
+  - 0.001
+  - 0.075
+  axon.gkdrbar: !!python/tuple
+  - 0.001
+  - 0.075
+  dend.gkdrbar: !!python/tuple
+  - 0.0005
+  - 0.01
+  soma.sh_nas/x: !!python/tuple
+  - 1.0
+  - 8.0
+  soma.tau_Cacum: !!python/tuple
+  - 9.
+  - 100.
+  AMPA.tau: !!python/tuple
+  - 50.
+  - 400.
+  AMPA.slope: !!python/tuple
+  - 1.0e-7
+  - 1.0e-5
+  AMPA.g0: !!python/tuple
+  - 1.0e-4
+  - 0.001
+  NMDA.g_unit: !!python/tuple
+  - 1.0e-4
+  - 5.0e-2
+  NMDA.gamma: !!python/tuple
+  - 0.02
+  - 0.12
+  NMDA.Kd: !!python/tuple
+  - 3.
+  - 12.
+  NMDA.vshift: !!python/tuple
+    - -10.
+    - 10.
+default_params:
+rel_bounds:
+- - dend.gbar_nas
+  - '<='
+  - 1.0
+  - soma.gbar_nas
+- - dend.gbar_nas min
+  - '<='
+  - 1.0
+  - dend.gbar_nas
+- - axon.gbar_nax
+  - '>'
+  - 1.0
+  - soma.gbar_nas
+- - ais.gbar_nax
+  - '>'
+  - 2.0
+  - axon.gbar_nax
+- - dend.gkabar
+  - '>'
+  - 1.0
+  - soma.gkabar
+- - axon.gkabar
+  - '<'
+  - 1.0
+  - soma.gkabar
+- - axon.gkdrbar
+  - '>='
+  - 1.0
+  - soma.gkdrbar
+- - dend.gkdrbar
+  - '<'
+  - 1.0
+  - soma.gkdrbar
+feature_names:
+- dend R_inp
+- term_dend R_inp
+- soma R_inp
+- soma vm_rest
+- vm_th
+- ADP
+- fAHP
+- mAHP
+- rebound_firing
+- vm_stability
+- ais_delay
+- slow_depo
+- dend_bAP_ratio
+- rheobase
+- soma_spike_amp
+- f_I_slope
+- dend_spike_amp
+- i_EPSC
+- spike_detector_delay
+- mean_unitary_EPSP_amp
+- mean_NMDA_contribution
+- integration_gain_control
+- integration_gain_AP5
+- initial_gain_control
+- initial_gain_AP5
+update_context:
+- - optimize_DG_GC_leak
+  - reset_biophysics
+- - optimize_DG_GC_leak
+  - update_mechanisms_leak
+- - optimize_DG_GC_spiking
+  - update_mechanisms_spiking
+- - optimize_DG_GC_synaptic_integration
+  - reset_syn_mechanisms
+- - optimize_DG_GC_synaptic_integration
+  - update_syn_mechanisms
+get_features_stages:
+- source: optimize_DG_GC_leak
+  get_args_static: get_args_static_leak
+  compute_features: compute_features_leak
+- source: optimize_DG_GC_spiking
+  get_args_dynamic: get_args_dynamic_i_holding
+  compute_features: compute_features_spike_shape
+- source: optimize_DG_GC_spiking
+  get_args_dynamic: get_args_dynamic_fI
+  compute_features: compute_features_fI
+  filter_features: filter_features_fI
+- source: optimize_DG_GC_spiking
+  get_args_dynamic: get_args_dynamic_spike_adaptation
+  compute_features: compute_features_spike_adaptation
+- source: optimize_DG_GC_spiking
+  get_args_dynamic: get_args_dynamic_dend_spike
+  compute_features: compute_features_dend_spike
+  filter_features: filter_features_dend_spike
+- source: optimize_DG_GC_iEPSP_propagation
+  get_args_dynamic: get_args_dynamic_i_EPSC
+  compute_features: compute_features_iEPSP_i_unit
+- source: optimize_DG_GC_iEPSP_propagation
+  get_args_dynamic: get_args_dynamic_iEPSP_unit
+  compute_features: compute_features_iEPSP_i_unit
+  filter_features: filter_features_iEPSP_attenuation
+- source: optimize_DG_GC_synaptic_integration
+  get_args_static: get_args_static_unitary_EPSP_amp
+  compute_features: compute_features_unitary_EPSP_amp
+  synchronize: export_unitary_EPSP_traces
+- source: optimize_DG_GC_synaptic_integration
+  get_args_static: get_args_static_compound_EPSP_amp
+  compute_features: compute_features_compound_EPSP_amp
+  synchronize: export_compound_EPSP_traces
+get_objectives:
+  optimize_DG_GC_leak: get_objectives_leak
+  optimize_DG_GC_spiking: get_objectives_spiking
+  optimize_DG_GC_iEPSP_propagation: get_objectives_iEPSP_attenuation
+  optimize_DG_GC_synaptic_integration: get_objectives_synaptic_integration
+kwargs:
+  mech_file_path: mechanisms/20211115_DG_GC_excitability_mech.yaml
+  # mech_file_path: mechanisms/20181205_DG_GC_excitability_mech.yaml
+  max_i_EPSP_attenuation_distance: 300.
+  gid: 118936
+  cell_type: GC
+  correct_for_spines: True
+  verbose: 1
+  seed_offset: 14e6
+  daspk: False
+  config_file: Network_Clamp_GC_Exc_AradiMorphTaper_Sat_SLN_IN_PR_proximal_pf.yaml
+  template_paths: ../DGC/Mateos-Aparicio2014:../dentate/templates
+  hoc_lib_path: ../dentate
+  config_prefix: ../dentate/config
+  dataset_prefix: ../dentate/datasets
+  results_path: data
+  cache_queries: True
+  debug: False  # True
+  load_edges: True
+  set_edge_delays: False
+objective_names:
+- dend R_inp
+- term_dend R_inp
+- soma R_inp
+- soma vm_rest
+- vm_th
+- ADP
+- fAHP
+- rebound_firing
+- vm_stability
+- ais_delay
+- slow_depo
+- dend_bAP_ratio
+- spike_adaptation_residuals
+- f_I_residuals
+- dend_spike_score
+- iEPSP_attenuation_residual
+- mean_unitary_EPSP_amp_residuals
+# - mean_NMDA_contribution_residuals
+- integration_gain_control_residuals
+- integration_gain_AP5_residuals
+# - initial_gain_control_residuals
+# - initial_gain_AP5_residuals
+optimization_title: DG_GC_excitability_synint_combined
+param_gen: PopulationAnnealing
+param_names:
+- dend.g_pas slope
+- dend.g_pas tau
+- soma.g_pas
+- e_pas
+- soma.gbar_nas
+- dend.gbar_nas
+- dend.gbar_nas min
+- axon.gbar_nax
+- ais.gbar_nax
+- soma.gkabar
+- dend.gkabar
+- soma.gkdrbar
+- axon.gkabar
+- axon.gkdrbar
+- dend.gkdrbar
+- soma.sh_nas/x
+- ais.sha_nax
+- soma.gCa factor
+- soma.gCadepK factor
+- ais.gkmbar
+- soma.tau_Cacum
+- AMPA.tau
+- AMPA.slope
+- AMPA.g0
+- NMDA.g_unit
+- NMDA.gamma
+- NMDA.Kd
+- NMDA.vshift
+target_range:
+  dend R_inp: 1.
+  soma R_inp: 0.5
+  soma vm_rest: 0.1
+  ADP: 0.05
+  fAHP: 0.07
+  ais_delay: 0.0005
+  dend_bAP_ratio: 0.0002
+  rebound_firing: 0.002
+  vm_th: 0.01
+  vm_stability: 0.1
+  dend_spike_amp: 0.1
+  iEPSP_attenuation: 0.001
+  mean_unitary_EPSP_amp: 0.005
+  mean_NMDA_contribution: 0.001
+  integration_gain_control: 0.005
+  integration_gain_AP5: 0.005
+  initial_gain_control: 0.005
+  initial_gain_AP5: 0.005
+target_val:
+  term_dend R_inp: 1000.
+  dend R_inp: 275.
+  soma R_inp: 295.
+  soma vm_rest: -77.0
+  min_ADP: 0.
+  max_ADP: 10.
+  min_fAHP: 3.0
+  max_fAHP: 15.
+  ais_delay: 0.0
+  dend_bAP_ratio: 0.5  # At ~100 uM from soma
+  rebound_firing: 0
+  slow_depo: 5.0
+  vm_th: -48.0
+  vm_stability: 5.0
+  dend_spike_amp: 15.
+  iEPSP_unit_amp: 1.
+  mean_unitary_EPSP_amp: 0.6
+  mean_NMDA_contribution: 0.2
+  integration_gain_control: 1.38
+  integration_gain_AP5: 0.8
+  initial_gain_control: 1.
+  initial_gain_AP5: 1.
+x0:
+  soma.gCa factor: 3.386286E-01
+  soma.tau_Cacum: 5.783834E+01
+  dend.gbar_nas min: 2.316494E-02
+  soma.gkdrbar: 4.012674E-02
+  soma.g_pas: 2.362825E-08
+  axon.gkabar: 1.229288E-02
+  soma.gkabar: 1.787941E-02
+  dend.gbar_nas: 3.650910E-02
+  ais.sha_nax: -3.882716E+00
+  axon.gkdrbar: 5.814910E-02
+  soma.sh_nas/x: 6.443239E+00
+  dend.gkabar: 1.555928E-01
+  ais.gbar_nax: 3.993188E-01
+  dend.gkdrbar: 7.635090E-03
+  dend.g_pas slope: 3.829971E-05
+  dend.g_pas tau: 3.053399E+02
+  axon.gbar_nax: 6.364521E-02
+  soma.gbar_nas: 4.925494E-02
+  soma.gCadepK factor: 8.701312E+00
+  ais.gkmbar: 1.305485E-02
+  e_pas: -7.444863E+01
+  AMPA.tau: 1.868088E+02
+  AMPA.slope: 3.293672E-06
+  AMPA.g0: 1.464409E-04
+  NMDA.g_unit: 4.316527E-03
+  NMDA.gamma: 8.130658E-02
+  NMDA.Kd: 4.331929E+00
+  NMDA.vshift: 9.592656E+00
+
