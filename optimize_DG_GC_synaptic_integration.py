@@ -641,7 +641,7 @@ def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, mode
     start_time = time.time()
     config_sim_env(context)
     update_source_contexts(x, context)
-    zero_na(context.cell)
+    # zero_na(context.cell)
 
     dt = context.dt
     duration = context.sim_duration['units']
@@ -771,7 +771,7 @@ def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, mod
     start_time = time.time()
     config_sim_env(context)
     update_source_contexts(x, context)
-    zero_na(context.cell)
+    # zero_na(context.cell)
 
     dt = context.dt
     duration = context.sim_duration['clustered']

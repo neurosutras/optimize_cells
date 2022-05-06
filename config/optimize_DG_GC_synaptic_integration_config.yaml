@@ -70,14 +70,14 @@ objective_names:
 - initial_gain_AP5_residuals
 optimization_title: DG_GC_synaptic_integration
 param_gen: PopulationAnnealing
-param_names:
-- AMPA.tau
-- AMPA.slope
-- AMPA.g0
-- NMDA.g_unit
-- NMDA.gamma
-- NMDA.Kd
-- NMDA.vshift
+#param_names:
+#- AMPA.tau
+#- AMPA.slope
+#- AMPA.g0
+#- NMDA.g_unit
+#- NMDA.gamma
+#- NMDA.Kd
+#- NMDA.vshift
 target_range:
   mean_unitary_EPSP_amp: 0.005
   mean_NMDA_contribution: 0.001

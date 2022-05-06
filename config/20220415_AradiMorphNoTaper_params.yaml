@@ -1,0 +1,30 @@
+118936:
+  AMPA.g0: 6.180438E-04
+  AMPA.slope: 2.473882E-06
+  AMPA.tau: 2.601469E+02
+  NMDA.Kd: 6.783938E+00
+  NMDA.g_unit: 8.882698E-03
+  NMDA.gamma: 8.169376E-02
+  NMDA.vshift: 7.389878E+00
+  ais.gbar_nax: 1.395210E-01
+  ais.gkmbar: 9.391623E-03
+  ais.sha_nax: -3.085507E+00
+  axon.gbar_nax: 4.971008E-02
+  axon.gkabar: 8.570276E-03
+  axon.gkdrbar: 7.444070E-02
+  dend.g_pas slope: 8.106069E-07
+  dend.g_pas tau: 3.366185E+02
+  dend.gbar_nas: 3.089465E-02
+  dend.gbar_nas min: 1.040475E-02
+  dend.gkabar: 2.600896E-02
+  dend.gkdrbar: 4.957807E-03
+  e_pas: -7.051746E+01
+  soma.gCa factor: 5.417087E-01
+  soma.gCadepK factor: 1.276493E-01
+  soma.g_pas: 3.955634E-08
+  soma.gbar_nas: 4.363988E-02
+  soma.gkabar: 1.741017E-02
+  soma.gkdrbar: 7.412202E-02
+  soma.sh_nas/x: 6.258366E+00
+  soma.tau_Cacum: 5.199074E+01
+
