@@ -78,11 +78,11 @@ bounds:
   - 0.02
   - 0.12
   NMDA.Kd: !!python/tuple
-  - 3.
+  - 1.
   - 12.
   NMDA.vshift: !!python/tuple
     - -10.
-    - 10.
+    - 30.
 default_params:
 rel_bounds:
 - - dend.gbar_nas
