@@ -6,7 +6,6 @@ import numpy as np
 import scipy.stats as stats
 import matplotlib.gridspec as gridspec
 from matplotlib import cm
-from dentate.synapses import get_syn_mech_param, get_syn_filter_dict
 from datetime import date
 
 mpl.rcParams['svg.fonttype'] = 'none'
