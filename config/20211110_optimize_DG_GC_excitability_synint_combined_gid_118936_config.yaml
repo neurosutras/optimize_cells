@@ -230,7 +230,7 @@ objective_names:
 - dend_spike_score
 - iEPSP_attenuation_residual
 - mean_unitary_EPSP_amp_residuals
-# - mean_NMDA_contribution_residuals
+- mean_NMDA_contribution_residuals
 - integration_gain_control_residuals
 - integration_gain_AP5_residuals
 # - initial_gain_control_residuals
