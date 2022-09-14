@@ -1,59 +1,29 @@
 118936:
-  AMPA.g0: 5.051324E-04
-  AMPA.slope: 4.137577E-06
-  AMPA.tau: 1.285368E+02
-  NMDA.Kd: 1.008323E+01
-  NMDA.g_unit: 1.403931E-02
-  NMDA.gamma: 1.176334E-01
-  NMDA.vshift: -2.310363E+00
-  ais.gbar_nax: 4.066179E-01
-  ais.gkmbar: 8.253273E-03
-  ais.sha_nax: -4.939721E+00
-  axon.gbar_nax: 6.510868E-02
-  axon.gkabar: 4.140014E-03
-  axon.gkdrbar: 5.865506E-02
-  dend.g_pas slope: 8.176851E-06
-  dend.g_pas tau: 3.881845E+02
-  dend.gbar_nas: 2.143384E-02
-  dend.gbar_nas min: 8.756318E-03
-  dend.gkabar: 7.802788E-02
-  dend.gkdrbar: 9.316891E-03
-  e_pas: -7.405231E+01
-  soma.gCa factor: 1.109313E+00
-  soma.gCadepK factor: 9.078387E+00
-  soma.g_pas: 2.674935E-08
-  soma.gbar_nas: 3.554602E-02
-  soma.gkabar: 5.043501E-03
-  soma.gkdrbar: 4.875064E-02
-  soma.sh_nas/x: 2.944364E+00
-  soma.tau_Cacum: 8.263672E+01
-alt:
-  AMPA.g0: 5.442709E-04
-  AMPA.slope: 3.173491E-06
-  AMPA.tau: 3.713743E+02
-  NMDA.Kd: 7.471765E+00
-  NMDA.g_unit: 1.917560E-02
-  NMDA.gamma: 1.124599E-01
-  NMDA.vshift: 3.225497E+00
-  ais.gbar_nax: 4.716769E-01
-  ais.gkmbar: 9.789577E-03
-  ais.sha_nax: -4.649270E+00
-  axon.gbar_nax: 7.965434E-02
-  axon.gkabar: 7.616287E-03
-  axon.gkdrbar: 6.177488E-02
-  dend.g_pas slope: 3.549823E-05
-  dend.g_pas tau: 1.777071E+02
-  dend.gbar_nas: 3.050566E-02
-  dend.gbar_nas min: 1.580297E-02
-  dend.gkabar: 5.748069E-02
-  dend.gkdrbar: 8.642009E-03
-  e_pas: -7.679417E+01
-  soma.gCa factor: 7.602013E-01
-  soma.gCadepK factor: 8.368407E+00
-  soma.g_pas: 2.709355E-08
-  soma.gbar_nas: 3.381207E-02
-  soma.gkabar: 8.683004E-03
-  soma.gkdrbar: 4.649136E-02
-  soma.sh_nas/x: 3.238702E+00
-  soma.tau_Cacum: 3.131555E+01
-
+  AMPA.g0: 3.374453E-04
+  AMPA.slope: 8.938494E-06
+  AMPA.tau: 1.769525E+02
+  NMDA.Kd: 6.590444E+00
+  NMDA.g_unit: 6.484437E-04
+  NMDA.gamma: 8.923679E-02
+  NMDA.vshift: -3.005552E+01
+  ais.gbar_nax: 4.398775E-01
+  ais.gkmbar: 3.728998E-03
+  ais.sha_nax: -3.713798E+00
+  axon.gbar_nax: 4.900915E-02
+  axon.gkabar: 1.229175E-02
+  axon.gkdrbar: 3.639831E-02
+  dend.g_pas slope: 3.284363E-06
+  dend.g_pas tau: 2.396535E+02
+  dend.gbar_nas: 2.283509E-02
+  dend.gbar_nas min: 4.917980E-03
+  dend.gkabar: 5.574643E-02
+  dend.gkdrbar: 5.361370E-03
+  e_pas: -7.088013E+01
+  soma.gCa factor: 1.889840E+00
+  soma.gCadepK factor: 7.508985E+00
+  soma.g_pas: 2.507670E-08
+  soma.gbar_nas: 4.680110E-02
+  soma.gkabar: 1.817115E-02
+  soma.gkdrbar: 3.132206E-02
+  soma.sh_nas/x: 7.968863E+00
+  soma.tau_Cacum: 1.649231E+01
