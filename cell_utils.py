@@ -414,7 +414,7 @@ def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.005, vm_tol=0.5, i
     sim.set_state(dt=dt, tstop=duration, cvode=cvode)
     sim.run(vm_target)
     t = np.arange(0., duration, dt)
-    vm = np.interp(t, sim.tvec, rec)
+    vm = np.interp(t, sim.tvec.to_python(), rec)
     vm_rest = np.mean(vm[int((duration - 3.) / dt):int((duration - 1.) / dt)])
     vm_before = vm_rest
     if sim.verbose:
@@ -432,7 +432,7 @@ def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.005, vm_tol=0.5, i
             prev_vm_rest = vm_rest
             sim.modify_stim('holding', amp=i_amp)
             sim.run(vm_target)
-            vm = np.interp(t, sim.tvec, rec)
+            vm = np.interp(t, sim.tvec.to_python(), rec.to_python())
             vm_rest = np.mean(vm[int((duration - 3.) / dt):int((duration - 1.) / dt)])
             vm_inc = vm_rest - prev_vm_rest
             vm_diff = vm_target - vm_rest
@@ -449,7 +449,7 @@ def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.005, vm_tol=0.5, i
                 i_amp += i_inc
                 sim.modify_stim('holding', amp=i_amp)
                 sim.run(vm_target)
-                vm = np.interp(t, sim.tvec, rec)
+                vm = np.interp(t, sim.tvec.to_python(), rec.to_python())
                 vm_rest = np.mean(vm[int((duration - 3.) / dt):int((duration - 1.) / dt)])
                 if sim.verbose:
                     print('offset_vm: pid: %i; %s; %s i_holding to %.3f nA; vm_rest: %.1f' % \
@@ -463,7 +463,7 @@ def offset_vm(rec_name, context=None, vm_target=None, i_inc=0.005, vm_tol=0.5, i
             i_amp += i_inc
             sim.modify_stim('holding', amp=i_amp)
             sim.run(vm_target)
-            vm = np.interp(t, sim.tvec, rec)
+            vm = np.interp(t, sim.tvec.to_python(), rec.to_python())
             vm_rest = np.mean(vm[int((duration - 3.) / dt):int((duration - 1.) / dt)])
             if sim.verbose:
                 print('offset_vm: pid: %i; %s; %s i_holding to %.3f nA; vm_rest: %.1f' % \

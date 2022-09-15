@@ -357,7 +357,7 @@ def compute_features_spike_shape(x, export=False, plot=False):
     while not spike:
         context.sim.modify_stim(step_stim_index, amp=amp)
         context.sim.run(v_active)
-        vm = np.interp(t, context.sim.tvec, context.sim.get_rec('soma')['vec'])
+        vm = np.interp(t, context.sim.tvec.to_python(), context.sim.get_rec('soma')['vec'].to_python())
         if np.any(vm[:int(equilibrate/dt)] > -30.):
             if context.disp:
                 print 'Process %i: Aborting - spontaneous firing' % (os.getpid())
@@ -387,7 +387,7 @@ def compute_features_spike_shape(x, export=False, plot=False):
     result['rheobase'] = amp
     result['spont_firing'] = len(np.where(spike_times < equilibrate)[0])
     result['th_count'] = len(spike_times)
-    dend_vm = np.interp(t, context.sim.tvec, context.sim.get_rec('dend')['vec'])
+    dend_vm = np.interp(t, context.sim.tvec.to_python(), context.sim.get_rec('dend')['vec'].to_python())
     th_x = np.where(vm[int(equilibrate / dt):] >= threshold)[0][0] + int(equilibrate / dt)
     if len(spike_times) > 1:
         end = min(th_x + int(10. / dt), int((spike_times[1] - 5.)/dt))
@@ -400,9 +400,9 @@ def compute_features_spike_shape(x, export=False, plot=False):
 
     # calculate AIS delay
     soma_dvdt = np.gradient(vm, dt)
-    ais_vm = np.interp(t, context.sim.tvec, context.sim.get_rec('ais')['vec'])
+    ais_vm = np.interp(t, context.sim.tvec.to_python(), context.sim.get_rec('ais')['vec'].to_python())
     ais_dvdt = np.gradient(ais_vm, dt)
-    axon_vm = np.interp(t, context.sim.tvec, context.sim.get_rec('axon')['vec'])
+    axon_vm = np.interp(t, context.sim.tvec.to_python(), context.sim.get_rec('axon')['vec'].to_python())
     axon_dvdt = np.gradient(axon_vm, dt)
     left = th_x - int(2. / dt)
     right = th_x + int(5. / dt)
@@ -482,7 +482,7 @@ def compute_features_fI(x, amp, extend_dur=False, export=False, plot=False):
     result['spike_times'] = spike_times
     result['amp'] = amp
     if extend_dur:
-        vm = np.interp(t, context.sim.tvec, context.sim.get_rec('soma')['vec'])
+        vm = np.interp(t, context.sim.tvec.to_python(), context.sim.get_rec('soma')['vec'].to_python())
         v_min_late = np.min(vm[int((equilibrate + stim_dur - 20.) / dt):int((equilibrate + stim_dur - 1.) / dt)])
         result['v_min_late'] = v_min_late
         v_rest = np.mean(vm[int((equilibrate - 3.) / dt):int((equilibrate - 1.) / dt)])
@@ -622,7 +622,7 @@ def offset_vm(description, vm_target=None):
     loc = context.rec_locs[description]
     rec_dict = context.sim.get_rec(description)
     context.sim.modify_stim(offset_stim_index, node=node, loc=loc, amp=0.)
-    rec = rec_dict['vec']
+    rec = rec_dict['vec'].to_python()
     offset = True
 
     equilibrate = context.equilibrate

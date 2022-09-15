@@ -6,8 +6,9 @@ Requires use of a nested.parallel interface.
 """
 __author__ = 'Aaron D. Milstein and Grace Ng'
 from dentate.biophysics_utils import *
-from nested.parallel import *
-from nested.optimize_utils import *
+from nested.parallel import get_parallel_interface
+from nested.optimize_utils import Context, nested_analyze_init_contexts_interactive, merge_exported_data, \
+    update_source_contexts
 from cell_utils import *
 import click
 
@@ -45,13 +46,12 @@ def main(cli, config_file_path, output_dir, export, export_file_path, label, ver
     kwargs = get_unknown_click_arg_dict(cli.args)
     context.disp = verbose > 0
 
-    context.interface = get_parallel_interface(source_file=__file__, source_package=__package__, **kwargs)
+    context.interface = get_parallel_interface(**kwargs)
     context.interface.start(disp=context.disp)
     context.interface.ensure_controller()
-    config_optimize_interactive(__file__, config_file_path=config_file_path, output_dir=output_dir,
-                                export=export, export_file_path=export_file_path, label=label,
-                                disp=context.disp, interface=context.interface, verbose=verbose, plot=plot,
-                                debug=debug, **kwargs)
+    nested_analyze_init_contexts_interactive(context, config_file_path=config_file_path, output_dir=output_dir,
+                                             export=export, export_file_path=export_file_path, label=label,
+                                             disp=context.disp, verbose=verbose, plot=plot, debug=debug, **kwargs)
 
     if not debug:
         run_tests()
@@ -62,36 +62,40 @@ def main(cli, config_file_path, output_dir, export, export_file_path, label, ver
 
 def run_tests():
     model_id = 0
-    if 'model_key' in context() and context.model_key is not None:
-        model_label = context.model_key
-    else:
-        model_label = [[]]
 
     args = context.interface.execute(get_args_static_leak)
     group_size = len(args[0])
     sequences = [[context.x0_array] * group_size] + args + [[model_id] * group_size] + \
-                [[context.export] * group_size]
+                [[context.export] * group_size] + [[context.plot] * group_size]
     primitives = context.interface.map(compute_features_leak, *sequences)
     features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
     features, objectives = context.interface.execute(get_objectives_leak, features, model_id, context.export)
 
+    if 'model_key' in context() and context.model_key is not None:
+        model_label = context.model_key
+    else:
+        model_label = 'x0'
+
     if context.export:
-        merge_exported_data(context, param_arrays=[context.x0_array],
-                            model_ids=[model_id], model_labels=[model_label], features=[features],
-                            objectives=[objectives], export_file_path=context.export_file_path,
-                            verbose=context.verbose > 1)
+        legend = {'model_labels': [model_label], 'export_keys': ['0'],
+                  'source': context.config_file_path}
+        merge_exported_data(context, export_file_path=context.export_file_path,
+                            output_dir=context.output_dir, legend=legend, verbose=context.disp)
+
     sys.stdout.flush()
-    print('model_id: %s; model_labels: %s' % (model_id, model_label))
+    print('model_id: %i; model_labels: %s' % (model_id, model_label))
     print('params:')
-    pprint.pprint(context.x0_dict)
+    print_param_dict_like_yaml(context.x0_dict)
     print('features:')
-    pprint.pprint(features)
+    print_param_dict_like_yaml(features)
     print('objectives:')
-    pprint.pprint(objectives)
+    print_param_dict_like_yaml(objectives)
     sys.stdout.flush()
     time.sleep(.1)
+
     if context.plot:
-        context.interface.apply(plt.show)
+        context.interface.show()
+
     context.update(locals())
 
 
@@ -201,13 +205,14 @@ def get_args_static_leak():
     return [['soma', 'dend', 'term_dend']]
 
 
-def compute_features_leak(x, section, model_id=None, export=False):
+def compute_features_leak(x, section, model_id=None, export=False, plot=False):
     """
     Inject a hyperpolarizing step current into the specified section, and return the steady-state input resistance.
     :param x: array
     :param section: str
     :param model_id: int or str
     :param export: bool
+    :param plot: bool
     :return: dict: {str: float}
     """
     start_time = time.time()
@@ -245,7 +250,7 @@ def compute_features_leak(x, section, model_id=None, export=False):
     sim.set_state(dt=dt, tstop=duration, cvode=True)
     sim.run(v_init)
 
-    R_inp = get_R_inp(np.array(sim.tvec), np.array(rec), equilibrate, duration, amp, dt)[2]
+    R_inp = get_R_inp(np.array(sim.tvec.to_python()), np.array(rec.to_python()), equilibrate, duration, amp, dt)[2]
     result = dict()
     result['%s R_inp' % section] = R_inp
     failed = False
@@ -263,7 +268,7 @@ def compute_features_leak(x, section, model_id=None, export=False):
         print('compute_features_leak: pid: %i; model_id: %s; %s: %s took %.1f s; R_inp: %.1f' % \
               (os.getpid(), model_id, title, description, time.time() - start_time, R_inp))
         sys.stdout.flush()
-    if context.plot:
+    if plot:
         sim.plot()
     if export:
         context.sim.export_to_file(context.temp_output_path, model_label=model_id, category=title)
@@ -275,12 +280,13 @@ def compute_features_leak(x, section, model_id=None, export=False):
     return result
 
 
-def get_objectives_leak(features, model_id=None, export=False):
+def get_objectives_leak(features, model_id=None, export=False, plot=False):
     """
 
     :param features: dict
     :param model_id: int or str
     :param export: bool
+    :param plot: bool
     :return: tuple of dict
     """
     objectives = {}
@@ -323,5 +329,4 @@ def update_mechanisms_leak(x, context):
 
 
 if __name__ == '__main__':
-    main(args=sys.argv[(list_find(lambda s: s.find(os.path.basename(__file__)) != -1, sys.argv) + 1):],
-         standalone_mode=False)
+    main(standalone_mode=False)

@@ -153,13 +153,13 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
             for param_name in rec_description_dict[syn_id][syn_name]:
                 rec_sum[syn_name][param_name].append(
                     sim.get_rec(rec_description_dict[syn_id][syn_name][param_name])['vec'].to_python())
-    t = sim.tvec.as_numpy()
+    t = np.array(sim.tvec.to_python())
     start = np.where(t >= equilibrate - 10.)[0][0]
     t -= equilibrate
     left = start + int((10. - 3.) / sim.dt)
     right = left + int(2. / sim.dt)
     window = right + int(25. / sim.dt)
-    soma_vm = sim.get_rec('soma')['vec'].as_numpy()
+    soma_vm = np.array(sim.get_rec('soma')['vec'].to_python())
     unit_amp = np.max(soma_vm[right:window]) - np.mean(soma_vm[left:right])
     print('unit amp: %.3f' % unit_amp)
 
@@ -178,8 +178,8 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
             axes[i].plot(t[start:], scale*this_sum[start:], label='%s_%s' % (param_name, syn_name), zorder=j)
             axes[i].set_ylabel(ylabel)
             axes[i].set_ylim(ylim)
-    axes[2].plot(t[start:], sim.get_rec('soma')['vec'].as_numpy()[start:], label='soma Vm')
-    axes[2].plot(t[start:], sim.get_rec('%s' % syn_node.name)['vec'].as_numpy()[start:], label='dend Vm')
+    axes[2].plot(t[start:], np.array(sim.get_rec('soma')['vec'].to_python())[start:], label='soma Vm')
+    axes[2].plot(t[start:], np.array(sim.get_rec('%s' % syn_node.name)['vec'].to_python())[start:], label='dend Vm')
     axes[2].set_xlabel('Time (ms)')
     axes[2].set_ylabel('Voltage (mV)')
     axes[2].set_ylim(-80., -10.)

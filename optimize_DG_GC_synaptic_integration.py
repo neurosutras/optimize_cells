@@ -6,8 +6,9 @@ Requires use of a nested.parallel interface.
 """
 __author__ = 'Aaron D. Milstein and Grace Ng'
 from dentate.biophysics_utils import *
-from nested.parallel import *
-from nested.optimize_utils import *
+from nested.parallel import get_parallel_interface
+from nested.optimize_utils import Context, nested_analyze_init_contexts_interactive, merge_exported_data, \
+    update_source_contexts
 from cell_utils import *
 import uuid
 import click
@@ -49,13 +50,12 @@ def main(cli, config_file_path, output_dir, export, export_file_path, label, ver
     kwargs = get_unknown_click_arg_dict(cli.args)
     context.disp = verbose > 0
 
-    context.interface = get_parallel_interface(source_file=__file__, source_package=__package__, **kwargs)
+    context.interface = get_parallel_interface(**kwargs)
     context.interface.start(disp=context.disp)
     context.interface.ensure_controller()
-    config_optimize_interactive(__file__, config_file_path=config_file_path, output_dir=output_dir,
-                                export=export, export_file_path=export_file_path, label=label,
-                                disp=context.disp, interface=context.interface, verbose=verbose, plot=plot,
-                                debug=debug, **kwargs)
+    nested_analyze_init_contexts_interactive(context, config_file_path=config_file_path, output_dir=output_dir,
+                                             export=export, export_file_path=export_file_path, label=label,
+                                             disp=context.disp, verbose=verbose, plot=plot, debug=debug, **kwargs)
 
     if plot:
         from dentate.plot import plot_synaptic_attribute_distribution
@@ -77,10 +77,6 @@ def main(cli, config_file_path, output_dir, export, export_file_path, label, ver
 
 def run_tests():
     model_id = 0
-    if 'model_key' in context() and context.model_key is not None:
-        model_label = context.model_key
-    else:
-        model_label = 'test'
 
     features = dict()
 
@@ -88,7 +84,7 @@ def run_tests():
     args = context.interface.execute(get_args_static_unitary_EPSP_amp)
     group_size = len(args[0])
     sequences = [[context.x0_array] * group_size] + args + [[model_id] * group_size] + \
-                [[context.export] * group_size]
+                [[context.export] * group_size] + [[context.plot] * group_size]
     primitives = context.interface.map(compute_features_unitary_EPSP_amp, *sequences)
     this_features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
     features.update(this_features)
@@ -99,7 +95,7 @@ def run_tests():
     args = context.interface.execute(get_args_static_compound_EPSP_amp)
     group_size = len(args[0])
     sequences = [[context.x0_array] * group_size] + args + [[model_id] * group_size] + \
-                [[context.export] * group_size]
+                [[context.export] * group_size] + [[context.plot] * group_size]
     primitives = context.interface.map(compute_features_compound_EPSP_amp, *sequences)
     this_features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
     features.update(this_features)
@@ -108,23 +104,32 @@ def run_tests():
 
     features, objectives = context.interface.execute(get_objectives_synaptic_integration, features, model_id,
                                                      context.export)
+
+    if 'model_key' in context() and context.model_key is not None:
+        model_label = context.model_key
+    else:
+        model_label = 'x0'
+
     if context.export:
-        merge_exported_data(context, param_arrays=[context.x0_array],
-                            model_ids=[model_id], model_labels=[model_label], features=[features],
-                            objectives=[objectives], export_file_path=context.export_file_path,
-                            verbose=context.verbose > 1)
+        legend = {'model_labels': [model_label], 'export_keys': ['0'],
+                  'source': context.config_file_path}
+        merge_exported_data(context, export_file_path=context.export_file_path,
+                            output_dir=context.output_dir, legend=legend, verbose=context.disp)
+
     sys.stdout.flush()
-    print('model_id: %s; model_labels: %s' % (model_id, model_label))
+    print('model_id: %i; model_labels: %s' % (model_id, model_label))
     print('params:')
-    pprint.pprint(context.x0_dict)
+    print_param_dict_like_yaml(context.x0_dict)
     print('features:')
-    pprint.pprint(features)
+    print_param_dict_like_yaml(features)
     print('objectives:')
-    pprint.pprint(objectives)
+    print_param_dict_like_yaml(objectives)
     sys.stdout.flush()
     time.sleep(.1)
+
     if context.plot:
-        context.interface.apply(plt.show)
+        context.interface.show()
+
     context.update(locals())
 
 
@@ -627,7 +632,7 @@ def get_args_static_unitary_EPSP_amp():
     return [syn_id_lists, syn_condition_list, syn_group_list]
 
 
-def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, model_key, export=False):
+def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, model_key, export=False, plot=False):
     """
 
     :param x: array
@@ -636,6 +641,7 @@ def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, mode
     :param syn_group: str
     :param model_key: int or str
     :param export: bool
+    :param plot: bool
     :return: dict
     """
     start_time = time.time()
@@ -695,7 +701,7 @@ def compute_features_unitary_EPSP_amp(x, syn_ids, syn_condition, syn_group, mode
         baseline_start, baseline_end = int(start - 3. / dt), int(start - 1. / dt)
         syn_id = int(syn_id)
         for rec_name in context.synaptic_integration_rec_names:
-            this_vm = np.array(context.sim.recs[rec_name]['vec'])
+            this_vm = np.array(context.sim.recs[rec_name]['vec'].to_python())
             baseline = np.mean(this_vm[baseline_start:baseline_end])
             this_vm = this_vm[trace_start:end] - baseline
             peak_index = np.argmax(this_vm)
@@ -757,7 +763,7 @@ def get_args_static_compound_EPSP_amp():
     return [syn_id_lists, syn_condition_list, syn_group_list]
 
 
-def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, model_key, export=False):
+def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, model_key, export=False, plot=False):
     """
 
     :param x: array
@@ -766,6 +772,7 @@ def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, mod
     :param syn_group: str
     :param model_key: int or str
     :param export: bool
+    :param plot: bool
     :return: dict
     """
     start_time = time.time()
@@ -821,7 +828,7 @@ def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, mod
     trace_start = start - int(trace_baseline / dt)
     baseline_start, baseline_end = int(start - 3. / dt), int(start - 1. / dt)
     for rec_name in context.synaptic_integration_rec_names:
-        this_vm = np.array(context.sim.recs[rec_name]['vec'])
+        this_vm = np.array(context.sim.recs[rec_name]['vec'].to_python())
         baseline = np.mean(this_vm[baseline_start:baseline_end])
         this_vm = this_vm[trace_start:] - baseline
         traces_dict[rec_name] = np.array(this_vm)
@@ -837,7 +844,7 @@ def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, mod
 
     result = {'model_key': model_key}
 
-    spike_times = np.array(context.cell.spike_detector.get_recordvec())
+    spike_times = np.array(context.cell.spike_detector.get_recordvec().to_python())
     if np.any(spike_times > equilibrate):
         result['soma_spikes'] = True
 
@@ -851,7 +858,7 @@ def compute_features_compound_EPSP_amp(x, syn_ids, syn_condition, syn_group, mod
         print('compute_features_compound_EPSP_amp: pid: %i; model_id: %s; %s: %s took %.3f s' %
               (os.getpid(), model_key, title, description, time.time() - start_time))
         sys.stdout.flush()
-    if context.plot:
+    if plot:
         context.sim.plot()
     if export:
         context.sim.export_to_file(context.temp_output_path, model_label=model_key, category=title)
@@ -884,12 +891,13 @@ def get_expected_compound_EPSP_traces(unitary_traces_dict, syn_id_dict):
     return traces
 
 
-def get_objectives_synaptic_integration(features, model_key, export=False):
+def get_objectives_synaptic_integration(features, model_key, export=False, plot=False):
     """
 
     :param features: dict
     :param model_key: int or str
     :param export: bool
+    :param plot: bool
     :return: tuple of dict
     """
     start_time = time.time()

@@ -1,53 +1,53 @@
 bounds:
-  ais.gbar_nax: !!python/tuple
+  ais.gbar_nax:
   - 0.02
   - 0.5
-  ais.gkmbar: !!python/tuple
+  ais.gkmbar:
   - 0.00005
   - 0.05
-  ais.sha_nax: !!python/tuple
+  ais.sha_nax:
   - -6.0
   - -1.0
-  axon.gbar_nax: !!python/tuple
+  axon.gbar_nax:
   - 0.02
   - 0.1
-  axon.gkabar: !!python/tuple
+  axon.gkabar:
   - 0.001
   - 0.05
-  dend.gbar_nas: !!python/tuple
+  dend.gbar_nas:
   - 0.01
   - 0.05
-  dend.gbar_nas min: !!python/tuple
+  dend.gbar_nas min:
   - 0.0
   - 0.05
-  dend.gkabar: !!python/tuple
+  dend.gkabar:
   - 0.001
   - 0.25
-  soma.gCa factor: !!python/tuple
+  soma.gCa factor:
   - 0.005
   - 2.0
-  soma.gCadepK factor: !!python/tuple
+  soma.gCadepK factor:
   - 0.0005
   - 10.
-  soma.gbar_nas: !!python/tuple
+  soma.gbar_nas:
   - 0.01
   - 0.05
-  soma.gkabar: !!python/tuple
+  soma.gkabar:
   - 0.005
   - 0.075
-  soma.gkdrbar: !!python/tuple
+  soma.gkdrbar:
   - 0.001
   - 0.075
-  axon.gkdrbar: !!python/tuple
+  axon.gkdrbar:
   - 0.001
   - 0.075
-  dend.gkdrbar: !!python/tuple
+  dend.gkdrbar:
   - 0.0005
   - 0.01
-  soma.sh_nas/x: !!python/tuple
+  soma.sh_nas/x:
   - 1.0
   - 8.0
-  soma.tau_Cacum: !!python/tuple
+  soma.tau_Cacum:
   - 9.
   - 100.
 default_params:
@@ -100,11 +100,11 @@ feature_names:
 - dend_spike_amp
 - spike_detector_delay
 update_context:
-- - optimize_DG_GC_spiking
-  - reset_biophysics
-- - optimize_DG_GC_spiking
-  - update_mechanisms_spiking
-get_features_stages:
+- source: optimize_DG_GC_spiking
+  function: reset_biophysics
+- source: optimize_DG_GC_spiking
+  function: update_mechanisms_spiking
+stages:
 - source: optimize_DG_GC_spiking
   get_args_dynamic: get_args_dynamic_i_holding
   compute_features: compute_features_spike_shape
@@ -119,8 +119,7 @@ get_features_stages:
   get_args_dynamic: get_args_dynamic_dend_spike
   compute_features: compute_features_dend_spike
   filter_features: filter_features_dend_spike
-get_objectives:
-    optimize_DG_GC_spiking: get_objectives_spiking
+  get_objectives: get_objectives_spiking
 kwargs:
   mech_file_path: mechanisms/20181205_DG_GC_excitability_mech.yaml
   gid: 0
@@ -147,25 +146,6 @@ objective_names:
 - f_I_residuals
 - dend_spike_score
 optimization_title: DG_GC_spiking
-param_gen: PopulationAnnealing
-param_names:
-- soma.gbar_nas
-- dend.gbar_nas
-- dend.gbar_nas min
-- axon.gbar_nax
-- ais.gbar_nax
-- soma.gkabar
-- dend.gkabar
-- soma.gkdrbar
-- axon.gkabar
-- axon.gkdrbar
-- dend.gkdrbar
-- soma.sh_nas/x
-- ais.sha_nax
-- soma.gCa factor
-- soma.gCadepK factor
-- ais.gkmbar
-- soma.tau_Cacum
 target_range:
   ADP: 0.05
   fAHP: 0.07

@@ -342,7 +342,8 @@ def compute_features_leak(x, section, export=False, plot=False):
     step_stim_index = context.sim.get_stim_index('step')
     context.sim.modify_stim(step_stim_index, node=node, loc=loc, amp=amp, dur=stim_dur)
     context.sim.run(v_init)
-    Rinp = get_Rinp(np.array(context.sim.tvec), np.array(rec['vec']), equilibrate, duration, amp)[2]
+    Rinp = get_Rinp(np.array(context.sim.tvec.to_python()),
+                    np.array(rec['vec'].to_python()), equilibrate, duration, amp)[2]
     result = {}
     result[section+' R_inp'] = Rinp
     print 'Process: %i: %s: %s took %.1f s, Rinp: %.1f' % (os.getpid(), title, description, time.time() - start_time,
@@ -389,7 +390,7 @@ def offset_vm(description, vm_target=None):
     loc = context.rec_locs[description]
     rec_dict = context.sim.get_rec(description)
     context.sim.modify_stim(offset_stim_index, node=node, loc=loc, amp=0.)
-    rec = rec_dict['vec']
+    rec = rec_dict['vec'].to_python()
     offset = True
 
     equilibrate = context.equilibrate

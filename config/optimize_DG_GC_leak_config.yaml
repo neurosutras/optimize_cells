@@ -1,14 +1,14 @@
 bounds:
-  dend.g_pas slope: !!python/tuple
+  dend.g_pas slope:
   - 1.0E-9
   - 1.0E-4
-  dend.g_pas tau: !!python/tuple
+  dend.g_pas tau:
   - 25.
   - 400.
-  soma.g_pas: !!python/tuple
+  soma.g_pas:
   - 1.0E-12
   - 1.0E-7
-  e_pas: !!python/tuple
+  e_pas:
   - -77.0
   - -70.0
 feature_names:
@@ -17,16 +17,15 @@ feature_names:
 - soma R_inp
 - soma vm_rest
 update_context:
-- - optimize_DG_GC_leak
-  - reset_biophysics
-- - optimize_DG_GC_leak
-  - update_mechanisms_leak
-get_features_stages:
+- source: optimize_DG_GC_leak
+  function: reset_biophysics
+- source: optimize_DG_GC_leak
+  function: update_mechanisms_leak
+stages:
 - source: optimize_DG_GC_leak
   get_args_static: get_args_static_leak
   compute_features: compute_features_leak
-get_objectives:
-  optimize_DG_GC_leak: get_objectives_leak
+  get_objectives: get_objectives_leak
 kwargs:
   mech_file_path: mechanisms/20181205_DG_GC_excitability_mech.yaml
   gid: 0
@@ -46,12 +45,6 @@ objective_names:
 - soma R_inp
 - soma vm_rest
 optimization_title: DG_GC_leak
-param_gen: PopulationAnnealing
-param_names:
-- dend.g_pas slope
-- dend.g_pas tau
-- soma.g_pas
-- e_pas
 target_range:
   dend R_inp: 1.
   soma R_inp: 0.5

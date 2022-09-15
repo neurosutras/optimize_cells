@@ -1,23 +1,23 @@
 bounds:
-  AMPA.tau: !!python/tuple
+  AMPA.tau:
   - 50.
   - 400.
-  AMPA.slope: !!python/tuple
+  AMPA.slope:
   - 1.0e-7
   - 1.0e-5
-  AMPA.g0: !!python/tuple
+  AMPA.g0:
   - 1.0e-4
   - 0.001
-  NMDA.g_unit: !!python/tuple
+  NMDA.g_unit:
   - 1.0e-4
   - 5.0e-2
-  NMDA.gamma: !!python/tuple
+  NMDA.gamma:
   - 0.02
   - 0.12
-  NMDA.Kd: !!python/tuple
+  NMDA.Kd:
   - 3.
   - 12.
-  NMDA.vshift: !!python/tuple
+  NMDA.vshift:
     - -10.
     - 10.
 feature_names:
@@ -28,13 +28,13 @@ feature_names:
 - initial_gain_control
 - initial_gain_AP5
 update_context:
-- - optimize_DG_GC_synaptic_integration
-  - reset_biophysics
-- - optimize_DG_GC_synaptic_integration
-  - reset_syn_mechanisms
-- - optimize_DG_GC_synaptic_integration
-  - update_syn_mechanisms
-get_features_stages:
+- source: optimize_DG_GC_synaptic_integration
+  function: reset_biophysics
+- source: optimize_DG_GC_synaptic_integration
+  function: reset_syn_mechanisms
+- source: optimize_DG_GC_synaptic_integration
+  function: update_syn_mechanisms
+stages:
 - source: optimize_DG_GC_synaptic_integration
   get_args_static: get_args_static_unitary_EPSP_amp
   compute_features: compute_features_unitary_EPSP_amp
@@ -43,17 +43,16 @@ get_features_stages:
   get_args_static: get_args_static_compound_EPSP_amp
   compute_features: compute_features_compound_EPSP_amp
   synchronize: export_compound_EPSP_traces
-get_objectives:
-  optimize_DG_GC_synaptic_integration: get_objectives_synaptic_integration
+  get_objectives: get_objectives_synaptic_integration
 kwargs:
   mech_file_path: mechanisms/20200131_DG_GC_excitability_mech.yaml
-  gid: 0
+  gid: 118936
   cell_type: GC
   correct_for_spines: True
   verbose: 1
   seed_offset: 14e6
   daspk: False
-  config_file: Small_Scale_Control_tune_GC_synapses.yaml
+  config_file: Network_Clamp_GC_Exc_Sat_SLN_IN_Izh_proximal_pf.yaml
   template_paths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoc_lib_path: ../dentate
   config_prefix: ../dentate/config
@@ -69,15 +68,6 @@ objective_names:
 - initial_gain_control_residuals
 - initial_gain_AP5_residuals
 optimization_title: DG_GC_synaptic_integration
-param_gen: PopulationAnnealing
-#param_names:
-#- AMPA.tau
-#- AMPA.slope
-#- AMPA.g0
-#- NMDA.g_unit
-#- NMDA.gamma
-#- NMDA.Kd
-#- NMDA.vshift
 target_range:
   mean_unitary_EPSP_amp: 0.005
   mean_NMDA_contribution: 0.001
