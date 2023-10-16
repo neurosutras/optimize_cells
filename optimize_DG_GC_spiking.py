@@ -77,7 +77,7 @@ def run_tests():
     sequences = [[context.x0_array] * group_size] + args + [[model_id] * group_size] + \
                 [[context.export] * group_size] + [[context.plot] * group_size]
     primitives = context.interface.map(compute_features_spike_shape, *sequences)
-    features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
+    features = {key: value for feature_dict in primitives for key, value in feature_dict.items()}
     context.update(locals())
 
     # Stage 1: Run simulations with a range of amplitudes of step current injections to the soma
@@ -97,7 +97,7 @@ def run_tests():
     sequences = [[context.x0_array] * group_size] + args + [[model_id] * group_size] + \
                 [[context.export] * group_size]
     primitives = context.interface.map(compute_features_spike_adaptation, *sequences)
-    this_features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
+    this_features = {key: value for feature_dict in primitives for key, value in feature_dict.items()}
     features.update(this_features)
     context.update(locals())
 

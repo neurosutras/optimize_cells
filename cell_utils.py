@@ -121,7 +121,7 @@ def get_expected_spine_index_map(sim_file):
     :return: dict
     """
     index_map = {}
-    for key, sim in viewitems(sim_file):
+    for key, sim in sim_file.items():
         path_index = sim.attrs['path_index']
         spine_index = sim.attrs['spine_index']
         if path_index not in index_map:
@@ -190,7 +190,7 @@ def get_expected_EPSP(sim_file, group_index, equilibrate, duration, dt=0.02):
     left, right = time2index(interp_t, equilibrate-3., equilibrate-1.)
     start, stop = time2index(interp_t, equilibrate-2., duration)
     trace_dict = {}
-    for rec in viewvalues(sim['rec']):
+    for rec in sim['rec'].values():
         location = rec.attrs['description']
         vm = rec[:]
         interp_vm = np.interp(interp_t, t, vm)
@@ -239,7 +239,7 @@ def get_expected_vs_actual(expected_sim_file, actual_sim_file, expected_index_ma
         interp_t = np.arange(0., duration, dt)
         left, right = time2index(interp_t, equilibrate-3., equilibrate-1.)
         start, stop = time2index(interp_t, equilibrate-2., duration)
-        for rec in viewvalues(sim['rec']):
+        for rec in sim['rec'].values():
             location = rec.attrs['description']
             if not location in actual:
                 actual[location] = []
@@ -254,8 +254,8 @@ def get_expected_vs_actual(expected_sim_file, actual_sim_file, expected_index_ma
     interp_t -= interp_t[0] + 2.
     expected = {}
     summed_traces = {}
-    equilibrate = next(iter(viewvalues(expected_sim_file))).attrs['equilibrate']
-    duration = next(iter(viewvalues(expected_sim_file))).attrs['duration']
+    equilibrate = next(iter(expected_sim_file.values())).attrs['equilibrate']
+    duration = next(iter(expected_sim_file.values())).attrs['duration']
     for i, spine_index in enumerate(spine_list):
         group_index = expected_index_map[spine_index]
         trace_dict = get_expected_EPSP(expected_sim_file, group_index, equilibrate, duration, dt)
@@ -287,7 +287,7 @@ def export_nmdar_cooperativity(expected_filename, actual_filename, description="
     """
     sim_key_dict = {}
     with h5py.File(data_dir+actual_filename+'.hdf5', 'r') as actual_file:
-        for key, sim in viewitems(actual_file):
+        for key, sim in actual_file.items():
             path_index = sim.attrs['path_index']
             if path_index not in sim_key_dict:
                 sim_key_dict[path_index] = []
@@ -313,7 +313,7 @@ def export_nmdar_cooperativity(expected_filename, actual_filename, description="
                     path_group.attrs['origin_distance'] = origin_distance
                     expected_dict, actual_dict = get_expected_vs_actual(expected_file, actual_file,
                                                                         expected_index_map[path_index], sim_keys)
-                    for rec in viewvalues(sim['rec']):
+                    for rec in sim['rec'].values():
                         location = rec.attrs['description']
                         rec_group = path_group.create_group(location)
                         rec_group.create_dataset('expected', compression='gzip', compression_opts=9,

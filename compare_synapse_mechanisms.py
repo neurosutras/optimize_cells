@@ -64,7 +64,9 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
                   'NMDA_KIN5': {'mech_params': ['g', 'i']},  # , 'netcon_params': {'r0': 3}},
                   'FacilExp2Syn': {'mech_params': ['g', 'i']},  # , 'netcon_params': {'g0': 4, 'f1': 6}},
                   'FacilNMDA': {'mech_params': ['g', 'i']},  # , 'B'], 'netcon_params': {'g0': 4, 'f1': 6}},
-                  'LinExp2Syn': {'mech_params': ['g', 'i']}
+                  'LinExp2Syn': {'mech_params': ['g', 'i']},
+                  'Exp3NMDA2': {'mech_params': ['g', 'i']},
+                  'LinExp2SynNMDA': {'mech_params': ['g', 'i']}
                   }
     syn_params = {'SatExp2Syn': {'g_unit': 0.000361, 'dur_onset': 0.5, 'tau_offset': 3.5, 'sat': 0.9, 'e': 0.},
                   'AMPA_KIN': {'gmax': 0.001222},
@@ -73,7 +75,10 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
                                    'g_unit': 0.00005, 'dur_onset': 10., 'tau_offset': 35., 'sat': 0.9, 'e': 0.},
                   'FacilNMDA': {'f_tau': 25., 'f_inc': 0.15, 'f_max': 0.6,
                                 'g_unit': 0.00043, 'dur_onset': 10., 'tau_offset': 35., 'sat': 0.9, 'e': 0.},
-                  'LinExp2Syn': {'g_unit': 0.000336, 'tau_rise': 0.2, 'tau_decay': 3.5, 'e': 0.}
+                  'LinExp2Syn': {'g_unit': 0.000336, 'tau_rise': 0.2, 'tau_decay': 3.5, 'e': 0.},
+                  'Exp3NMDA2': {'weight': 0.0001236},
+                  'LinExp2SynNMDA': {'g_unit': 0.0002236}
+
                   # 'LinExp2Syn': {'g_unit': 0.000336, 'tau_rise': 50., 'tau_decay': 200., 'e': -90.}
                   }
 
@@ -137,7 +142,7 @@ def main(gid, pop_name, config_file, template_paths, hoc_lib_path, dataset_prefi
 
             if 'netcon_params' in recordings[syn_name]:
                 this_netcon = nc_obj_dict[syn_id][syn_name]
-                for param_name, j in viewitems(recordings[syn_name]['netcon_params']):
+                for param_name, j in recordings[syn_name]['netcon_params'].items():
                     if j > 1:
                         description = '%s_%s_%i' % (param_name, syn_name, syn_id)
                         sim.append_rec(cell, syn_node, description)

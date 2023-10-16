@@ -202,7 +202,7 @@ kwargs:
   verbose: 1
   seed_offset: 14e6
   daspk: False
-  config_file: Network_Clamp_GC_Exc_AradiMorphNoTaper_Sat_SLN_IN_PR_proximal_pf.yaml
+  config: Network_Clamp_GC_Exc_AradiMorphNoTaper_Sat_SLN_IN_PR_proximal_pf.yaml
   template_paths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoc_lib_path: ../dentate
   config_prefix: ../dentate/config

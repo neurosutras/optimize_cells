@@ -70,7 +70,7 @@ def run_tests():
     sequences = [[context.x0_array] * group_size] + args + [[model_id] * group_size] + \
                 [[context.export] * group_size] + [[context.plot] * group_size]
     primitives = context.interface.map(compute_features_iEPSP_i_unit, *sequences)
-    features = {key: value for feature_dict in primitives for key, value in viewitems(feature_dict)}
+    features = {key: value for feature_dict in primitives for key, value in feature_dict.items()}
     context.update(locals())
 
     # Stage 1:

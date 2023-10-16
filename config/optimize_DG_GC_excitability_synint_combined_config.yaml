@@ -204,7 +204,7 @@ kwargs:
   verbose: 1
   seed_offset: 14e6
   daspk: False
-  config_file: Small_Scale_Control_tune_GC_synapses.yaml  # Small_Scale_Control_LN_weights_Sat.yaml
+  config: Small_Scale_Control_tune_GC_synapses.yaml  # Small_Scale_Control_LN_weights_Sat.yaml
   template_paths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoc_lib_path: ../dentate
   config_prefix: ../dentate/config

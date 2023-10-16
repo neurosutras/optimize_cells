@@ -68,7 +68,7 @@ def plot_Rinp(rec_file_list, sec_types_list=None, features_list=None, features_l
         feature_dict = {feature: {} for feature in features_list}
         distances_dict = {feature: {} for feature in features_list}
         with h5py.File(data_dir + rec_file + '.hdf5', 'r') as f:
-            for item in viewvalues(f['Rinp_data']):
+            for item in f['Rinp_data'].values():
                 if ((item.attrs['type'] in sec_types_list) or
                         ('axon' in sec_types_list and item.attrs['type'] in axon_types_list) or
                         ('dendrite' in sec_types_list and item.attrs['type'] in dend_types_list)):
@@ -191,10 +191,10 @@ def plot_superimpose_conditions(rec_filename, legend=False):
     f = h5py.File(data_dir+rec_filename+'.hdf5', 'r')
     rec_ids = []
     sim_ids = []
-    for sim in viewvalues(f):
+    for sim in f.values():
         if 'description' in sim.attrs and not sim.attrs['description'] in sim_ids:
             sim_ids.append(sim.attrs['description'])
-        for rec in viewvalues(sim['rec']):
+        for rec in sim['rec'].values():
             if 'description' in rec.attrs:
                 rec_id = rec.attrs['description']
             else:
@@ -206,13 +206,13 @@ def plot_superimpose_conditions(rec_filename, legend=False):
         axes[i].set_xlabel('Time (ms)')
         axes[i].set_ylabel(rec_ids[i]['ylabel'])
         axes[i].set_title(rec_ids[i]['id'])
-    for sim in viewvalues(f):
+    for sim in f.values():
         if 'description' in sim.attrs:
             sim_id = sim.attrs['description']
         else:
             sim_id = ''
         tvec = sim['time']
-        for rec in viewvalues(sim['rec']):
+        for rec in sim['rec'].values():
             if ('description' in rec.attrs):
                 rec_id = rec.attrs['description']
             else:
@@ -242,7 +242,7 @@ def plot_synaptic_parameter(rec_file_list, description_list=None):
     if description_list is None:
         description_list = [" " for rec in rec_file_list]
     with h5py.File(data_dir+rec_file_list[0]+'.hdf5', 'r') as f:
-        param_list = [dataset for dataset in next(iter(viewvalues(f))) if not dataset == 'distances']
+        param_list = [dataset for dataset in next(iter(f.values())) if not dataset == 'distances']
         fig, axes = plt.subplots(max(2,len(param_list)), max(2, len(f)))
     colors = ['k', 'r', 'c', 'y', 'm', 'g', 'b']
     for index, rec_filename in enumerate(rec_file_list):
@@ -275,10 +275,10 @@ def plot_synaptic_parameter_GC(rec_file_list, param_names=None, description_list
     # default_rec_locs = ['soma']
     with h5py.File(data_dir+rec_file_list[0]+'.hdf5', 'r') as f:
         if param_names is None:
-            param_names = [param_name for param_name in next(iter(viewvalues(f))).attrs if param_name not in ['input_loc', 'equilibrate', 'duration']]
+            param_names = [param_name for param_name in next(iter(f.values())).attrs if param_name not in ['input_loc', 'equilibrate', 'duration']]
         temp_input_locs = []
         temp_rec_locs = []
-        for sim in viewvalues(f):
+        for sim in f.values():
             input_loc = sim.attrs['input_loc']
             if not input_loc in temp_input_locs:
                 temp_input_locs.append(input_loc)
@@ -298,7 +298,7 @@ def plot_synaptic_parameter_GC(rec_file_list, param_names=None, description_list
             for param_name in param_names:
                 param_vals[param_name][input_loc] = {}
         with h5py.File(data_dir+rec_filename+'.hdf5', 'r') as f:
-            for sim in viewvalues(f):
+            for sim in f.values():
                 input_loc = sim.attrs['input_loc']
                 is_terminal = str(sim['rec']['2'].attrs['is_terminal'])
                 if is_terminal not in distances_soma[input_loc].keys():
@@ -527,6 +527,8 @@ def plot_exported_DG_GC_spiking_features(file_path, model_label=None, **kwargs):
     if not os.path.isfile(file_path):
         raise IOError('plot_exported_DG_GC_spiking_features: invalid file path: %s' % file_path)
     with h5py.File(file_path, 'r') as f:
+        if model_label is None:
+            model_label = next(iter(f.keys()))
         group_name = 'f_I'
         group = get_h5py_group(f, [model_label, group_name])
         fig1, axes1 = plt.subplots()
@@ -578,6 +580,8 @@ def plot_exported_DG_MC_spiking_features(file_path, model_label=None, **kwargs):
     if not os.path.isfile(file_path):
         raise IOError('plot_exported_DG_MC_spiking_features: invalid file path: %s' % file_path)
     with h5py.File(file_path, 'r') as f:
+        if model_label is None:
+            model_label = next(iter(f.keys()))
         group_name = 'f_I'
         group = get_h5py_group(f, [model_label, group_name])
         fig1, axes1 = plt.subplots()
@@ -630,6 +634,8 @@ def plot_exported_DG_GC_synaptic_integration_features(file_path, model_label=Non
         raise IOError('plot_exported_DG_GC_synaptic_integration_features: invalid file path: {!s}'.format(file_path))
     from matplotlib import cm
     with h5py.File(file_path, 'r') as f:
+        if model_label is None:
+            model_label = next(iter(f.keys()))
         group_name = 'mean_unitary_EPSP_traces'
         source = get_h5py_group(f, [model_label, group_name])
         t = source['time'][:]
@@ -666,7 +672,7 @@ def plot_exported_DG_GC_synaptic_integration_features(file_path, model_label=Non
         group_name = 'compound_EPSP_summary'
         group = get_h5py_group(f, [model_label, group_name])
         t = group['time'][:]
-        syn_conditions = list(next(iter(viewvalues(group['traces']))).keys())
+        syn_conditions = list(next(iter(group['traces'].values())).keys())
         ordered_syn_conditions = ['expected_control', 'control']
         for syn_condition in [syn_condition for syn_condition in syn_conditions
                               if syn_condition != 'control' and 'expected' not in syn_condition]:
@@ -695,7 +701,7 @@ def plot_exported_DG_GC_synaptic_integration_features(file_path, model_label=Non
         fig, axes = plt.subplots(1, len(branch_names), sharey=True, sharex=True)
         if len(branch_names) == 1:
             axes = [axes]
-        syn_conditions = list(next(iter(viewvalues(data_group))).keys())
+        syn_conditions = list(next(iter(data_group.values())).keys())
         ordered_syn_conditions = ['control'] + [syn_condition for syn_condition in syn_conditions
                                                 if syn_condition != 'control' and 'expected' not in syn_condition]
         colors = list(cm.Paired(np.linspace(0, 1, len(syn_conditions))))
@@ -747,13 +753,15 @@ def plot_sim_from_file(file_path, model_label=None, category=None, group_name='s
     if not os.path.isfile(file_path):
         raise IOError('plot_sim_from_file: invalid file path: %s' % file_path)
     with h5py.File(file_path, 'r') as f:
+        if model_label is None:
+            model_label = next(iter(f.keys()))
         source = get_h5py_group(f, [model_label, group_name, category])
         if 'enumerated' not in source.attrs or not source.attrs['enumerated']:
             raise AttributeError('plot_sim_from_file: source: %s is not enumerated; available categories: %s' %
                                  (source, list(source.keys())))
-        for trial_key, trial in viewitems(source):
+        for trial_key, trial in source.items():
             fig, axes = plt.subplots()
-            for name, rec in viewitems(trial['recs']):
+            for name, rec in trial['recs'].items():
                 description = get_h5py_attr(rec.attrs, 'description')
                 sec_type = get_h5py_attr(rec.attrs, 'type')
                 node_name = '%s%i' % (sec_type, rec.attrs['index'])
@@ -878,6 +886,8 @@ def plot_exported_DG_iEPSP_attenuation(file_path, model_label=None, show=True, *
     :param show: bool
     """
     with h5py.File(file_path, 'r') as f:
+        if model_label is None:
+            model_label = next(iter(f.keys()))
         group_name = 'iEPSP_attenuation'
         source = get_h5py_group(f, [model_label, group_name])
         exp_attenuation = np.array(source['exp_attenuation'])

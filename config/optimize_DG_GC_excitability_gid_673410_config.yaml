@@ -160,7 +160,7 @@ kwargs:
   correct_for_spines: True
   verbose: 2
   daspk: False
-  config_file: Network_Clamp_GC_test_20200127.yaml
+  config: Network_Clamp_GC_test_20200127.yaml
   template_paths: ../DGC/Mateos-Aparicio2014:../dentate/templates
   hoc_lib_path: ../dentate
   config_prefix: ../dentate/config

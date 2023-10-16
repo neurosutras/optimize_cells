@@ -1,86 +1,86 @@
 bounds:
-    dend.g_pas slope: !!python/tuple
+    dend.g_pas slope:
         - 1.0E-9
         - 1.0E-4
-    dend.g_pas tau: !!python/tuple
+    dend.g_pas tau:
         - 25.
         - 400.
-    soma.g_pas: !!python/tuple
+    soma.g_pas:
         - 1.0E-12
         - 1.0E-7
-    e_pas: !!python/tuple
+    e_pas:
         - -77.0
         - -70.0
-    ais.gbar_nax: !!python/tuple
+    ais.gbar_nax:
         - 0.02
         - 0.5
-    ais.gkmbar: !!python/tuple
+    ais.gkmbar:
         - 0.00005
         - 0.05
-    ais.sha_nax: !!python/tuple
+    ais.sha_nax:
         - -6.0
         - -1.0
-    axon.gbar_nax: !!python/tuple
+    axon.gbar_nax:
         - 0.02
         - 0.1
-    axon.gkabar: !!python/tuple
+    axon.gkabar:
         - 0.001
         - 0.05
-    dend.gbar_nas: !!python/tuple
+    dend.gbar_nas:
         - 0.01
         - 0.05
-    dend.gbar_nas min: !!python/tuple
+    dend.gbar_nas min:
         - 0.0
         - 0.05
-    dend.gkabar: !!python/tuple
+    dend.gkabar:
         - 0.001
         - 0.25
-    soma.gCa factor: !!python/tuple
+    soma.gCa factor:
         - 0.005
         - 2.0
-    soma.gCadepK factor: !!python/tuple
+    soma.gCadepK factor:
         - 0.0005
         - 10.
-    soma.gbar_nas: !!python/tuple
+    soma.gbar_nas:
         - 0.01
         - 0.05
-    soma.gkabar: !!python/tuple
+    soma.gkabar:
         - 0.005
         - 0.075
-    soma.gkdrbar: !!python/tuple
+    soma.gkdrbar:
         - 0.001
         - 0.075
-    axon.gkdrbar: !!python/tuple
+    axon.gkdrbar:
         - 0.001
         - 0.075
-    dend.gkdrbar: !!python/tuple
+    dend.gkdrbar:
         - 0.0005
         - 0.01
-    soma.sh_nas/x: !!python/tuple
+    soma.sh_nas/x:
         - 1.0
         - 8.0
-    soma.tau_Cacum: !!python/tuple
+    soma.tau_Cacum:
         - 9.
         - 100.
-    AMPA.tau: !!python/tuple
+    AMPA.tau:
         - 50.
         - 400.
-    AMPA.slope: !!python/tuple
+    AMPA.slope:
         - 1.0e-7
         - 1.0e-5
-    AMPA.g0: !!python/tuple
+    AMPA.g0:
         - 1.0e-4
         - 0.001
-    NMDA.g_unit: !!python/tuple
+    NMDA.g_unit:
         - 1.0e-5
         - 5.0e-3
-    NMDA.gamma: !!python/tuple
+    NMDA.gamma:
         - 0.02
         - 0.15
-    NMDA.Kd: !!python/tuple
+    NMDA.Kd:
         - 3.
         - 12.
-    NMDA.vshift: !!python/tuple
+    NMDA.vshift:
         - -40.
         - 0.
 default_params:
@@ -144,20 +144,21 @@ feature_names:
     - initial_gain_control
     - initial_gain_AP5
 update_context:
-    - - optimize_DG_GC_leak
-      - reset_biophysics
-    - - optimize_DG_GC_leak
-      - update_mechanisms_leak
-    - - optimize_DG_GC_spiking
-      - update_mechanisms_spiking
-    - - optimize_DG_GC_synaptic_integration
-      - reset_syn_mechanisms
-    - - optimize_DG_GC_synaptic_integration
-      - update_syn_mechanisms
-get_features_stages:
+    - source: optimize_DG_GC_leak
+      function: reset_biophysics
+#    - source: optimize_DG_GC_leak
+#      function: update_mechanisms_leak
+#    - source: optimize_DG_GC_spiking
+#      function: update_mechanisms_spiking
+    - source: optimize_DG_GC_synaptic_integration
+      function: reset_syn_mechanisms
+#    - source: optimize_DG_GC_synaptic_integration
+#      function: update_syn_mechanisms
+stages:
     - source: optimize_DG_GC_leak
       get_args_static: get_args_static_leak
       compute_features: compute_features_leak
+      get_objectives: get_objectives_leak
     - source: optimize_DG_GC_spiking
       get_args_dynamic: get_args_dynamic_i_holding
       compute_features: compute_features_spike_shape
@@ -172,6 +173,7 @@ get_features_stages:
       get_args_dynamic: get_args_dynamic_dend_spike
       compute_features: compute_features_dend_spike
       filter_features: filter_features_dend_spike
+      get_objectives: get_objectives_spiking
     - source: optimize_DG_GC_iEPSP_propagation
       get_args_dynamic: get_args_dynamic_i_EPSC
       compute_features: compute_features_iEPSP_i_unit
@@ -179,30 +181,26 @@ get_features_stages:
       get_args_dynamic: get_args_dynamic_iEPSP_unit
       compute_features: compute_features_iEPSP_i_unit
       filter_features: filter_features_iEPSP_attenuation
+      get_objectives: get_objectives_iEPSP_attenuation
     - source: optimize_DG_GC_synaptic_integration
       get_args_static: get_args_static_unitary_EPSP_amp
       compute_features: compute_features_unitary_EPSP_amp
-      synchronize: export_unitary_EPSP_traces
+      collective: export_unitary_EPSP_traces
     - source: optimize_DG_GC_synaptic_integration
       get_args_static: get_args_static_compound_EPSP_amp
       compute_features: compute_features_compound_EPSP_amp
-      synchronize: export_compound_EPSP_traces
-get_objectives:
-    optimize_DG_GC_leak: get_objectives_leak
-    optimize_DG_GC_spiking: get_objectives_spiking
-    optimize_DG_GC_iEPSP_propagation: get_objectives_iEPSP_attenuation
-    optimize_DG_GC_synaptic_integration: get_objectives_synaptic_integration
+      collective: export_compound_EPSP_traces
+      get_objectives: get_objectives_synaptic_integration
 kwargs:
-    mech_file_path: mechanisms/20211115_DG_GC_excitability_mech.yaml
-    # mech_file_path: mechanisms/20181205_DG_GC_excitability_mech.yaml
+    mech_file_path: mechanisms/20230816_DG_GC_excitability_synint_SynExp3NMDA2fd_gid_960280_mech.yaml
     max_i_EPSP_attenuation_distance: 300.
-    gid: 118936
+    gid: 960280
     cell_type: GC
     correct_for_spines: True
     verbose: 1
     seed_offset: 14e6
     daspk: False
-    config: Network_Clamp_GC_Exc_AradiMorphTaper_Sat_SLN_IN_PR_proximal_pf.yaml
+    config: 20230816_Network_Clamp_GC_Exc_Sat_SynExp3NMDA2_SLN_CLS_IN_PR_center_pf.yaml
     template_paths: ../DGC/Mateos-Aparicio2014:../dentate/templates
     hoc_lib_path: ../dentate
     config_prefix: ../dentate/config
@@ -235,37 +233,7 @@ objective_names:
     - integration_gain_AP5_residuals
 # - initial_gain_control_residuals
 # - initial_gain_AP5_residuals
-optimization_title: DG_GC_excitability_synint_combined
-param_gen: PopulationAnnealing
-param_names:
-    - dend.g_pas slope
-    - dend.g_pas tau
-    - soma.g_pas
-    - e_pas
-    - soma.gbar_nas
-    - dend.gbar_nas
-    - dend.gbar_nas min
-    - axon.gbar_nax
-    - ais.gbar_nax
-    - soma.gkabar
-    - dend.gkabar
-    - soma.gkdrbar
-    - axon.gkabar
-    - axon.gkdrbar
-    - dend.gkdrbar
-    - soma.sh_nas/x
-    - ais.sha_nax
-    - soma.gCa factor
-    - soma.gCadepK factor
-    - ais.gkmbar
-    - soma.tau_Cacum
-    - AMPA.tau
-    - AMPA.slope
-    - AMPA.g0
-    - NMDA.g_unit
-    - NMDA.gamma
-    - NMDA.Kd
-    - NMDA.vshift
+optimization_title: DG_GC_excitability_synint_combined_gid_960280
 target_range:
     dend R_inp: 1.
     soma R_inp: 0.5
