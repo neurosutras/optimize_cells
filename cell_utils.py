@@ -620,7 +620,7 @@ def get_dend_segments(cell, ref_seg=None, sec_type='apical', soma_near=False, te
     # Add most proximal segment on section
     idx_lst = [1] if soma_near else []
     for i in range(N_dend):
-        seg_idx_arr[i,0] = np.rint(san_locs*(n_seg_list[i]+1)).astype(np.int)
+        seg_idx_arr[i,0] = np.rint(san_locs*(n_seg_list[i]+1)).astype(int)
         seg_idx_arr[i,1] = [] + idx_lst 
 
     # Add most distal segment on section
@@ -637,7 +637,7 @@ def get_dend_segments(cell, ref_seg=None, sec_type='apical', soma_near=False, te
     tot_len = 0
     for i, obj in enumerate(section_list):
         tmp_lst = [j for j in obj.sec.allseg()]
-        all_idx = np.union1d(seg_idx_arr[i,0], seg_idx_arr[i,1]).astype(np.int)
+        all_idx = np.union1d(seg_idx_arr[i,0], seg_idx_arr[i,1]).astype(int)
         if all_seg: all_idx = np.union1d(all_idx, np.arange(1, obj.sec.nseg+1))
         for k in all_idx: 
             frac_pos = tmp_lst[k].x
