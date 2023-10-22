@@ -146,14 +146,14 @@ feature_names:
 update_context:
     - source: optimize_DG_GC_leak
       function: reset_biophysics
-#    - source: optimize_DG_GC_leak
-#      function: update_mechanisms_leak
-#    - source: optimize_DG_GC_spiking
-#      function: update_mechanisms_spiking
+    - source: optimize_DG_GC_leak
+      function: update_mechanisms_leak
+    - source: optimize_DG_GC_spiking
+      function: update_mechanisms_spiking
     - source: optimize_DG_GC_synaptic_integration
       function: reset_syn_mechanisms
-#    - source: optimize_DG_GC_synaptic_integration
-#      function: update_syn_mechanisms
+    - source: optimize_DG_GC_synaptic_integration
+      function: update_syn_mechanisms
 stages:
     - source: optimize_DG_GC_leak
       get_args_static: get_args_static_leak
