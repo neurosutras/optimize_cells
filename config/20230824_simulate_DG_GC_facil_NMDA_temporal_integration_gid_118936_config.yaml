@@ -146,6 +146,10 @@ feature_names:
     - integration_gain_AP5
     - initial_gain_control
     - initial_gain_AP5
+    - EPSP_summation_proximal_control
+    - EPSP_summation_proximal_AP5
+    - EPSP_summation_distal_control
+    - EPSP_summation_distal_AP5
 update_context:
     - source: optimize_DG_GC_leak
       function: reset_biophysics
@@ -240,6 +244,10 @@ objective_names:
     - mean_NMDA_contribution_residuals
     - integration_gain_control_residuals
     - integration_gain_AP5_residuals
+    - EPSP_summation_proximal_control
+    - EPSP_summation_proximal_AP5
+    - EPSP_summation_distal_control
+    - EPSP_summation_distal_AP5
 # - initial_gain_control_residuals
 # - initial_gain_AP5_residuals
 optimization_title: DG_GC_facil_NMDA_temporal_integration
