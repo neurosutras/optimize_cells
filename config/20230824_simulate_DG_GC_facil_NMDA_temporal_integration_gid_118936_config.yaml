@@ -86,6 +86,12 @@ bounds:
     NMDA.sat:
         - 0.25
         - 0.9
+    NMDA.f_inc:
+        - 0.01
+        - 1.
+    NMDA.f_max:
+        - 0.5
+        - 3.
 default_params:
 rel_bounds:
     - - dend.gbar_nas
@@ -306,7 +312,9 @@ x0:
     NMDA.g_unit: 5.180688E-04
     NMDA.gamma: 0.11
     NMDA.vshift: -28.
-    NMDA.sat: 0.25
+    NMDA.sat: 0.9
+    NMDA.f_inc: 0.15
+    NMDA.f_max: 0.6
     ais.gbar_nax: 4.412620E-01
     ais.gkmbar: 9.402899E-03
     ais.sha_nax: -4.897933E+00

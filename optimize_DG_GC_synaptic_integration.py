@@ -455,6 +455,10 @@ def update_syn_mechanisms(x, context=None):
                      param_name='vshift', value=x_dict['NMDA.vshift'], update_targets=False)
     modify_syn_param(cell, env, 'apical', context.NMDA_type, filters={'syn_types': ['excitatory']},
                      param_name='sat', value=x_dict['NMDA.sat'], update_targets=False)
+    modify_syn_param(cell, env, 'apical', context.NMDA_type, filters={'syn_types': ['excitatory']},
+                     param_name='f_inc', value=x_dict['NMDA.f_inc'], update_targets=False)
+    modify_syn_param(cell, env, 'apical', context.NMDA_type, filters={'syn_types': ['excitatory']},
+                     param_name='f_max', value=x_dict['NMDA.f_max'], update_targets=False)
     config_biophys_cell_syns(env=env, gid=cell.gid, postsyn_name=cell.pop_name, syn_ids=context.syn_id_list,
                              verbose=context.verbose > 1, throw_error=True)
 
