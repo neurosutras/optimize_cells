@@ -13,15 +13,18 @@ sbatch <<EOT
 #SBATCH -N 36
 #SBATCH -n 2016
 #SBATCH -t 24:00:00
-#SBATCH --mail-user=neurosutras@gmail.com
+#SBATCH --mail-user=milstein@cabm.rutgers.edu
 #SBATCH --mail-type=BEGIN,END,FAIL
 
 set -x
 
 cd $WORK2/optimize_cells
 
+lfs setstripe -c 8 $SCRATCH/data/optimize_cells
+
 ibrun -n 2016 python3 -m nested.optimize \
     --config-file-path=$CONFIG_FILE_PATH \
     --output-dir=$SCRATCH/data/optimize_cells --pop_size=200 --max_iter=50 --path_length=3 --disp \
-    --label=gid_"$GID"_"$LABEL" --verbose=1 --dataset_prefix=$SCRATCH/data/dentate --gid=$GID
+    --label=gid_"$GID"_"$LABEL" --verbose=1 --dataset_prefix=$SCRATCH/data/dentate --gid=$GID \
+    --framework=pc
 EOT
