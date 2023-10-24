@@ -1,10 +1,10 @@
 #!/bin/bash -l
 export DATE=$(date +%Y%m%d_%H%M%S)
-export DATASET_PREFIX=$1
-export NETWORK_CONFIG_FILE=$2
-export GID=$3
+export CONFIG_FILE_PATH=$1
+export GID=$2
+export LABEL=$3
 export STORAGE_PATH=$4
-export JOB_NAME=optimize_DG_GC_excitability_synint_combined_gid_"$GID"_"$DATE"
+export JOB_NAME=optimize_DG_GC_excitability_synint_combined_gid_"$GID"_"$LABEL"_"$DATE"
 sbatch <<EOT
 #!/bin/bash -l
 #SBATCH -J $JOB_NAME
@@ -13,17 +13,19 @@ sbatch <<EOT
 #SBATCH -p normal
 #SBATCH -N 36
 #SBATCH -n 2016
-#SBATCH -t 12:00:00
-#SBATCH --mail-user=neurosutras@gmail.com
-#SBATCH --mail-type=BEGIN,END,FAIL
+#SBATCH -t 24:00:00
+#SBATCH --mail-user=milstein@cabm.rutgers.edu
+#SBATCH --mail-type=ALL
 
 set -x
 
 cd $WORK/optimize_cells
 
+lfs setstripe -c 8 $SCRATCH/data/optimize_cells
+
 ibrun -n 2016 python3 -m nested.optimize \
-    --config-file-path=config/optimize_DG_GC_excitability_synint_combined_config.yaml \
+    --config-file-path=$CONFIG_FILE_PATH \
     --output-dir=$SCRATCH/data/optimize_cells --pop_size=200 --max_iter=50 --path_length=3 --disp \
-    --label=gid_"$GID" --verbose=1 --dataset_prefix=$DATASET_PREFIX --gid=$GID --config_file=$NETWORK_CONFIG_FILE \
-    --hot-start --storage-file-path=$STORAGE_PATH
+    --label=gid_"$GID"_"$LABEL" --verbose=1 --dataset_prefix=$SCRATCH/data/dentate --gid=$GID \
+    --framework=pc --hot-start --storage-file-path=$STORAGE_PATH
 EOT

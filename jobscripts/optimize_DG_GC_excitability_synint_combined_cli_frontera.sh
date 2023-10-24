@@ -14,11 +14,11 @@ sbatch <<EOT
 #SBATCH -n 2016
 #SBATCH -t 24:00:00
 #SBATCH --mail-user=milstein@cabm.rutgers.edu
-#SBATCH --mail-type=BEGIN,END,FAIL
+#SBATCH --mail-type=ALL
 
 set -x
 
-cd $WORK2/optimize_cells
+cd $WORK/optimize_cells
 
 lfs setstripe -c 8 $SCRATCH/data/optimize_cells
 
