@@ -11,8 +11,8 @@ sbatch <<EOT
 #SBATCH -o /scratch1/06441/aaronmil/logs/optimize_cells/$JOB_NAME.%j.o
 #SBATCH -e /scratch1/06441/aaronmil/logs/optimize_cells/$JOB_NAME.%j.e
 #SBATCH -p normal
-#SBATCH -N 36
-#SBATCH -n 2016
+#SBATCH -N 72
+#SBATCH -n 2000
 #SBATCH -t 24:00:00
 #SBATCH --mail-user=milstein@cabm.rutgers.edu
 #SBATCH --mail-type=ALL
@@ -23,9 +23,9 @@ cd $WORK/optimize_cells
 
 lfs setstripe -c 8 $SCRATCH/data/optimize_cells
 
-ibrun -n 2016 python3 -m nested.optimize \
+ibrun -n 2000 python3 -m nested.optimize \
     --config-file-path=$CONFIG_FILE_PATH \
     --output-dir=$SCRATCH/data/optimize_cells --pop_size=200 --max_iter=50 --path_length=3 --disp \
     --label=gid_"$GID"_"$LABEL" --verbose=1 --dataset_prefix=$SCRATCH/data/dentate --gid=$GID \
-    --framework=pc --hot-start --storage-file-path=$STORAGE_PATH
+    --framework=pc --hot-start --history-file-path=$STORAGE_PATH
 EOT

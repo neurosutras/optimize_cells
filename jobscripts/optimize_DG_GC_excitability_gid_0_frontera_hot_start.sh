@@ -20,5 +20,5 @@ cd $SCRATCH/src/optimize_cells
 
 ibrun -n 1232 python3 -m nested.optimize --config-file-path=config/optimize_DG_GC_excitability_config.yaml \
     --output-dir=data --pop_size=200 --max_iter=50 --path_length=3 --disp --label=gid_0 --verbose=1 --hot-start \
-    --storage-file-path=$STORAGE_FILE_PATH
+    --history-file-path=$STORAGE_FILE_PATH
 EOT

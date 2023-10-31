@@ -28,6 +28,6 @@ cd /home/pmoolcha/Work/optimize_cells
 
 mpirun -ib python3 -m nested.optimize --config-file-path='config/optimize_DG_MC_leak_spiking_shortdend_config.yaml' --pop_size=200 --max_iter=50 --path_length=3 --disp --output-dir=data --label=cell1000000 --export
 
-#mpirun -ib python3 -m nested.optimize --config-file-path='config/optimize_DG_MC_leak_spiking_shortdend_config.yaml' --pop_size=200 --max_iter=50 --path_length=3 --disp --output-dir=data --label=cell1000000 --export --hot-start --storage-file-path='data/20200414_0827_DG_MC_leak_spiking_cell1000000_PopulationAnnealing_optimization_history.hdf5'
+#mpirun -ib python3 -m nested.optimize --config-file-path='config/optimize_DG_MC_leak_spiking_shortdend_config.yaml' --pop_size=200 --max_iter=50 --path_length=3 --disp --output-dir=data --label=cell1000000 --export --hot-start --history-file-path='data/20200414_0827_DG_MC_leak_spiking_cell1000000_PopulationAnnealing_optimization_history.hdf5'
 
-#ibrun python3 -m nested.optimize --config-file-path='config/optimize_DG_MC_leak_spiking_shortdend_M_curr_soma_config.yaml' --pop_size=200 --max_iter=50 --path_length=3 --disp --output-dir=data --label=cell1000000 --export --hot-start --storage-file-path='data/20200129_1429_DG_MC_leak_spiking_cell1000000_PopulationAnnealing_optimization_history.hdf5'
+#ibrun python3 -m nested.optimize --config-file-path='config/optimize_DG_MC_leak_spiking_shortdend_M_curr_soma_config.yaml' --pop_size=200 --max_iter=50 --path_length=3 --disp --output-dir=data --label=cell1000000 --export --hot-start --history-file-path='data/20200129_1429_DG_MC_leak_spiking_cell1000000_PopulationAnnealing_optimization_history.hdf5'
