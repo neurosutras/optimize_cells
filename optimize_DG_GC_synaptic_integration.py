@@ -503,6 +503,7 @@ def export_unitary_EPSP_traces():
                     for rec_name in context.synaptic_integration_rec_names:
                         context.temp_model_data_file[group_key][description][syn_group][
                             syn_condition].create_dataset(rec_name, (num_syn_ids, trace_len), dtype='f8')
+        context.interface.global_comm.barrier()
     
     context.interface.global_comm.barrier()
     if context.interface.global_comm.rank == 0:
@@ -518,7 +519,7 @@ def export_unitary_EPSP_traces():
         else:
             this_temp_model_data = {}
         context.interface.global_comm.barrier()
-        this_temp_model_data = context.interface.global_comm.gather(this_temp_model_data, root=target_rank)
+        this_temp_model_data = context.interface.global_comm.Igather(this_temp_model_data, root=target_rank)
         if context.interface.global_comm.rank == target_rank:
             print('rank: %i now has %i elements from gather for model_key: %s' %
                   (context.interface.global_comm.rank, len(this_temp_model_data), model_key))
