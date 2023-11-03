@@ -483,6 +483,7 @@ def export_unitary_EPSP_traces():
         context.temp_model_data_file = h5py.File(context.temp_model_data_file_path, 'a', driver='mpio',
                                                  comm=context.interface.global_comm)
     
+    context.interface.global_comm.barrier()
     if context.interface.global_comm.rank == 0:
         print('export_unitary_EPSP_traces: getting past creating file')
         sys.stdout.flush()
@@ -502,13 +503,25 @@ def export_unitary_EPSP_traces():
                     for rec_name in context.synaptic_integration_rec_names:
                         context.temp_model_data_file[group_key][description][syn_group][
                             syn_condition].create_dataset(rec_name, (num_syn_ids, trace_len), dtype='f8')
-        
+    
+    context.interface.global_comm.barrier()
+    if context.interface.global_comm.rank == 0:
+        print('export_unitary_EPSP_traces: getting past building groups and datasets')
+        sys.stdout.flush()
+    
+    for i, model_key in enumerate(model_keys):
         target_rank = i % context.interface.global_comm.size
         if model_key in context.temp_model_data:
             this_temp_model_data = context.temp_model_data.pop(model_key)
+            print('rank: %i has model_key: %s' % (context.interface.global_comm.rank, model_key))
+            sys.stdout.flush()
         else:
             this_temp_model_data = {}
         this_temp_model_data = context.interface.global_comm.gather(this_temp_model_data, root=target_rank)
+        if context.interface.global_comm.rank == target_rank:
+            print('rank: %i now has %i elements from gather for model_key: %s' %
+                  (context.interface.global_comm.rank, len(this_temp_model_data), model_key))
+            sys.stdout.flush()
         if context.interface.global_comm.rank == target_rank:
             context.temp_model_data[model_key] = {description: {}}
             for element in this_temp_model_data:
