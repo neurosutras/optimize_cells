@@ -482,7 +482,11 @@ def export_unitary_EPSP_traces():
             context.interface.global_comm.bcast(context.temp_model_data_file_path, root=0)
         context.temp_model_data_file = h5py.File(context.temp_model_data_file_path, 'a', driver='mpio',
                                                  comm=context.interface.global_comm)
-
+    
+    if context.interface.global_comm.rank == 0:
+        print('export_unitary_EPSP_traces: getting past creating file')
+        sys.stdout.flush()
+    
     for i, model_key in enumerate(model_keys):
         group_key = str(i)
         context.temp_model_data_legend[model_key] = group_key
@@ -498,7 +502,7 @@ def export_unitary_EPSP_traces():
                     for rec_name in context.synaptic_integration_rec_names:
                         context.temp_model_data_file[group_key][description][syn_group][
                             syn_condition].create_dataset(rec_name, (num_syn_ids, trace_len), dtype='f8')
-
+        
         target_rank = i % context.interface.global_comm.size
         if model_key in context.temp_model_data:
             this_temp_model_data = context.temp_model_data.pop(model_key)
@@ -511,6 +515,7 @@ def export_unitary_EPSP_traces():
                 if element:
                     dict_merge(context.temp_model_data[model_key], element)
         context.interface.global_comm.barrier()
+    
     if context.interface.global_comm.rank == 0:
         print('export_unitary_EPSP_traces: getting past data transport step')
         sys.stdout.flush()

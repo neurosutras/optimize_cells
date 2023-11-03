@@ -48,7 +48,7 @@ NEURON {
 	POINT_PROCESS Exp3NMDA2fd
 	NONSPECIFIC_CURRENT i
 	RANGE  tau1_0, a1, tau2_0, a2, tauV, e, i, gVI, st_gVD, v0_gVD, Mg, K0, delta
-        RANGE tau_D1, delta_D1, tau_F, delta_F
+    RANGE tau_D1, delta_D1, tau_F, delta_F, g_unit, vshift
 	RANGE inf, tau1, tau2
 	THREADSAFE
 }
@@ -94,7 +94,9 @@ PARAMETER {
 							: then tauV at 26 degC should be 7 
 	st_gVD = 0.007	(1/mV)	: steepness of the gVD-V graph from Clarke08 -> 2 units / 285 mv
 	v0_gVD = -100	(mV)	: Membrane potential at which there is no voltage dependent current, from Clarke08 -> -90 or -100
-	gVI = 1			(uS)	: Maximum Conductance of Voltage Independent component, This value is used to calculate gVD
+
+    g_unit = 0.0005 (uS)    : Conductance scale factor
+    gVI = 1			(uS)	: Maximum Conductance of Voltage Independent component, This value is used to calculate gVD
 	Q10 = 1.52				: Kim11
 	T0 = 26			(degC)	: reference temperature 
 	celsius 		(degC)	: actual temperature for simulation, defined in Neuron, usually about 35
@@ -102,8 +104,10 @@ PARAMETER {
 	Mg = 1			(mM)	: external magnesium concentration from Spruston95
 	K0 = 4.1		(mM)	: IC50 at 0 mV from Spruston95
 	delta = 0.8 	(1)		: the electrical distance of the Mg2+ binding site from the outside of the membrane from Spruston95
+    vshift = 0.     (mV)    : shift v_half of sigmoidal activation
 : Parameter Controls Ohm's law in NMDAR
 	e = -0.7		(mV)	: in CA1-CA3 region = -0.7 from Spruston95
+
 }
 
 CONSTANT {
@@ -155,7 +159,7 @@ INITIAL {
 BREAKPOINT {
 	SOLVE state METHOD derivimplicit
 
-	i = (B - A)*(gVI + gVD)*Mgblock(v)*(v - e)
+	i = g_unit*(B - A)*(gVI + gVD)*Mgblock(v-vshift)*(v - e)
 }
 
 DERIVATIVE state { LOCAL x
