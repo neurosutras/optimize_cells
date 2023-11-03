@@ -519,7 +519,7 @@ def export_unitary_EPSP_traces():
         else:
             this_temp_model_data = {}
         context.interface.global_comm.barrier()
-        this_temp_model_data = context.interface.global_comm.Igather(this_temp_model_data, root=target_rank)
+        this_temp_model_data = context.interface.global_comm.gather(this_temp_model_data, root=target_rank)
         if context.interface.global_comm.rank == target_rank:
             print('rank: %i now has %i elements from gather for model_key: %s' %
                   (context.interface.global_comm.rank, len(this_temp_model_data), model_key))
