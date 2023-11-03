@@ -511,14 +511,22 @@ def export_unitary_EPSP_traces():
                 if element:
                     dict_merge(context.temp_model_data[model_key], element)
         context.interface.global_comm.barrier()
+    if context.interface.global_comm.rank == 0:
+        print('export_unitary_EPSP_traces: getting past data transport step')
+        sys.stdout.flush()
     
-    for model_key in context.temp_model_data:
-        print('rank: %i has model_key: %s' % (context.interface.global_comm.rank, model_key))
-        sys.stdout.flush()
-        context.temp_model_data[model_key][description] = \
-            consolidate_unitary_EPSP_traces(context.temp_model_data[model_key][description])
-        print('rank: %i finished consolidating model_key: %s' % (context.interface.global_comm.rank, model_key))
-        sys.stdout.flush()
+    for model_key in model_keys:
+        if model_key in context.temp_model_data:
+            print('rank: %i has model_key: %s' % (context.interface.global_comm.rank, model_key))
+            sys.stdout.flush()
+            context.temp_model_data[model_key][description] = \
+                consolidate_unitary_EPSP_traces(context.temp_model_data[model_key][description])
+            print('rank: %i finished consolidating model_key: %s' % (context.interface.global_comm.rank, model_key))
+            sys.stdout.flush()
+    # for model_key in context.temp_model_data:
+    #     print('rank: %i has model_key: %s' % (context.interface.global_comm.rank, model_key))
+    #     sys.stdout.flush()
+    
     context.interface.global_comm.barrier()
     if context.interface.global_comm.rank == 0:
         print('export_unitary_EPSP_traces: getting past data consolidation step')
