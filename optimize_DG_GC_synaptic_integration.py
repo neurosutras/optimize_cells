@@ -513,8 +513,12 @@ def export_unitary_EPSP_traces():
         context.interface.global_comm.barrier()
     
     for model_key in context.temp_model_data:
+        print('rank: %i has model_key: %s' % (context.interface.global_comm.rank, model_key))
+        sys.stdout.flush()
         context.temp_model_data[model_key][description] = \
             consolidate_unitary_EPSP_traces(context.temp_model_data[model_key][description])
+        print('rank: %i finished consolidating model_key: %s' % (context.interface.global_comm.rank, model_key))
+        sys.stdout.flush()
     context.interface.global_comm.barrier()
     if context.interface.global_comm.rank == 0:
         print('export_unitary_EPSP_traces: getting past data consolidation step')
@@ -527,7 +531,8 @@ def export_unitary_EPSP_traces():
                 for syn_condition in context.temp_model_data[model_key][description][syn_group]:
                     for rec_name in context.temp_model_data[model_key][description][syn_group][syn_condition]:
                         if np.any(np.isnan(context.temp_model_data[model_key][description][syn_group][syn_condition][rec_name])):
-                            raise Exception('rank: %i, model_key: %s, group_key: %s data has nans')
+                            raise Exception('rank: %i, model_key: %s, group_key: %s data has nans' %
+                                            (context.interface.global_comm.rank, model_key, group_key))
                         context.temp_model_data_file[group_key][description][syn_group][syn_condition][
                             rec_name][:,:] = \
                             context.temp_model_data[model_key][description][syn_group][syn_condition][rec_name]
