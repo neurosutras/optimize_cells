@@ -511,20 +511,26 @@ def export_unitary_EPSP_traces():
                 if element:
                     dict_merge(context.temp_model_data[model_key], element)
         context.interface.global_comm.barrier()
-        if context.interface.global_comm.rank == 0:
-            print('export_unitary_EPSP_traces: getting past data consolidation step')
-            sys.stdout.flush()
-        
+    
     for model_key in context.temp_model_data:
         context.temp_model_data[model_key][description] = \
             consolidate_unitary_EPSP_traces(context.temp_model_data[model_key][description])
-        group_key = context.temp_model_data_legend[model_key]
-        for syn_group in context.temp_model_data[model_key][description]:
-            for syn_condition in context.temp_model_data[model_key][description][syn_group]:
-                for rec_name in context.temp_model_data[model_key][description][syn_group][syn_condition]:
-                    context.temp_model_data_file[group_key][description][syn_group][syn_condition][
-                        rec_name][:,:] = \
-                        context.temp_model_data[model_key][description][syn_group][syn_condition][rec_name]
+    context.interface.global_comm.barrier()
+    if context.interface.global_comm.rank == 0:
+        print('export_unitary_EPSP_traces: getting past data consolidation step')
+        sys.stdout.flush()
+        
+    for model_key in model_keys:
+        if model_key in context.temp_model_data:
+            group_key = context.temp_model_data_legend[model_key]
+            for syn_group in context.temp_model_data[model_key][description]:
+                for syn_condition in context.temp_model_data[model_key][description][syn_group]:
+                    for rec_name in context.temp_model_data[model_key][description][syn_group][syn_condition]:
+                        if np.any(np.isnan(context.temp_model_data[model_key][description][syn_group][syn_condition][rec_name])):
+                            raise Exception('rank: %i, model_key: %s, group_key: %s data has nans')
+                        context.temp_model_data_file[group_key][description][syn_group][syn_condition][
+                            rec_name][:,:] = \
+                            context.temp_model_data[model_key][description][syn_group][syn_condition][rec_name]
 
     context.interface.global_comm.barrier()
     if context.interface.global_comm.rank == 0:
