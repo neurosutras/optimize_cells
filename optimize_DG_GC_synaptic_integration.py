@@ -482,12 +482,7 @@ def export_unitary_EPSP_traces():
             context.interface.global_comm.bcast(context.temp_model_data_file_path, root=0)
         context.temp_model_data_file = h5py.File(context.temp_model_data_file_path, 'a', driver='mpio',
                                                  comm=context.interface.global_comm)
-    
-    context.interface.global_comm.barrier()
-    if context.interface.global_comm.rank == 0:
-        print('export_unitary_EPSP_traces: getting past creating file')
-        sys.stdout.flush()
-    
+
     for i, model_key in enumerate(model_keys):
         group_key = str(i)
         context.temp_model_data_legend[model_key] = group_key
@@ -503,77 +498,34 @@ def export_unitary_EPSP_traces():
                     for rec_name in context.synaptic_integration_rec_names:
                         context.temp_model_data_file[group_key][description][syn_group][
                             syn_condition].create_dataset(rec_name, (num_syn_ids, trace_len), dtype='f8')
-        context.interface.global_comm.barrier()
-    
-    context.interface.global_comm.barrier()
-    if context.interface.global_comm.rank == 0:
-        print('export_unitary_EPSP_traces: getting past building groups and datasets')
-        sys.stdout.flush()
-    
-    for i, model_key in enumerate(model_keys):
+
         target_rank = i % context.interface.global_comm.size
         if model_key in context.temp_model_data:
             this_temp_model_data = context.temp_model_data.pop(model_key)
-            print('rank: %i has model_key: %s' % (context.interface.global_comm.rank, model_key))
-            sys.stdout.flush()
         else:
             this_temp_model_data = {}
-        context.interface.global_comm.barrier()
         this_temp_model_data = context.interface.global_comm.gather(this_temp_model_data, root=target_rank)
-        if context.interface.global_comm.rank == target_rank:
-            print('rank: %i now has %i elements from gather for model_key: %s' %
-                  (context.interface.global_comm.rank, len(this_temp_model_data), model_key))
-            sys.stdout.flush()
         if context.interface.global_comm.rank == target_rank:
             context.temp_model_data[model_key] = {description: {}}
             for element in this_temp_model_data:
                 if element:
                     dict_merge(context.temp_model_data[model_key], element)
-        
-    context.interface.global_comm.barrier()
-    if context.interface.global_comm.rank == 0:
-        print('export_unitary_EPSP_traces: getting past data transport step')
-        sys.stdout.flush()
-    
-    for model_key in model_keys:
-        if model_key in context.temp_model_data:
-            print('rank: %i has model_key: %s' % (context.interface.global_comm.rank, model_key))
-            sys.stdout.flush()
-            context.temp_model_data[model_key][description] = \
-                consolidate_unitary_EPSP_traces(context.temp_model_data[model_key][description])
-            print('rank: %i finished consolidating model_key: %s' % (context.interface.global_comm.rank, model_key))
-            sys.stdout.flush()
-    # for model_key in context.temp_model_data:
-    #     print('rank: %i has model_key: %s' % (context.interface.global_comm.rank, model_key))
-    #     sys.stdout.flush()
-    
-    context.interface.global_comm.barrier()
-    if context.interface.global_comm.rank == 0:
-        print('export_unitary_EPSP_traces: getting past data consolidation step')
-        sys.stdout.flush()
-        
-    for model_key in model_keys:
-        if model_key in context.temp_model_data:
-            group_key = context.temp_model_data_legend[model_key]
-            for syn_group in context.temp_model_data[model_key][description]:
-                for syn_condition in context.temp_model_data[model_key][description][syn_group]:
-                    for rec_name in context.temp_model_data[model_key][description][syn_group][syn_condition]:
-                        if np.any(np.isnan(context.temp_model_data[model_key][description][syn_group][syn_condition][rec_name])):
-                            raise Exception('rank: %i, model_key: %s, group_key: %s data has nans' %
-                                            (context.interface.global_comm.rank, model_key, group_key))
-                        context.temp_model_data_file[group_key][description][syn_group][syn_condition][
-                            rec_name][:,:] = \
-                            context.temp_model_data[model_key][description][syn_group][syn_condition][rec_name]
+        context.interface.global_comm.barrier()
+
+    for model_key in context.temp_model_data:
+        context.temp_model_data[model_key][description] = \
+            consolidate_unitary_EPSP_traces(context.temp_model_data[model_key][description])
+        group_key = context.temp_model_data_legend[model_key]
+        for syn_group in context.temp_model_data[model_key][description]:
+            for syn_condition in context.temp_model_data[model_key][description][syn_group]:
+                for rec_name in context.temp_model_data[model_key][description][syn_group][syn_condition]:
+                    context.temp_model_data_file[group_key][description][syn_group][syn_condition][
+                        rec_name][:,:] = \
+                        context.temp_model_data[model_key][description][syn_group][syn_condition][rec_name]
 
     context.interface.global_comm.barrier()
-    if context.interface.global_comm.rank == 0:
-        print('export_unitary_EPSP_traces: getting past data write step')
-        sys.stdout.flush()
     context.temp_model_data_file.flush()
-    if context.interface.global_comm.rank == 0:
-        print('export_unitary_EPSP_traces: getting past file flush step')
-        sys.stdout.flush()
-    
+
     del context.temp_model_data
     context.temp_model_data = dict()
 
@@ -632,10 +584,7 @@ def export_compound_EPSP_traces():
                 if element:
                     dict_merge(context.temp_model_data[model_key], element)
         context.interface.global_comm.barrier()
-        if context.interface.global_comm.rank == 0:
-            print('export_compound_EPSP_traces: getting past data consolidation step')
-            sys.stdout.flush()
-        
+
     for model_key in context.temp_model_data:
         context.temp_model_data[model_key][description] = \
             consolidate_compound_EPSP_traces(context.temp_model_data[model_key][description])
@@ -648,13 +597,7 @@ def export_compound_EPSP_traces():
                         context.temp_model_data[model_key][description][syn_group][syn_condition][rec_name]
 
     context.interface.global_comm.barrier()
-    if context.interface.global_comm.rank == 0:
-        print('export_compound_EPSP_traces: getting past data write step')
-        sys.stdout.flush()
     context.temp_model_data_file.flush()
-    if context.interface.global_comm.rank == 0:
-        print('export_compound_EPSP_traces: getting past file flush step')
-        sys.stdout.flush()
 
     del context.temp_model_data
     context.temp_model_data = dict()

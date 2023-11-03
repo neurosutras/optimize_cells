@@ -155,41 +155,41 @@ update_context:
     - source: optimize_DG_GC_synaptic_integration
       function: update_syn_mechanisms
 stages:
-#    - source: optimize_DG_GC_leak
-#      get_args_static: get_args_static_leak
-#      compute_features: compute_features_leak
-#      get_objectives: get_objectives_leak
-#    - source: optimize_DG_GC_spiking
-#      get_args_dynamic: get_args_dynamic_i_holding
-#      compute_features: compute_features_spike_shape
-#    - source: optimize_DG_GC_spiking
-#      get_args_dynamic: get_args_dynamic_fI
-#      compute_features: compute_features_fI
-#      filter_features: filter_features_fI
-#    - source: optimize_DG_GC_spiking
-#      get_args_dynamic: get_args_dynamic_spike_adaptation
-#      compute_features: compute_features_spike_adaptation
-#    - source: optimize_DG_GC_spiking
-#      get_args_dynamic: get_args_dynamic_dend_spike
-#      compute_features: compute_features_dend_spike
-#      filter_features: filter_features_dend_spike
-#      get_objectives: get_objectives_spiking
-#    - source: optimize_DG_GC_iEPSP_propagation
-#      get_args_dynamic: get_args_dynamic_i_EPSC
-#      compute_features: compute_features_iEPSP_i_unit
-#    - source: optimize_DG_GC_iEPSP_propagation
-#      get_args_dynamic: get_args_dynamic_iEPSP_unit
-#      compute_features: compute_features_iEPSP_i_unit
-#      filter_features: filter_features_iEPSP_attenuation
-#      get_objectives: get_objectives_iEPSP_attenuation
+    - source: optimize_DG_GC_leak
+      get_args_static: get_args_static_leak
+      compute_features: compute_features_leak
+      get_objectives: get_objectives_leak
+    - source: optimize_DG_GC_spiking
+      get_args_dynamic: get_args_dynamic_i_holding
+      compute_features: compute_features_spike_shape
+    - source: optimize_DG_GC_spiking
+      get_args_dynamic: get_args_dynamic_fI
+      compute_features: compute_features_fI
+      filter_features: filter_features_fI
+    - source: optimize_DG_GC_spiking
+      get_args_dynamic: get_args_dynamic_spike_adaptation
+      compute_features: compute_features_spike_adaptation
+    - source: optimize_DG_GC_spiking
+      get_args_dynamic: get_args_dynamic_dend_spike
+      compute_features: compute_features_dend_spike
+      filter_features: filter_features_dend_spike
+      get_objectives: get_objectives_spiking
+    - source: optimize_DG_GC_iEPSP_propagation
+      get_args_dynamic: get_args_dynamic_i_EPSC
+      compute_features: compute_features_iEPSP_i_unit
+    - source: optimize_DG_GC_iEPSP_propagation
+      get_args_dynamic: get_args_dynamic_iEPSP_unit
+      compute_features: compute_features_iEPSP_i_unit
+      filter_features: filter_features_iEPSP_attenuation
+      get_objectives: get_objectives_iEPSP_attenuation
     - source: optimize_DG_GC_synaptic_integration
       get_args_static: get_args_static_unitary_EPSP_amp
       compute_features: compute_features_unitary_EPSP_amp
       collective: export_unitary_EPSP_traces
-#    - source: optimize_DG_GC_synaptic_integration
-#      get_args_static: get_args_static_compound_EPSP_amp
-#      compute_features: compute_features_compound_EPSP_amp
-#      collective: export_compound_EPSP_traces
+    - source: optimize_DG_GC_synaptic_integration
+      get_args_static: get_args_static_compound_EPSP_amp
+      compute_features: compute_features_compound_EPSP_amp
+      collective: export_compound_EPSP_traces
       get_objectives: get_objectives_synaptic_integration
 kwargs:
     # mech_file_path: mechanisms/20211115_DG_GC_excitability_mech.yaml
