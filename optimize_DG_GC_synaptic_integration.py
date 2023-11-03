@@ -517,6 +517,7 @@ def export_unitary_EPSP_traces():
             sys.stdout.flush()
         else:
             this_temp_model_data = {}
+        context.interface.global_comm.barrier()
         this_temp_model_data = context.interface.global_comm.gather(this_temp_model_data, root=target_rank)
         if context.interface.global_comm.rank == target_rank:
             print('rank: %i now has %i elements from gather for model_key: %s' %
@@ -527,8 +528,8 @@ def export_unitary_EPSP_traces():
             for element in this_temp_model_data:
                 if element:
                     dict_merge(context.temp_model_data[model_key], element)
-        context.interface.global_comm.barrier()
-    
+        
+    context.interface.global_comm.barrier()
     if context.interface.global_comm.rank == 0:
         print('export_unitary_EPSP_traces: getting past data transport step')
         sys.stdout.flush()
