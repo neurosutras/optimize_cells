@@ -1061,7 +1061,7 @@ def get_args_static_EPSP_train():
     syn_group_list = []
     syn_id_lists = []
     syn_condition_list = []
-    print(context.syn_id_dict.keys())
+    
     for syn_group in ['proximal', 'distal']:
         this_syn_id_group = context.syn_id_dict[syn_group]
         for syn_condition in context.syn_conditions:
